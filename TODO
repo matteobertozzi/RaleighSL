@@ -1,0 +1,23 @@
+ RaleighFS - TODO
+==========================
+The code is under heavy development, and this is just a list of thing that
+can be done sometime in the future...
+
+ Zcl
+~~~~~~~~~~~~~~~~~
+ - Re-Write chunkq, buffer, stream, ...
+ - Avoid buffer-copy in rpc, chunkq, stream...
+ - Add flexible data type based on extent tree (raleighfs flow like)
+
+ - Add some hash-table hash functions (murmur3, lookup3, ...)
+ - Add some hash functions (ripemd, sha1, ...)
+
+ - Add remote messageq plug and use the localq as server-backend.
+
+ Raleigh Server
+~~~~~~~~~~~~~~~~~
+ - memcached: 'verbosity' and 'stats' are not currently implemented.
+ - redis: implement all the missing commands.
+ - websock: expose a websocket interface for xyz protocol
+ - v1: raleighfs plain text protocol
+
