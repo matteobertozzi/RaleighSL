@@ -44,6 +44,7 @@ void z_messageq_free (z_messageq_t *messageq) {
     z_object_free(messageq);
 }
 
+
 z_message_t *z_message_alloc (z_messageq_t *messageq,
                               z_message_source_t *source,
                               unsigned int flags)
@@ -52,7 +53,6 @@ z_message_t *z_message_alloc (z_messageq_t *messageq,
 
     if ((message = z_object_struct_alloc(messageq, z_message_t)) == NULL)
         return(NULL);
-
 
     message->messageq = messageq;
     message->source = source;
@@ -104,6 +104,10 @@ z_messageq_t *z_message_queue (z_message_t *message) {
     return(message->messageq);
 }
 
+z_message_source_t *z_message_source (z_message_t *message) {
+    return(message->source);
+}
+
 int z_message_send (z_message_t *message,
                     const void *obj_name,
                     unsigned int obj_nlength,
@@ -151,11 +155,39 @@ static unsigned int __message_stream_write (z_stream_t *stream,
     return(wr);
 }
 
+static unsigned int __message_stream_fetch (z_stream_t *stream,
+                                            unsigned int length,
+                                            z_iopush_t fetch_func,
+                                            void *user_data)
+{
+    z_message_t *message = Z_MESSAGE(stream->data.ptr);
+    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
+    unsigned int rd;
+
+    rd = z_chunkq_fetch(chunkq, stream->offset, length, fetch_func, user_data);
+    if (rd != length)
+        message->flags |= Z_MESSAGE_HAS_ERRORS;
+
+    stream->offset += rd;
+
+    return(rd);
+}
+
+static int __message_stream_memcmp (z_stream_t *stream,
+                                    const void *mem,
+                                    unsigned int mem_size)
+{
+    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
+    return(z_chunkq_memcmp(chunkq, stream->offset, mem, mem_size));
+}
+
 static z_stream_plug_t __message_stream_plug = {
     .close  = NULL,
     .seek   = NULL,
     .read   = __message_stream_read,
     .write  = __message_stream_write,
+    .fetch  = __message_stream_fetch,
+    .memcmp = __message_stream_memcmp,
 };
 
 int z_message_request_stream (z_message_t *message, z_stream_t *stream) {

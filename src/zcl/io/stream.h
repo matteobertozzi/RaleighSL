@@ -38,6 +38,14 @@ struct z_stream_plug {
     unsigned int (*write)    (z_stream_t *stream,
                               const void *buffer,
                               unsigned int n);
+
+    unsigned int (*fetch)    (z_stream_t *stream,
+                              unsigned int length,
+                              z_iopush_t fetch_func,
+                              void *user_data);
+    int          (*memcmp)   (z_stream_t *stream,
+                              const void *mem,
+                              unsigned int mem_size);
 };
 
 struct z_stream_extent {

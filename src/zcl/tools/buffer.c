@@ -171,7 +171,7 @@ int z_buffer_prepend (z_buffer_t *buffer,
             return(-1);
     }
 
-    if ((unsigned char *)blob >= buffer->blob && 
+    if ((unsigned char *)blob >= buffer->blob &&
         (unsigned char *)blob < (buffer->blob + buffer->block))
     {
         z_memory_t *memory = z_object_memory(buffer);
@@ -215,7 +215,7 @@ int z_buffer_insert (z_buffer_t *buffer,
     if (index > buffer->size) {
         z_memzero(buffer->blob + buffer->size, index - buffer->size);
         z_memcpy(p, blob, n);
-    } else if ((unsigned char *)blob >= buffer->blob &&     
+    } else if ((unsigned char *)blob >= buffer->blob &&
                (unsigned char *)blob < (buffer->blob + buffer->block))
     {
         z_memory_t *memory = z_object_memory(buffer);
@@ -260,7 +260,7 @@ int z_buffer_equal (z_buffer_t *buffer,
 {
     if (buffer->size != size)
         return(0);
-    
+
     return(!z_memcmp(buffer->blob, blob, size));
 }
 
@@ -308,6 +308,8 @@ static z_stream_plug_t __buffer_stream_plug = {
     .seek   = NULL,
     .read   = __buffer_read,
     .write  = __buffer_write,
+    .fetch  = NULL,
+    .memcmp = NULL,
 };
 
 int z_buffer_stream (z_stream_t *stream,

@@ -885,11 +885,36 @@ static unsigned int __chunkq_write (z_stream_t *stream,
     return(wr);
 }
 
+static unsigned int __chunkq_fetch (z_stream_t *stream,
+                                    unsigned int length,
+                                    z_iopush_t fetch_func,
+                                    void *user_data)
+{
+    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
+    unsigned int rd;
+
+    rd = z_chunkq_fetch(chunkq, stream->offset, length, fetch_func, user_data);
+    stream->offset += rd;
+
+    return(rd);
+}
+
+static int __chunkq_memcmp (z_stream_t *stream,
+                            const void *mem,
+                            unsigned int mem_size)
+{
+    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
+    return(z_chunkq_memcmp(chunkq, stream->offset, mem, mem_size));
+}
+
+
 static z_stream_plug_t __chunkq_stream_plug = {
     .close  = NULL,
     .seek   = NULL,
     .read   = __chunkq_read,
     .write  = __chunkq_write,
+    .fetch  = __chunkq_fetch,
+    .memcmp = __chunkq_memcmp,
 };
 
 int z_chunkq_stream (z_stream_t *stream,

@@ -19,6 +19,55 @@
 #include <zcl/memchr.h>
 #include <zcl/memcmp.h>
 
+static unsigned int __stream_fetch (z_stream_t *stream,
+                                    unsigned int offset,
+                                    unsigned int length,
+                                    z_iopush_t fetch_func,
+                                    void *user_data)
+{
+    unsigned int n, rd;
+    char buffer[1024];
+
+    n = length;
+    while (n > 0) {
+        rd = (n > sizeof(buffer)) ? sizeof(buffer) : n;
+
+        rd = z_stream_pread(stream, offset, buffer, rd);
+        fetch_func(user_data, buffer, rd);
+
+        n -= rd;
+        offset += rd;
+    }
+
+    return(length);
+}
+
+static int __stream_memcmp (z_stream_t *stream,
+                           unsigned int offset,
+                           const void *mem,
+                           unsigned int mem_size)
+{
+    const char *p = (const char *)mem;
+    unsigned int n, rd;
+    char buffer[1024];
+    int cmp;
+
+    n = mem_size;
+    while (n > 0) {
+        rd = (n > sizeof(buffer)) ? sizeof(buffer) : n;
+
+        rd = z_stream_pread(stream, offset, buffer, rd);
+        if ((cmp = z_memcmp(buffer, p, rd)) != 0)
+            return(cmp);
+
+        n -= rd;
+        p += rd;
+        offset += rd;
+    }
+
+    return(0);
+}
+
 int z_stream_open (z_stream_t *stream, z_stream_plug_t *plug) {
     stream->plug = plug;
     stream->offset = 0;
@@ -312,21 +361,18 @@ unsigned int z_stream_fetch (z_stream_t *stream,
                              z_iopush_t fetch_func,
                              void *user_data)
 {
-    unsigned int n, rd;
-    char buffer[1024];
+    unsigned int old_offset;
+    int res;
 
-    n = length;
-    while (n > 0) {
-        rd = (n > sizeof(buffer)) ? sizeof(buffer) : n;
+    if (stream->plug->fetch == NULL)
+        return(__stream_fetch(stream, offset, length, fetch_func, user_data));
 
-        rd = z_stream_pread(stream, offset, buffer, rd);
-        fetch_func(user_data, buffer, rd);
+    old_offset = stream->offset;
+    z_stream_seek(stream, offset);
+    res = stream->plug->fetch(stream, length, fetch_func, user_data);
+    z_stream_seek(stream, old_offset);
 
-        n -= rd;
-        offset += rd;
-    }
-
-    return(length);
+    return(res);
 }
 
 int z_stream_memcmp (z_stream_t *stream,
@@ -334,25 +380,17 @@ int z_stream_memcmp (z_stream_t *stream,
                      const void *mem,
                      unsigned int mem_size)
 {
-    const char *p = (const char *)mem;
-    unsigned int n, rd;
-    char buffer[1024];
+    unsigned int old_offset;
     int cmp;
 
-    n = mem_size;
-    while (n > 0) {
-        rd = (n > sizeof(buffer)) ? sizeof(buffer) : n;
+    if (stream->plug->memcmp == NULL)
+        return(__stream_memcmp(stream, offset, mem, mem_size));
 
-        rd = z_stream_pread(stream, offset, buffer, rd);
-        if ((cmp = z_memcmp(buffer, p, rd)) != 0)
-            return(cmp);
+    old_offset = stream->offset;
+    z_stream_seek(stream, offset);
+    cmp = stream->plug->memcmp(stream, mem, mem_size);
+    z_stream_seek(stream, old_offset);
 
-        n -= rd;
-        p += rd;
-        offset += rd;
-    }
-
-    return(0);
+    return(cmp);
 }
-
 

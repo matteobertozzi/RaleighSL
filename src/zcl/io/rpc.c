@@ -28,6 +28,15 @@
 static z_iopoll_entity_plug_t __rpc_server_ioplug;
 static z_iopoll_entity_plug_t __rpc_client_ioplug;
 
+struct fetch_info {
+    union {
+        const z_stream_extent_t *stream;
+        const z_chunkq_extent_t *chunkq;
+    } extent;
+    unsigned int remaining;
+    unsigned int offset;
+};
+
 static z_rpc_server_t *__rpc_server_alloc (z_memory_t *memory,
                                            z_rpc_protocol_t *proto,
                                            const void *hostname,
@@ -235,52 +244,71 @@ int z_rpc_writev (z_rpc_client_t *client,
     return(0);
 }
 
+static unsigned int __fetch_chunkq (void *data, void *buffer, unsigned int n) {
+    struct fetch_info *fetch_info = (struct fetch_info *)data;
+    z_chunkq_t *chunkq = fetch_info->extent.chunkq->chunkq;
+    unsigned int rd;
+
+    if (n > fetch_info->remaining)
+        n = fetch_info->remaining;
+
+    rd = z_chunkq_read(chunkq, fetch_info->offset, buffer, n);
+    fetch_info->remaining -= rd;
+    fetch_info->offset += rd;
+
+    return(rd);
+}
+
 int z_rpc_write_chunk (z_rpc_client_t *client,
                        const z_chunkq_extent_t *extent)
 {
-    unsigned int n, rd, offset;
-    char buffer[1024];
+    struct fetch_info fetch_info;
 
     if (z_iopoll_entity_flag(client, Z_RPC_NOREPLY))
         return(0);
 
-    n = extent->length;
-    offset = extent->offset;
-    while (n > 0) {
-        rd = (n > sizeof(buffer)) ? sizeof(buffer) : n;
+    fetch_info.remaining = extent->length;
+    fetch_info.extent.chunkq = extent;
+    fetch_info.offset = extent->offset;
 
-        rd = z_chunkq_read(extent->chunkq, offset, buffer, rd);
-        z_chunkq_append(&(client->wrbuffer), buffer, rd);
-
-        n -= rd;
-        offset += rd;
-    }
+    z_chunkq_append_fetch(&(client->wrbuffer), __fetch_chunkq, &fetch_info);
 
     z_iopoll_entity_set_writeable(client->server->iopoll,
                                   Z_IOPOLL_ENTITY(client), 1);
     return(0);
 }
 
+static unsigned int __fetch_stream (void *data, void *buffer, unsigned int n) {
+    struct fetch_info *fetch_info = (struct fetch_info *)data;
+    unsigned int rd;
+
+    if (n > fetch_info->remaining)
+        n = fetch_info->remaining;
+
+    rd = z_stream_read(fetch_info->extent.stream->stream, buffer, n);
+    fetch_info->remaining -= rd;
+    fetch_info->offset += rd;
+
+    return(rd);
+}
+
 int z_rpc_write_stream (z_rpc_client_t *client,
                         const z_stream_extent_t *extent)
 {
-    unsigned int n, rd, offset;
-    char buffer[1024];
+    struct fetch_info fetch_info;
+    unsigned int old_offset;
 
     if (z_iopoll_entity_flag(client, Z_RPC_NOREPLY))
         return(0);
 
-    n = extent->length;
-    offset = extent->offset;
-    while (n > 0) {
-        rd = (n > sizeof(buffer)) ? sizeof(buffer) : n;
+    fetch_info.remaining = extent->length;
+    fetch_info.extent.stream = extent;
+    fetch_info.offset = extent->offset;
 
-        rd = z_stream_pread(extent->stream, offset, buffer, rd);
-        z_chunkq_append(&(client->wrbuffer), buffer, rd);
-
-        n -= rd;
-        offset += rd;
-    }
+    old_offset = extent->stream->offset;
+    z_stream_seek(extent->stream, extent->offset);
+    z_chunkq_append_fetch(&(client->wrbuffer), __fetch_stream, &fetch_info);
+    z_stream_seek(extent->stream, old_offset);
 
     z_iopoll_entity_set_writeable(client->server->iopoll,
                                   Z_IOPOLL_ENTITY(client), 1);
