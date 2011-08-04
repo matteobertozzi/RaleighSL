@@ -282,7 +282,7 @@ class BuildMiniTools(Build):
 
         for src_dir in self.src_dirs:
             if not self.compileDirectory(src_dir):
-                return
+                return []
 
         tools = []
         for obj_name in os.listdir(self._dir_obj):
@@ -586,15 +586,15 @@ if __name__ == '__main__':
     def buildServer():
         build_opts = default_opts.clone()
         build_opts.addLdLibs(zcl_ldlibs)
-        build_opts.addLdLibs(raleighfs_ldlibs)
+        #build_opts.addLdLibs(raleighfs_ldlibs)
         build_opts.addIncludePaths(zcl_includes)
-        build_opts.addIncludePaths(raleighfs_includes)
+        #build_opts.addIncludePaths(raleighfs_includes)
 
         build = BuildApp('raleigh-server', ['src/raleigh-server/'], options=build_opts)
         if not options.xcode and options.build_server:
             build.build()
 
     buildZcl()
-    buildFs()
+    #buildFs()
     buildServer()
 
