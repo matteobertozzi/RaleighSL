@@ -354,10 +354,11 @@ class BuildConfig(Build):
 class BuildLibrary(Build):
     SKIP_HEADER_ENDS = ('_p.h', 'private.h')
 
-    def __init__(self, name, version, src_dirs, **kwargs):
+    def __init__(self, name, version, src_dirs, copy_dirs=None, **kwargs):
         super(BuildLibrary, self).__init__(name, **kwargs)
         self.version = version
         self.src_dirs = src_dirs
+        self.copy_dirs = copy_dirs or []
 
     def moveBuild(self, dst):
         _removeDirectory(dst)
@@ -429,10 +430,19 @@ class BuildLibrary(Build):
 
     def copyHeaders(self):
         dir_dst = os.path.join(self._dir_inc, self.name)
+        self.copyHeadersFromTo(None, self.src_dirs)
+        for hname, hdirs in self.copy_dirs:
+            self.copyHeadersFromTo(hname, hdirs)
+        print
+
+    def copyHeadersFromTo(self, name, src_dirs):
+        dir_dst = os.path.join(self._dir_inc, self.name)
+        if name is not None:
+            dir_dst = os.path.join(dir_dst, name)
         _removeDirectory(dir_dst)
         os.makedirs(dir_dst)
 
-        for dir_src in self.src_dirs:
+        for dir_src in src_dirs:
             for root, dirs, files in os.walk(dir_src, topdown=False):
                 for name in files:
                     if not name.endswith('.h'):
@@ -446,7 +456,6 @@ class BuildLibrary(Build):
                         dst_path = os.path.join(dir_dst, name)
                         shutil.copyfile(src_path, dst_path)
                         print ' [CP]', dst_path
-        print
 
 def _parseCmdline():
     #from optparse import OptionParser
@@ -541,16 +550,36 @@ if __name__ == '__main__':
         build_opts.addLdLibs(zcl_ldlibs)
         build_opts.addIncludePaths(zcl_includes)
 
-        build = BuildLibrary('raleighfs', '0.5.0', ['src/raleighfs-core'], options=build_opts)
+        copy_dirs = [('semantic', ['src/raleighfs-plugins/semantic']),
+                     ('objcache', ['src/raleighfs-plugins/objcache']),
+                     ('object', ['src/raleighfs-plugins/object']),
+                     ('device', ['src/raleighfs-plugins/device'])]
+
+        build = BuildLibrary('raleighfs', '0.5.0', ['src/raleighfs-core', 'src/raleighfs-plugins'],
+                             copy_dirs=copy_dirs, options=build_opts)
+
         if options.xcode:
             build.copyHeaders()
         elif options.build_fs:
             build.build()
 
+        if not options.xcode and options.build_tests:
+            build_opts = default_opts.clone()
+            build_opts.addLdLibs(zcl_ldlibs)
+            build_opts.addLdLibs(raleighfs_ldlibs)
+            build_opts.addIncludePaths(zcl_includes)
+            build_opts.addIncludePaths(raleighfs_includes)
+
+            build = BuildMiniTools('raleighfs-test', ['tests/raleighfs'], options=build_opts)
+            tools = build.build()
+            build.runTools('RaleighFS Test', tools, verbose=options.verbose)
+
     def buildServer():
         build_opts = default_opts.clone()
         build_opts.addLdLibs(zcl_ldlibs)
+        build_opts.addLdLibs(raleighfs_ldlibs)
         build_opts.addIncludePaths(zcl_includes)
+        build_opts.addIncludePaths(raleighfs_includes)
 
         build = BuildApp('raleigh-server', ['src/raleigh-server/'], options=build_opts)
         if not options.xcode and options.build_server:
