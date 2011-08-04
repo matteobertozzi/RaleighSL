@@ -449,10 +449,19 @@ class BuildLibrary(Build):
         print
 
 def _parseCmdline():
-    #from optparse import OptionParser
-    import argparse
+    try:
+        from argparse import ArgumentParser
+    except ImportError:
+        from optparse import OptionParser
+        class ArgumentParser(OptionParser):
+            def add_argument(self, *args, **kwargs):
+                return self.add_option(*args, **kwargs)
 
-    parser = argparse.ArgumentParser()
+            def parse_args(self):
+                options, args = OptionParser.parse_args(self)
+                return options
+
+    parser = ArgumentParser()
     parser.add_argument('-x', '--xcode', dest='xcode', action='store_true', default=False,
                         help="Use XCode to build everithing")
     parser.add_argument('-r', '--release', dest='release', action='store_true', default=False,
