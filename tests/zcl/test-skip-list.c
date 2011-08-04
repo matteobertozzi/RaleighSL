@@ -236,5 +236,5 @@ int main (int argc, char **argv) {
     printf("        - z_skip_list_t         %ubytes\n", (unsigned int)sizeof(z_skip_list_t));
     printf("        - z_skip_node_t         %ubytes\n", (unsigned int)sizeof(z_skip_node_t));
 
-    return(0);
+    return(res);
 }

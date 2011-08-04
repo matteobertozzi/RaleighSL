@@ -146,6 +146,6 @@ int main (int argc, char **argv) {
     printf("        - z_work_item_t         %ubytes\n", (unsigned int)sizeof(z_work_item_t));
 
 
-    return(0);
+    return(res);
 }
 

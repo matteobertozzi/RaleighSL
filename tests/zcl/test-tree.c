@@ -246,5 +246,5 @@ int main (int argc, char **argv) {
     printf("        - z_tree_t              %ubytes\n", (unsigned int)sizeof(z_tree_t));
     printf("        - z_tree_node_t         %ubytes\n", (unsigned int)sizeof(z_tree_node_t));
 
-    return(0);
+    return(res);
 }

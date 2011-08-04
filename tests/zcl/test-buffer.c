@@ -146,5 +146,5 @@ int main (int argc, char **argv) {
 
     printf("        - z_buffer_t            %ubytes\n", (unsigned int)sizeof(z_buffer_t));
 
-    return(0);
+    return(res);
 }

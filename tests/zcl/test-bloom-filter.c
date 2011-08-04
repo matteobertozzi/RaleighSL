@@ -146,5 +146,5 @@ int main (int argc, char **argv) {
 
     printf("        - z_bloom_filter_t      %ubytes\n", (unsigned int)sizeof(z_bloom_filter_t));
 
-    return(0);
+    return(res);
 }

@@ -225,5 +225,5 @@ int main (int argc, char **argv) {
     printf("        - z_chunkq_node_t       %ubytes\n", (unsigned int)sizeof(z_chunkq_node_t));
     printf("        - z_chunkq_extent_t     %ubytes\n", (unsigned int)sizeof(z_chunkq_extent_t));
 
-    return(0);
+    return(res);
 }

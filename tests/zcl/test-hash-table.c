@@ -174,5 +174,5 @@ int main (int argc, char **argv) {
 
     printf("        - z_hash_table_t        %ubytes\n", (unsigned int)sizeof(z_hash_table_t));
 
-    return(0);
+    return(res);
 }

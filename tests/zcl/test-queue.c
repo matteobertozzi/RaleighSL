@@ -88,5 +88,5 @@ int main (int argc, char **argv) {
     printf("        - z_queue_t             %ubytes\n", (unsigned int)sizeof(z_queue_t));
     printf("        - z_queue_node_t        %ubytes\n", (unsigned int)sizeof(z_queue_node_t));
 
-    return(0);
+    return(res);
 }
