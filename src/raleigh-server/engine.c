@@ -22,6 +22,7 @@
 
 #include "engine.h"
 
+#define MEMCACHE_FLAGS_RESET                (0xffffff0000000000ULL)
 #define MEMCACHE_ITEM(x)                    Z_CAST(memcache_object_t, x)
 #define MEMCACHE_ITEM_NUMBER                ((uint64_t)1 << 40)
 #define MEMCACHE_ITEM_CAS                   ((uint64_t)1 << 41)
@@ -453,7 +454,7 @@ static int __storage_set (struct storage *storage, z_message_t *msg) {
 
         /* Set Item Flags */
         item->exptime = exptime;
-        item->flags = flags;
+        item->flags = (item->flags & MEMCACHE_FLAGS_RESET) + flags;
 
         /* Read Item Data */
         memcache_object_set(item, storage->memory, &value);
@@ -484,7 +485,7 @@ static int __storage_set (struct storage *storage, z_message_t *msg) {
 
         /* Set Item Flags */
         item->exptime = exptime;
-        item->flags = flags;
+        item->flags = (item->flags & MEMCACHE_FLAGS_RESET) + flags;
 
         /* Read Item Data */
         memcache_object_set(item, storage->memory, &value);
