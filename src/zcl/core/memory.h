@@ -78,6 +78,9 @@ void *  z_memory_zalloc     (z_memory_t *memory,
 #define z_memory_array_zalloc(memory, n, type)                              \
     ((type *)z_memory_zalloc(memory, (n) * sizeof(type)))
 
+#define z_memory_array_realloc(memory, ptr, n, type)                        \
+    ((type *)z_memory_realloc(memory, ptr, (n) * sizeof(type)))
+
 #define z_memory_array_free(memory, ptr)                                    \
     z_memory_free(memory, ptr)
 

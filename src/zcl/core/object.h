@@ -76,6 +76,9 @@ struct z_object {
 #define z_object_array_zalloc(object, n, type)                              \
     z_memory_array_zalloc(z_object_memory(object), n, type)
 
+#define z_object_array_realloc(object, ptr, n, type)                        \
+    z_memory_array_realloc(z_object_memory(object), ptr, n, type)
+
 #define z_object_array_free(object, ptr)                                    \
     z_memory_array_free(z_object_memory(object), ptr)
 

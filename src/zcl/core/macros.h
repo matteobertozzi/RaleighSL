@@ -83,6 +83,11 @@
 #define z_align_down(x, align)          ((x) & (-(align)))
 #define z_align_up(x, align)            ((((x) + ((align) - 1)) & (-(align))))
 
+#define z_rotl32(x, r)                  (((x) << (r)) | ((x) >> (32 - (r))))
+#define z_rotl64(x, r)                  (((x) << (r)) | ((x) >> (64 - (r))))
+#define z_rotr32(x, r)                  (((x) >> (r)) | ((x) << (32 - (r))))
+#define z_rotr64(x, r)                  (((x) >> (r)) | ((x) << (64 - (r))))
+
 #define z_min(a, b)                     ((a) < (b) ? (a) : (b))
 #define z_max(a, b)                     ((a) > (b) ? (a) : (b))
 
@@ -93,6 +98,9 @@
 
 #define z_bit_clear(x, n)                                                   \
     do { (x) &= ~(1 << (n)); } while (0)
+
+#define z_bit_toggle(x, n)                                                  \
+    do { (x) ^= 1 << (n); } while (0)
 
 #define z_bit_change(x, n, v)                                               \
     do { (x) = (((x) & ~(1 << (n))) | ((!!v) << (n))); } while (0)
