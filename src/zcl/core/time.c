@@ -71,6 +71,10 @@ float z_timer_clock (const z_timer_t *timer) {
 }
 
 float z_timer_micros (const z_timer_t *timer) {
+    return((float)(timer->micros[1] - timer->micros[0]));
+}
+
+float z_timer_secs (const z_timer_t *timer) {
     return((float)(timer->micros[1] - timer->micros[0]) / __USEC_PER_SEC);
 }
 

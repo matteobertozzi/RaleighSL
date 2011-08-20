@@ -38,6 +38,7 @@ void        z_timer_start       (z_timer_t *timer);
 void        z_timer_stop        (z_timer_t *timer);
 float       z_timer_clock       (const z_timer_t *timer);
 float       z_timer_micros      (const z_timer_t *timer);
+float       z_timer_secs        (const z_timer_t *timer);
 
 #endif /* !_Z_TIME_H_ */
 
