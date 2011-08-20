@@ -299,6 +299,8 @@ static int __process_stats (z_rpc_client_t *client,
     z_rpc_write(client, stats, z_strlen(stats));
     free(stats);
 
+    z_rpc_write(client, "\r\nEND\r\n", 7);
+
     return(0);
 }
 
