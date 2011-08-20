@@ -1,0 +1,39 @@
+ LevelDB - Demo network interface for LevelDB
+==============================================
+
+How To Compile & Run
+~~~~~~~~~~~~~~~~~~~~~~
+
+First of all, build zcl:
+    mkdir ~/src && cd ~/src
+    git clone https://github.com/matteobertozzi/RaleighFS.git
+    cd RaleighFS
+    python ./build.py
+
+Download levelDB and compile:
+    cd ~/src/
+    svn checkout http://leveldb.googlecode.com/svn/trunk/ leveldb-build
+    cd ~/src/leveldb-build && make
+
+    cd ~/src/RaleighFS/demo/leveldb/
+    python ./build.py ~/src/leveldb-build/
+
+Execute demo-leveldb
+    export LD_LIBRARY_PATH=../../build/zcl/libs
+    ./build/demo-leveldb/demo-leveldb test.db
+
+How To Test
+~~~~~~~~~~~~~~~~~~~~~~
+
+    telnet localhost 11213
+    > set key 5
+    > value
+    >> STORED
+    > get key
+    >> VALUE key 5
+    >> value
+    >> END
+    > delete key
+    >> DELETED
+    > quit
+
