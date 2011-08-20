@@ -17,6 +17,9 @@
 #ifndef _Z_STRTOL_H_
 #define _Z_STRTOL_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <stdint.h>
 
 int     z_strtoi32   (const char *str, int base, int32_t *value);
@@ -34,6 +37,8 @@ int     z_i64tostr   (int64_t i64, char *nptr, unsigned int nptrsize, int base);
 int     z_i32tostr   (int32_t i32, char *nptr, unsigned int nptrsize, int base);
 int     z_i16tostr   (int16_t i16, char *nptr, unsigned int nptrsize, int base);
 int     z_i8tostr    (int8_t i8, char *nptr, unsigned int nptrsize, int base);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_STRTOL_H_ */
 

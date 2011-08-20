@@ -17,6 +17,9 @@
 #ifndef _Z_TREE_H_
 #define _Z_TREE_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/object.h>
 #include <zcl/types.h>
 
@@ -113,6 +116,8 @@ void *      z_tree_iter_lookup_custom   (z_tree_iter_t *iter,
                                          const void *key);
 void *      z_tree_iter_lookup_min      (z_tree_iter_t *iter);
 void *      z_tree_iter_lookup_max      (z_tree_iter_t *iter);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_TREE_H_ */
 

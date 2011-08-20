@@ -17,6 +17,9 @@
 #ifndef _Z_OBJECT_H_
 #define _Z_OBJECT_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/memory.h>
 #include <zcl/macros.h>
 
@@ -111,6 +114,8 @@ void *  __z_object_alloc    (z_memory_t *memory,
                              unsigned short int type,
                              unsigned int size);
 void    __z_object_free     (z_object_t *object);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_OBJECT_H_ */
 

@@ -17,6 +17,9 @@
 #ifndef _Z_WORK_QUEUE_H_
 #define _Z_WORK_QUEUE_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/object.h>
 #include <zcl/thread.h>
 #include <zcl/types.h>
@@ -82,6 +85,8 @@ int                 z_work_queue_wait       (z_work_queue_t *queue);
 int                 z_work_queue_loop       (z_work_queue_t *queue);
 
 unsigned int        z_work_queue_id         (z_work_queue_t *queue);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_WORK_QUEUE_H_ */
 

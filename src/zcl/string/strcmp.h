@@ -17,6 +17,9 @@
 #ifndef _Z_STRCMP_H_
 #define _Z_STRCMP_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 int     z_strcmp          (const char *s1, const char *s2);
 int     z_strncmp         (const char *s1, const char *s2, unsigned int n);
 
@@ -25,6 +28,8 @@ int     z_strncasecmp     (const char *s1, const char *s2, unsigned int n);
 
 #define z_streq(s1, s2)         (!z_strcmp(s1, s2))
 #define z_strneq(s1, s2, n)     (!z_strcmp(s1, s2, n))
+
+__Z_END_DECLS__
 
 #endif /* !_Z_STRCMP_H_ */
 

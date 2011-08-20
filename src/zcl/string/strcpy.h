@@ -17,10 +17,15 @@
 #ifndef _Z_STRCPY_H_
 #define _Z_STRCPY_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #define z_strcpy                            strcpy
 #define z_strncpy                           strncpy
 
 unsigned int z_strlcpy (char *dst, const char *src, unsigned int size);
+
+__Z_END_DECLS__
 
 #endif /* _Z_STRCPY_H_ */
 

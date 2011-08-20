@@ -17,6 +17,9 @@
 #ifndef _Z_TEST_H_
 #define _Z_TEST_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/macros.h>
 
 #ifndef Z_TEST_MAX
@@ -36,6 +39,8 @@ struct z_test {
 };
 
 int     z_test_run      (z_test_t *test, void *user_data);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_TEST_H_ */
 

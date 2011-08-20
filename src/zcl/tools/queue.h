@@ -17,6 +17,9 @@
 #ifndef _Z_QUEUE_H_
 #define _Z_QUEUE_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/object.h>
 #include <zcl/types.h>
 
@@ -54,6 +57,8 @@ void *          z_queue_pop         (z_queue_t *queue);
 void *          z_queue_peek        (z_queue_t *queue);
 
 int             z_queue_is_empty    (z_queue_t *queue);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_QUEUE_H_ */
 

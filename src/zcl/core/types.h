@@ -17,6 +17,9 @@
 #ifndef _Z_TYPES_H_
 #define _Z_TYPES_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/macros.h>
 
 /* Objects */
@@ -86,6 +89,8 @@ typedef unsigned int (*z_iofetch_t)         (void *user_data,
 typedef unsigned int (*z_iopush_t)          (void *user_data,
                                              const void *buffer,
                                              unsigned int n);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_TYPES_H_ */
 

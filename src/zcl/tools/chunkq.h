@@ -17,6 +17,9 @@
 #ifndef _Z_CHUNKQ_H_
 #define _Z_CHUNKQ_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/object.h>
 #include <zcl/stream.h>
 #include <zcl/string.h>
@@ -174,6 +177,8 @@ void                z_chunkq_dump               (const  z_chunkq_extent_t *ext);
     } while (0)
 
 #define z_chunkq_is_null(extent)                ((extent)->chunkq == NULL)
+
+__Z_END_DECLS__
 
 #endif /* !_Z_CHUNKQ_H_ */
 

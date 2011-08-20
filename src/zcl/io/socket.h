@@ -17,11 +17,12 @@
 #ifndef _Z_SOCKET_H_
 #define _Z_SOCKET_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netdb.h>
-
-#include <zcl/config.h>
 
 int     z_socket_tcp_connect      (const char *address,
                                    const char *port,
@@ -92,6 +93,8 @@ char *  z_socket_str_address_info (char *buffer,
                                    const struct addrinfo *address);
 
 int     z_socket_address_is_ipv6  (const struct sockaddr *address);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_SOCKET_H_ */
 

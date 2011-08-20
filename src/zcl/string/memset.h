@@ -17,6 +17,9 @@
 #ifndef _Z_MEMSET_H_
 #define _Z_MEMSET_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <stdint.h>
 
 void *  z_memset      (void *dest, int c, unsigned int n);
@@ -35,6 +38,8 @@ void *  z_memzero8    (void *dest, unsigned int n);
 void *  z_memzero16   (void *dest, unsigned int n);
 void *  z_memzero32   (void *dest, unsigned int n);
 void *  z_memzero64   (void *dest, unsigned int n);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_MEMSET_H_ */
 

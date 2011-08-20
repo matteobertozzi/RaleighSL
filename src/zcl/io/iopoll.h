@@ -17,8 +17,10 @@
 #ifndef _Z_IOPOLL_H_
 #define _Z_IOPOLL_H_
 
-#include <zcl/hashtable.h>
 #include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
+#include <zcl/hashtable.h>
 #include <zcl/object.h>
 #include <zcl/types.h>
 
@@ -104,16 +106,12 @@ struct z_iopoll {
 };
 
 #ifdef Z_IOPOLL_HAS_EPOLL
-    z_iopoll_plug_t z_iopoll_epoll;
+    extern z_iopoll_plug_t z_iopoll_epoll;
 #endif /* Z_IOPOLL_HAS_EPOLL */
 
 #ifdef Z_IOPOLL_HAS_KQUEUE
-    z_iopoll_plug_t z_iopoll_kqueue;
+    extern z_iopoll_plug_t z_iopoll_kqueue;
 #endif /* Z_IOPOLL_HAS_KQUEUE */
-
-#ifdef Z_IOPOLL_HAS_SELECT
-    z_iopoll_plug_t z_iopoll_select;
-#endif /* Z_IOPOLL_HAS_SELECT */
 
 extern z_iopoll_plug_t *z_iopoll_default;
 
@@ -176,6 +174,8 @@ int     z_iopoll_entity_set_readable    (z_iopoll_t *iopoll,
 int     z_iopoll_entity_set_writeable   (z_iopoll_t *iopoll,
                                          z_iopoll_entity_t *entity,
                                          int writeable);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_IOPOLL_H_ */
 

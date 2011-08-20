@@ -17,10 +17,15 @@
 #ifndef _Z_MEMCMP_H_
 #define _Z_MEMCMP_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 int     z_memcmp      (const void *m1, const void *m2, unsigned int n);
 int     z_memcmp8     (const void *m1, const void *m2, unsigned int n);
 int     z_memcmp16    (const void *m1, const void *m2, unsigned int n);
 int     z_memcmp32    (const void *m1, const void *m2, unsigned int n);
 int     z_memcmp64    (const void *m1, const void *m2, unsigned int n);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_MEMCMP_H */

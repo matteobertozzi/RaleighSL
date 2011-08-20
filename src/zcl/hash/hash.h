@@ -17,6 +17,9 @@
 #ifndef _Z_HASH_H_
 #define _Z_HASH_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/object.h>
 #include <zcl/types.h>
 
@@ -111,6 +114,8 @@ void            z_hash160_sha1          (uint8_t hash[20],
 void            z_hash160_ripemd        (uint8_t hash[20],
                                          const void *data,
                                          unsigned int size);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_HASH_H_ */
 

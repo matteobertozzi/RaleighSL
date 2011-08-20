@@ -17,8 +17,13 @@
 #ifndef _Z_STRUPPER_H_
 #define _Z_STRUPPER_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 char *  z_strupper     (char *str);
 char *  z_strnupper    (char *str, unsigned int n);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_STRUPPER_H_ */
 

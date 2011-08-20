@@ -17,11 +17,16 @@
 #ifndef _Z_STRLEN_H_
 #define _Z_STRLEN_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 unsigned int      z_strlen        (const char *str);
 unsigned int      z_strlen8       (const char *str);
 unsigned int      z_strlen16      (const char *str);
 unsigned int      z_strlen32      (const char *str);
 unsigned int      z_strlen64      (const char *str);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_STRLEN_H_ */
 

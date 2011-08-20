@@ -17,6 +17,9 @@
 #ifndef _Z_STRING_H_
 #define _Z_STRING_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/macros.h>
 
 #include <zcl/memchr.h>
@@ -47,5 +50,7 @@ struct z_string {
         (str)->blob = (s);                                                  \
         (str)->length = (n);                                                \
     } while (0)
+
+__Z_END_DECLS__
 
 #endif /* !_Z_STRING_H_ */

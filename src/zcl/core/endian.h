@@ -17,6 +17,9 @@
 #ifndef _Z_ENDIAN_H_
 #define _Z_ENDIAN_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <stdint.h>
 
 #define z_bswap16(x) ((uint16_t)(                                   \
@@ -68,5 +71,7 @@
     #define z_le64_to_cpu(x)		(x)
     #define z_be64_to_cpu(x)		z_bswap64(x)
 #endif
+
+__Z_END_DECLS__
 
 #endif /* Z_ENDIAN_H_ */

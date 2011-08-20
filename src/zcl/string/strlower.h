@@ -17,8 +17,13 @@
 #ifndef _Z_STRLOWER_H_
 #define _Z_STRLOWER_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 char *  z_strlower    (char *str);
 char *  z_strnlower   (char *str, unsigned int n);
+
+__Z_END_DECLS__
 
 #endif /* _Z_STRLOWER_H_ */
 

@@ -18,6 +18,8 @@
 #define _Z_THREAD_H_
 
 #include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/types.h>
 
 #include <pthread.h>
@@ -85,6 +87,8 @@ int     z_thread_create         (z_thread_t *thread,
                                  void * (*func) (void *),
                                  void *context);
 int     z_thread_join           (z_thread_t *thread);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_THREAD_H_ */
 

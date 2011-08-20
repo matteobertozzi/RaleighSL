@@ -17,6 +17,9 @@
 #ifndef _Z_MACROS_H_
 #define _Z_MACROS_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -104,6 +107,8 @@
 
 #define z_bit_change(x, n, v)                                               \
     do { (x) = (((x) & ~(1 << (n))) | ((!!v) << (n))); } while (0)
+
+__Z_END_DECLS__
 
 #endif /* !_Z_MACROS_H_ */
 

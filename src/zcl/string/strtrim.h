@@ -17,6 +17,9 @@
 #ifndef _Z_STRTRIM_H_
 #define _Z_STRTRIM_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 unsigned int  z_strnltrim   (char *str, unsigned int n);
 unsigned int  z_strnrtrim   (char *str, unsigned int n);
 unsigned int  z_strntrim    (char *str, unsigned int n);
@@ -24,6 +27,8 @@ unsigned int  z_strntrim    (char *str, unsigned int n);
 char *  z_strltrim    (char *str);
 char *  z_strrtrim    (char *str);
 char *  z_strtrim     (char *str);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_STRTRIM_H_ */
 

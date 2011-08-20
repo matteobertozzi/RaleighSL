@@ -17,6 +17,9 @@
 #ifndef _Z_SYSTEM_H_
 #define _Z_SYSTEM_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <stdint.h>
 
 uint32_t    z_system_processors     (void);
@@ -25,6 +28,8 @@ uint32_t    z_system_cache_line     (void);
 uint64_t    z_system_memory         (void);
 uint64_t    z_system_memory_free    (void);
 uint64_t    z_system_memory_used    (void);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_SYSTEM_H_ */
 

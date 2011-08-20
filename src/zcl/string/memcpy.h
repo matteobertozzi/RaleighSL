@@ -17,6 +17,9 @@
 #ifndef _Z_MEMCPY_H_
 #define _Z_MEMCPY_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 void *  z_memcpy      (void *dest, const void *src, unsigned int n);
 void *  z_memcpy8     (void *dest, const void *src, unsigned int n);
 void *  z_memcpy16    (void *dest, const void *src, unsigned int n);
@@ -34,6 +37,8 @@ void *  z_memmove8    (void *dest, const void *src, unsigned int n);
 void *  z_memmove16   (void *dest, const void *src, unsigned int n);
 void *  z_memmove32   (void *dest, const void *src, unsigned int n);
 void *  z_memmove64   (void *dest, const void *src, unsigned int n);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_MEMCPY_H_ */
 

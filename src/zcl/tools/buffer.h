@@ -17,6 +17,9 @@
 #ifndef _Z_BUFFER_H_
 #define _Z_BUFFER_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/object.h>
 #include <zcl/stream.h>
 #include <zcl/types.h>
@@ -82,6 +85,8 @@ int               z_buffer_compare          (z_buffer_t *buffer,
 
 int               z_buffer_stream           (z_stream_t *stream,
                                              z_buffer_t *buffer);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_BUFFER_H_ */
 

@@ -17,6 +17,9 @@
 #ifndef _Z_MEMMEM_H_
 #define _Z_MEMMEM_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 void *  z_memmem            (const void *haystack,
                              unsigned int haystack_len,
                              const void *needle,
@@ -31,6 +34,8 @@ void *  z_memmem_horspool   (const void *haystack,
                              unsigned int haystack_len,
                              const void *needle,
                              unsigned int needle_len);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_MEMMEM_H_ */
 

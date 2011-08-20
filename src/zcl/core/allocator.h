@@ -17,6 +17,9 @@
 #ifndef _Z_ALLOCATOR_H_
 #define _Z_ALLOCATOR_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -45,6 +48,8 @@ struct z_allocator {
 };
 
 z_allocator_t * z_system_allocator  (void);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_ALLOCATOR_H_ */
 

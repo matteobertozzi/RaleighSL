@@ -17,6 +17,9 @@
 #ifndef _Z_RPC_H_
 #define _Z_RPC_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <sys/uio.h>
 
 #include <zcl/iopoll.h>
@@ -88,6 +91,8 @@ int             z_rpc_tokenize_line   (z_rpc_client_t *client,
 
 unsigned int    z_rpc_has_line        (z_rpc_client_t *client,
                                        unsigned int offset);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_RPC_H_ */
 

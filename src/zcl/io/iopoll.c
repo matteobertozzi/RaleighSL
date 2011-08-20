@@ -27,8 +27,6 @@
     z_iopoll_plug_t *z_iopoll_default = &z_iopoll_epoll;
 #elif defined(Z_IOPOLL_HAS_KQUEUE)
     z_iopoll_plug_t *z_iopoll_default = &z_iopoll_kqueue;
-#elif defined(Z_IOPOLL_HAS_SELECT)
-    z_iopoll_plug_t *z_iopoll_default = &z_iopoll_select;
 #else
     z_iopoll_plug_t *z_iopoll_default = NULL;
 #endif

@@ -17,6 +17,9 @@
 #ifndef _Z_STRSTR_H_
 #define _Z_STRSTR_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <sys/types.h>
 
 char *      z_strstr      (const char *haystack, const char *needle);
@@ -24,6 +27,8 @@ char *      z_strrstr     (const char *haystack, const char *needle);
 
 ssize_t     z_strpos      (const char *haystack, const char *needle);
 ssize_t     z_strrpos     (const char *haystack, const char *needle);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_STRSTR_H_ */
 

@@ -17,6 +17,9 @@
 #ifndef _Z_STREAM_H_
 #define _Z_STREAM_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/macros.h>
 #include <zcl/types.h>
 
@@ -124,6 +127,8 @@ int             z_stream_memcmp     (z_stream_t *stream,
                                      unsigned int offset,
                                      const void *mem,
                                      unsigned int mem_size);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_STREAM_H_ */
 

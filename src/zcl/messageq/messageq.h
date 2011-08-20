@@ -17,6 +17,9 @@
 #ifndef _Z_MESSAGEQ_H_
 #define _Z_MESSAGEQ_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/object.h>
 #include <zcl/stream.h>
 #include <zcl/types.h>
@@ -111,6 +114,8 @@ int                 z_message_send              (z_message_t *message,
                                                  unsigned int object_nlength,
                                                  z_message_func_t callback,
                                                  void *user_data);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_MESSAGEQ_H_ */
 

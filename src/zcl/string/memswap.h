@@ -17,11 +17,16 @@
 #ifndef _Z_MEMSWAP_H_
 #define _Z_MEMSWAP_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 void    z_memswap      (void *a, void *b, unsigned int n);
 void    z_memswap8     (void *a, void *b, unsigned int n);
 void    z_memswap16    (void *a, void *b, unsigned int n);
 void    z_memswap32    (void *a, void *b, unsigned int n);
 void    z_memswap64    (void *a, void *b, unsigned int n);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_MEMSWAP_H_ */
 

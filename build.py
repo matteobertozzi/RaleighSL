@@ -343,6 +343,17 @@ class BuildConfig(Build):
         fd.write('#ifndef _%s_BUILD_CONFIG_H_\n' % config_head)
         fd.write('#define _%s_BUILD_CONFIG_H_\n' % config_head)
         fd.write('\n')
+
+        fd.write('/* C++ needs to know that types and declarations are C, not C++. */\n')
+        fd.write('#ifdef __cplusplus\n')
+        fd.write('    #define __%s_BEGIN_DECLS__         extern "C" {\n' % config_head)
+        fd.write('    #define __%s_END_DECLS__           }\n' % config_head)
+        fd.write('#else\n')
+        fd.write('    #define __%s_BEGIN_DECLS__\n' % config_head)
+        fd.write('    #define __%s_END_DECLS__\n' % config_head)
+        fd.write('#endif\n')
+        fd.write('\n')
+
         for define in config:
             fd.write('#define %s_%s\n' % (config_head, define.upper().replace('-', '_')))
         fd.write('\n')

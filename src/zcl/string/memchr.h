@@ -17,6 +17,9 @@
 #ifndef _Z_MEMCHR_H_
 #define _Z_MEMCHR_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <stdint.h>
 
 void *  z_memchr      (const void *s, uint8_t c, unsigned int n);
@@ -33,6 +36,8 @@ void *  z_memrchr32   (const void *s, uint8_t c, unsigned int n);
 void *  z_memrchr64   (const void *s, uint8_t c, unsigned int n);
 
 void *  z_memtok      (const void *s, const char *delim, unsigned int n);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_MEMCHR_H_ */
 

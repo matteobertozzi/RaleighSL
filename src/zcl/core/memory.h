@@ -17,6 +17,9 @@
 #ifndef _Z_MEMORY_H_
 #define _Z_MEMORY_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/allocator.h>
 #include <zcl/macros.h>
 
@@ -121,6 +124,8 @@ void *  __z_memory_dup      (z_memory_t *memory,
                              unsigned int size);
 #define z_memory_dup(memory, type, src, size)                               \
     ((type *)__z_memory_dup(memory, src, size))
+
+__Z_END_DECLS__
 
 #endif /* _Z_MEMORY_H_ */
 

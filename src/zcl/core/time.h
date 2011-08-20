@@ -17,6 +17,9 @@
 #ifndef _Z_TIME_H_
 #define _Z_TIME_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <stdint.h>
 #include <time.h>
 
@@ -39,6 +42,8 @@ void        z_timer_stop        (z_timer_t *timer);
 float       z_timer_clock       (const z_timer_t *timer);
 float       z_timer_micros      (const z_timer_t *timer);
 float       z_timer_secs        (const z_timer_t *timer);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_TIME_H_ */
 

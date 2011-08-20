@@ -17,6 +17,9 @@
 #ifndef _Z_HASH_TABLE_H_
 #define _Z_HASH_TABLE_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/object.h>
 #include <zcl/types.h>
 
@@ -105,6 +108,8 @@ unsigned int      z_hash_table_grow_policy    (void *user_data,
 unsigned int      z_hash_table_shrink_policy  (void *user_data,
                                                unsigned int used,
                                                unsigned int size);
+
+__Z_END_DECLS__
 
 #endif /* _Z_HASH_TABLE_H_ */
 

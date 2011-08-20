@@ -17,6 +17,9 @@
 #ifndef _Z_BLOOM_FILTER_H_
 #define _Z_BLOOM_FILTER_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/object.h>
 #include <zcl/types.h>
 
@@ -60,6 +63,8 @@ int                 z_bloom_filter_add          (z_bloom_filter_t *filter,
 
 int                 z_bloom_filter_contains     (z_bloom_filter_t *filter,
                                                  const void *key);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_BLOOM_FILTER_H_ */
 

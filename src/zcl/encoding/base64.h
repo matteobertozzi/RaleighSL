@@ -17,12 +17,17 @@
 #ifndef _Z_BASE64_H_
 #define _Z_BASE64_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 unsigned int    z_base64_encode         (void *dst,
                                          const void *src,
                                          unsigned int size);
 unsigned int    z_base64_decode         (void *dst,
                                          const void *src,
                                          unsigned int size);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_BASE64_H_ */
 

@@ -17,6 +17,9 @@
 #ifndef _Z_MESSAGEQ_PRIVATE_H_
 #define _Z_MESSAGEQ_PRIVATE_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <zcl/messageq.h>
 #include <zcl/chunkq.h>
 
@@ -45,6 +48,8 @@ struct z_message {
     z_chunkq_t          request;
     z_chunkq_t          response;
 };
+
+__Z_END_DECLS__
 
 #endif /* !_Z_MESSAGEQ_PRIVATE_H_ */
 
