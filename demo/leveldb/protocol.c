@@ -271,9 +271,11 @@ static int __process_flush_all (z_rpc_client_t *client,
 
     /* loop and delete all keys */
     wbatch = leveldb_writebatch_create();
+    leveldb_iter_seek_to_first(iter);
     while (leveldb_iter_valid(iter)) {
         key = leveldb_iter_key(iter, &keylen);
         leveldb_writebatch_delete(wbatch, key, keylen);
+        leveldb_iter_next(iter);
     }
     z_leveldb_write(__LEVELDB(client), wbatch);
     leveldb_writebatch_destroy(wbatch);
