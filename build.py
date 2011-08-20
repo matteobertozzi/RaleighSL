@@ -471,6 +471,9 @@ def _parseCmdline():
                 return options
 
     parser = ArgumentParser()
+    parser.add_argument('-c', '--compiler', dest='compiler', action='store',
+                        help='Compiler to use')
+
     parser.add_argument('-x', '--xcode', dest='xcode', action='store_true', default=False,
                         help="Use XCode to build everithing")
     parser.add_argument('-r', '--release', dest='release', action='store_true', default=False,
@@ -505,6 +508,10 @@ if __name__ == '__main__':
     default_opts = BuildOptions()
     default_opts.addDefines(DEFAULT_DEFINES)
     default_opts.addLdLibs(DEFAULT_LDLIBS)
+
+    if options.compiler is not None:
+        default_opts.setCompiler(options.compiler)
+
     if options.release:
         default_opts.addCFlags(DEFAULT_RELEASE_CFLAGS)
     else:
