@@ -20,21 +20,24 @@
 #include <zcl/macros.h>
 
 /* Objects */
+#define z_hash_type_id                     (0x1010)
+
 #define z_iopoll_type_id                   (0x2010)
 #define z_socket_poll_type_id              (z_iopoll_type_id | 0x1)
 
 #define z_work_queue_type_id               (0x3010)
-#define z_requestq_type_id                 (0x3020)
-#define z_messageq_type_id                 (0x3030)
+#define z_messageq_type_id                 (0x3020)
 
 #define z_tree_type_id                     (0x5010)
-#define z_trie_type_id                     (0x5020)
-#define z_queue_type_id                    (0x5030)
-#define z_skip_list_type_id                (0x5040)
-#define z_hash_table_type_id               (0x5050)
-#define z_bloom_filter_type_id             (0x5060)
-#define z_buffer_type_id                   (0x5070)
-#define z_chunkq_type_id                   (0x5080)
+#define z_stree_type_id                    (0x5020)
+#define z_trie_type_id                     (0x5030)
+#define z_queue_type_id                    (0x5040)
+#define z_skip_list_type_id                (0x5050)
+#define z_hash_table_type_id               (0x5060)
+#define z_bloom_filter_type_id             (0x5070)
+#define z_buffer_type_id                   (0x5080)
+#define z_chunkq_type_id                   (0x5090)
+#define z_cache_type_id                    (0x50A0)
 #define z_space_map_type_id                (z_tree_type_id | 0x1)
 #define z_extent_tree_type_id              (z_tree_type_id | 0x2)
 

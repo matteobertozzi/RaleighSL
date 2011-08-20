@@ -40,9 +40,12 @@ Source Code
 Source Code References
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-In src/zcl/hash.c you can find some general purpose hash function that you
+In src/zcl/hash/hash.c you can find some general purpose hash function that you
 can find here: http://www.partow.net/programming/hashfunctions/
 
-In src/zcl/murmur2.c you can find the murmur2 hash function that you can find
-on the author website: http://code.google.com/p/smhasher/
+In src/zcl/hash/murmur*.c you can find the murmur* hash function that you can
+find on the author website: http://code.google.com/p/smhasher/
+
+In src/zcl/encode/base64.c you can find the base64 encoder/decoder that you can
+find on the author website: http://base64.sourceforge.net/b64.c
 
