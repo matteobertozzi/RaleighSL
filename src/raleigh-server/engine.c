@@ -84,8 +84,15 @@ static int memcache_object_set (memcache_object_t *object,
         z_stream_read_extent(value, vbuffer);
         vbuffer[value->length] = '\0';
 
+        if (object->flags & MEMCACHE_ITEM_NUMBER)
+            blob = NULL;
+        else
+            blob = object->data.blob;
+
         if (z_strtou64(vbuffer, 10, &(object->data.number))) {
-            /* TODO: free blob */
+            if (blob != NULL)
+                z_memory_blob_free(memory, blob);
+
             object->flags |= MEMCACHE_ITEM_NUMBER;
             return(0);
         }
