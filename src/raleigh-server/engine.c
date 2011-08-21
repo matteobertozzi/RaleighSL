@@ -220,14 +220,15 @@ static int memcache_object_append (memcache_object_t *object,
     return(0);
 }
 /* ====================================================================== */
+#define __HASH_FUNC_SEED                (0)
+#define __HASH_FUNC                     z_hash32_murmur3
 
 #if USE_HASH_TABLE
 static unsigned int __item_hash (void *user_data,
                                  const void *data)
 {
     memcache_object_t *item = MEMCACHE_ITEM(data);
-    return(z_hash32_murmur2(item->key, item->key_size, 0));
-    /* return(z_hash32_string(item->key, item->key_size, 0)); */
+    return(__HASH_FUNC(item->key, item->key_size, __HASH_FUNC_SEED));
 }
 #endif
 static int __item_compare (void *user_data,
@@ -247,8 +248,7 @@ static int __item_compare (void *user_data,
 }
 #if USE_HASH_TABLE
 static unsigned int __hash (void *user_data, const void *buffer, unsigned int n) {
-    unsigned int *hash = Z_UINT_PTR(user_data);
-    *hash = z_hash32_murmur2(buffer, n, *hash);
+    z_hash32_update(Z_HASH32(user_data), buffer, n);
     return(n);
 }
 
@@ -256,9 +256,10 @@ static unsigned int __item_key_hash (void *user_data,
                                      const void *data)
 {
     const z_stream_extent_t *key = (const z_stream_extent_t *)data;
-    unsigned int hash = 0;
+    z_hash32_t hash;
+    z_hash32_init(&hash, __HASH_FUNC, __HASH_FUNC_SEED);
     z_stream_fetch(key->stream, key->offset, key->length, __hash, &hash);
-    return(hash);
+    return(z_hash32_digest(&hash));
 }
 #endif
 
