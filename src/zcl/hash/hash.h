@@ -23,6 +23,7 @@ __Z_BEGIN_DECLS__
 #include <zcl/object.h>
 #include <zcl/types.h>
 
+Z_TYPEDEF_CONST_STRUCT(z_hash32_plug)
 Z_TYPEDEF_CONST_STRUCT(z_hash_plug)
 
 Z_TYPEDEF_STRUCT(z_hash160)
@@ -37,13 +38,22 @@ typedef uint32_t    (*z_hash32_func_t)     (const void *blob,
                                             uint32_t seed);
 
 struct z_hash_plug {
-    int  (*init)    (z_hash_t *hash);
-    void (*uninit)  (z_hash_t *hash);
-    void (*update)  (z_hash_t *hash,
-                     const void *blob,
-                     unsigned int n);
-    void (*digest)  (z_hash_t *hash,
-                     void *digest);
+    int     (*init)     (z_hash_t *hash);
+    void    (*uninit)   (z_hash_t *hash);
+    void    (*update)   (z_hash_t *hash,
+                         const void *blob,
+                         unsigned int n);
+    void    (*digest)   (z_hash_t *hash,
+                         void *digest);
+};
+
+struct z_hash32_plug {
+    void    (*init)     (z_hash32_t *hash,
+                         uint32_t seed);
+    void    (*update)   (z_hash32_t *hash,
+                         const void *blob,
+                         unsigned int n);
+    void    (*digest)   (z_hash32_t *hash);
 };
 
 struct z_hash {
@@ -53,12 +63,19 @@ struct z_hash {
 };
 
 struct z_hash32 {
-    z_hash32_func_t func;
-    uint32_t        buffer;
+    z_hash32_plug_t *plug;
+    z_hash32_func_t  func;
+    uint8_t          buffer[8];
+    unsigned int     bufsize;
+    unsigned int     length;
+    uint32_t         hash;
 };
 
 extern z_hash_plug_t z_hash160_plug_sha1;
 extern z_hash_plug_t z_hash160_plug_ripemd;
+
+extern z_hash32_plug_t z_hash32_plug_jenkin;
+extern z_hash32_plug_t z_hash32_plug_murmur3;
 
 z_hash_t *      z_hash_alloc            (z_hash_t *hash,
                                          z_memory_t *memory,
@@ -73,6 +90,9 @@ void            z_hash_digest           (z_hash_t *hash,
 void            z_hash32_init           (z_hash32_t *hash,
                                          z_hash32_func_t func,
                                          uint32_t seed);
+void            z_hash32_init_plug      (z_hash32_t *hash,
+                                         z_hash32_plug_t *plug,
+                                         uint32_t seed);
 void            z_hash32_update         (z_hash32_t *hash,
                                          const void *blob,
                                          unsigned int n);
@@ -86,9 +106,6 @@ char *          z_hash_to_string        (char *buffer,
 uint32_t        z_hash32_js             (const void *blob,
                                          unsigned int n,
                                          uint32_t seed);
-uint32_t        z_hash32_elf            (const void *blob,
-                                         unsigned int n,
-                                         uint32_t seed);
 uint32_t        z_hash32_elfv           (const void *blob,
                                          unsigned int n,
                                          uint32_t seed);
@@ -98,10 +115,16 @@ uint32_t        z_hash32_sdbm           (const void *blob,
 uint32_t        z_hash32_dek            (const void *blob,
                                          unsigned int n,
                                          uint32_t seed);
-uint32_t        z_hash32_string         (const void *blob,
+uint32_t        z_hash32_djb            (const void *data,
                                          unsigned int n,
                                          uint32_t seed);
-uint32_t        z_hash32_murmur2        (const void *blob,
+uint32_t        z_hash32_fnv            (const void *data,
+                                         unsigned int n,
+                                         uint32_t seed);
+uint32_t        z_hash32_jenkin         (const void *data,
+                                         unsigned int n,
+                                         uint32_t seed);
+uint32_t        z_hash32_string         (const void *blob,
                                          unsigned int n,
                                          uint32_t seed);
 uint32_t        z_hash32_murmur3        (const void *blob,

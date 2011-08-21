@@ -48,18 +48,48 @@ void z_hash_digest (z_hash_t *hash, void *digest) {
     hash->plug->digest(hash, digest);
 }
 
-
 void z_hash32_init (z_hash32_t *hash, z_hash32_func_t func, uint32_t seed) {
-    hash->buffer = seed;
     hash->func = func;
+    hash->plug = NULL;
+    hash->hash = seed;
+    hash->bufsize = 0;
+    hash->length = 0;
+
+    if (hash->func == z_hash32_murmur3)
+        hash->plug = &z_hash32_plug_murmur3;
+    else if (hash->func == z_hash32_jenkin)
+        hash->plug = &z_hash32_plug_jenkin;
+
+    if (hash->plug != NULL && hash->plug->init != NULL)
+        hash->plug->init(hash, seed);
+}
+
+void z_hash32_init_plug (z_hash32_t *hash,
+                         z_hash32_plug_t *plug,
+                         uint32_t seed)
+{
+    hash->plug = plug;
+    hash->hash = seed;
+    hash->bufsize = 0;
+    hash->length = 0;
+
+    if (hash->plug != NULL && hash->plug->init != NULL)
+        hash->plug->init(hash, seed);
 }
 
 void z_hash32_update (z_hash32_t *hash, const void *blob, unsigned int n) {
-    hash->buffer = hash->func(blob, n, hash->buffer);
+    hash->length += n;
+
+    if (hash->plug != NULL)
+        hash->plug->update(hash, blob, n);
+    else
+        hash->hash = hash->func(blob, n, hash->hash);
 }
 
 uint32_t z_hash32_digest (z_hash32_t *hash) {
-    return(hash->buffer);
+    if (hash->plug != NULL)
+        hash->plug->digest(hash);
+    return(hash->hash);
 }
 
 

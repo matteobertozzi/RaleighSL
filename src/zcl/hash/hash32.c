@@ -1,5 +1,6 @@
 /*
  * http://www.partow.net/programming/hashfunctions
+ * http://www.burtleburtle.net/bob/hash/doobs.html
  */
 
 #include <zcl/hash.h>
@@ -7,29 +8,11 @@
 /* A bitwise hash function written by Justin Sobel
  */
 uint32_t z_hash32_js (const void *data, unsigned int n, uint32_t seed) {
-    uint32_t hash = 1315423911;
+    uint32_t hash = seed;
     const uint8_t *p;
 
     for (p = (const uint8_t *)data; n--; p++)
         hash ^= ((hash << 5) + *p + (hash >> 2));
-
-    return(hash);
-}
-
-/* Similar to the PJW Hash function, but tweaked for 32-bit processors.
- * Its the hash function widely used on most UNIX systems.
- */
-uint32_t z_hash32_elf (const void *data, unsigned int n, uint32_t seed) {
-    uint32_t hash = seed;
-    const uint8_t *p;
-    uint32_t x;
-
-    for (p = (const uint8_t *)data; n--; p++) {
-        hash = (hash << 4) + *p++;
-        if ((x = hash & 0xf0000000) != 0)
-            hash ^= (x >> 24);
-        hash &= ~x;
-    }
 
     return(hash);
 }
@@ -77,6 +60,32 @@ uint32_t z_hash32_dek (const void *data, unsigned int n, uint32_t seed) {
 
     for (p = (const uint8_t *)data; n--; p++)
         hash = ((hash << 5) ^ (hash >> 27) ^ *p);
+
+    return(hash);
+}
+
+/* An algorithm produced by Professor Daniel J. Bernstein and shown first to
+ * the world on the usenet newsgroup comp.lang.c.
+ */
+uint32_t z_hash32_djb (const void *data, unsigned int n, uint32_t seed) {
+    uint32_t hash = seed;
+    const uint8_t *p;
+
+    for (p = (const uint8_t *)data; n--; ++p)
+        hash = ((hash << 5) + hash) + *p;
+
+    return(hash);
+}
+
+
+uint32_t z_hash32_fnv (const void *data, unsigned int n, uint32_t seed) {
+    uint32_t hash = seed;
+    const uint8_t *p;
+
+    for (p = (const uint8_t *)data; n--; ++p) {
+        hash *= 0x811C9DC5;
+        hash ^= *p;
+    }
 
     return(hash);
 }
