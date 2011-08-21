@@ -4,6 +4,19 @@
 #include <zcl/hash.h>
 #include <zcl/test.h>
 
+static z_hash32_func_t __hash32_funcs[] = {
+    /* [ 0] */ z_hash32_js,
+    /* [ 1] */ z_hash32_elfv,
+    /* [ 2] */ z_hash32_sdbm,
+    /* [ 3] */ z_hash32_dek,
+    /* [ 4] */ z_hash32_djb,
+    /* [ 5] */ z_hash32_fnv,
+    /* [ 6] */ z_hash32_jenkin,
+    /* [ 7] */ z_hash32_string,
+    /* [ 8] */ z_hash32_murmur3,
+    /* [ 9] */ NULL,
+};
+
 struct user_data {
     z_memory_t memory;
 };
@@ -93,22 +106,24 @@ static int __test_ripemd160_plug (z_test_t *test) {
 }
 
 static int __test_hash32_plug (z_test_t *test) {
-    unsigned int o32;
-    unsigned int h32;
+    z_hash32_func_t *f;
+    uint32_t h1, h2;
     z_hash32_t hash;
 
-    o32 = z_hash32_murmur2("The quick brown fox ", 20, 0xf5);
-    o32 = z_hash32_murmur2("jumps over ", 11, o32);
-    o32 = z_hash32_murmur2("the lazy dog", 12, o32);
+    for (f = __hash32_funcs; *f != NULL; ++f) {
+        h1 = (*f)("The quick brown fox jumps over the lazy dog", 43, 0);
 
-    z_hash32_init(&hash, z_hash32_murmur2, 0xf5);
-    z_hash32_update(&hash, "The quick brown fox ", 20);
-    z_hash32_update(&hash, "jumps over ", 11);
-    z_hash32_update(&hash, "the lazy dog", 12);
-    h32 = z_hash32_digest(&hash);
+        z_hash32_init(&hash, *f, 0);
+        z_hash32_update(&hash, "The quick brown fox", 19);
+        z_hash32_update(&hash, " ", 1);
+        z_hash32_update(&hash, "jumps over ", 11);
+        z_hash32_update(&hash, "the lazy ", 9);
+        z_hash32_update(&hash, "dog", 3);
+        h2 = z_hash32_digest(&hash);
 
-    if (o32 != h32)
-        return(1);
+        if (h1 != h2)
+            return((unsigned int)(f - __hash32_funcs));
+    }
 
     return(0);
 }
