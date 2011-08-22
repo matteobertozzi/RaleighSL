@@ -50,15 +50,18 @@ void z_hash_digest (z_hash_t *hash, void *digest) {
 
 void z_hash32_init (z_hash32_t *hash, z_hash32_func_t func, uint32_t seed) {
     hash->func = func;
-    hash->plug = NULL;
     hash->hash = seed;
     hash->bufsize = 0;
     hash->length = 0;
 
     if (hash->func == z_hash32_murmur3)
         hash->plug = &z_hash32_plug_murmur3;
+    else if (hash->func == z_hash32_lookup3)
+        hash->plug = &z_hash32_plug_lookup3;
     else if (hash->func == z_hash32_jenkin)
         hash->plug = &z_hash32_plug_jenkin;
+    else
+        hash->plug = NULL;
 
     if (hash->plug != NULL && hash->plug->init != NULL)
         hash->plug->init(hash, seed);
@@ -68,6 +71,7 @@ void z_hash32_init_plug (z_hash32_t *hash,
                          z_hash32_plug_t *plug,
                          uint32_t seed)
 {
+    hash->func = NULL;
     hash->plug = plug;
     hash->hash = seed;
     hash->bufsize = 0;

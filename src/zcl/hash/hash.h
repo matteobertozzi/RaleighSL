@@ -65,7 +65,7 @@ struct z_hash {
 struct z_hash32 {
     z_hash32_plug_t *plug;
     z_hash32_func_t  func;
-    uint8_t          buffer[8];
+    uint8_t          buffer[32];
     unsigned int     bufsize;
     unsigned int     length;
     uint32_t         hash;
@@ -75,6 +75,7 @@ extern z_hash_plug_t z_hash160_plug_sha1;
 extern z_hash_plug_t z_hash160_plug_ripemd;
 
 extern z_hash32_plug_t z_hash32_plug_jenkin;
+extern z_hash32_plug_t z_hash32_plug_lookup3;
 extern z_hash32_plug_t z_hash32_plug_murmur3;
 
 z_hash_t *      z_hash_alloc            (z_hash_t *hash,
@@ -125,6 +126,9 @@ uint32_t        z_hash32_jenkin         (const void *data,
                                          unsigned int n,
                                          uint32_t seed);
 uint32_t        z_hash32_string         (const void *blob,
+                                         unsigned int n,
+                                         uint32_t seed);
+uint32_t        z_hash32_lookup3        (const void *blob,
                                          unsigned int n,
                                          uint32_t seed);
 uint32_t        z_hash32_murmur3        (const void *blob,

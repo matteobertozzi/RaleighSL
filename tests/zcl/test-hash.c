@@ -14,7 +14,8 @@ static z_hash32_func_t __hash32_funcs[] = {
     /* [ 6] */ z_hash32_jenkin,
     /* [ 7] */ z_hash32_string,
     /* [ 8] */ z_hash32_murmur3,
-    /* [ 9] */ NULL,
+    /* [ 9] */ z_hash32_lookup3,
+    /* [10] */ NULL,
 };
 
 struct user_data {
@@ -151,6 +152,8 @@ int main (int argc, char **argv) {
         printf(" [ !! ] Hash %d\n", res);
     else
         printf(" [ ok ] Hash\n");
+    printf("        - z_hash32_t            %ubytes\n", (unsigned int)sizeof(z_hash32_t));
+    printf("        - z_hash_t              %ubytes\n", (unsigned int)sizeof(z_hash_t));
 
     return(res);
 }
