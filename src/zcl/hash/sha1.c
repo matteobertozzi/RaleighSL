@@ -27,17 +27,17 @@ typedef struct {
 /* Hash a single 512-bit block. This is the core of the algorithm. */
 static void SHA1Transform(uint32_t state[5], const uint8_t buffer[64])
 {
-	uint32_t a, b, c, d, e;
-	uint32_t block[16];
+    uint32_t a, b, c, d, e;
+    uint32_t block[16];
 
-	z_memcpy(&block, buffer, 64);
+    z_memcpy(&block, buffer, 64);
 
-	/* Copy context->state[] to working vars */
-	a = state[0];
-	b = state[1];
-	c = state[2];
-	d = state[3];
-	e = state[4];
+    /* Copy context->state[] to working vars */
+    a = state[0];
+    b = state[1];
+    c = state[2];
+    d = state[3];
+    e = state[4];
 
     /* 4 rounds of 20 operations each. Loop unrolled. */
     R0(a,b,c,d,e, 0); R0(e,a,b,c,d, 1); R0(d,e,a,b,c, 2); R0(c,d,e,a,b, 3);
@@ -61,22 +61,22 @@ static void SHA1Transform(uint32_t state[5], const uint8_t buffer[64])
     R4(d,e,a,b,c,72); R4(c,d,e,a,b,73); R4(b,c,d,e,a,74); R4(a,b,c,d,e,75);
     R4(e,a,b,c,d,76); R4(d,e,a,b,c,77); R4(c,d,e,a,b,78); R4(b,c,d,e,a,79);
 
-	/* Add the working vars back into context.state[] */
-	state[0] += a;
-	state[1] += b;
-	state[2] += c;
-	state[3] += d;
-	state[4] += e;
+    /* Add the working vars back into context.state[] */
+    state[0] += a;
+    state[1] += b;
+    state[2] += c;
+    state[3] += d;
+    state[4] += e;
 }
 
 static void SHA1_begin (SHA1_Context *context) {
-	/* SHA1 initialization constants */
-	context->state[0] = 0x67452301;
-	context->state[1] = 0xEFCDAB89;
-	context->state[2] = 0x98BADCFE;
-	context->state[3] = 0x10325476;
-	context->state[4] = 0xC3D2E1F0;
-	context->count[0] = 0;
+    /* SHA1 initialization constants */
+    context->state[0] = 0x67452301;
+    context->state[1] = 0xEFCDAB89;
+    context->state[2] = 0x98BADCFE;
+    context->state[3] = 0x10325476;
+    context->state[4] = 0xC3D2E1F0;
+    context->count[0] = 0;
     context->count[1] = 0;
 }
 
@@ -84,42 +84,42 @@ static void SHA1_update (SHA1_Context *context,
                          const void *vdata,
                          unsigned int len)
 {
-	const uint8_t *data = (const uint8_t*)vdata;
-	unsigned int i, j;
+    const uint8_t *data = (const uint8_t*)vdata;
+    unsigned int i, j;
 
-	j = (context->count[0] >> 3) & 63;
-	if ((context->count[0] += len << 3) < (len << 3))
-		context->count[1]++;
-	context->count[1] += (len >> 29);
+    j = (context->count[0] >> 3) & 63;
+    if ((context->count[0] += len << 3) < (len << 3))
+        context->count[1]++;
+    context->count[1] += (len >> 29);
 
-	if ((j + len) > 63) {
+    if ((j + len) > 63) {
         z_memcpy(&context->buffer[j], data, (i = 64-j));
-		SHA1Transform(context->state, context->buffer);
-		for ( ; i + 63 < len; i += 64)
-			SHA1Transform(context->state, &data[i]);
-		j = 0;
-	} else {
-		i = 0;
+        SHA1Transform(context->state, context->buffer);
+        for ( ; i + 63 < len; i += 64)
+            SHA1Transform(context->state, &data[i]);
+        j = 0;
+    } else {
+        i = 0;
     }
 
     z_memcpy(&context->buffer[j], &data[i], len - i);
 }
 
 static void SHA1_final(SHA1_Context *context, uint8_t digest[20]) {
-	uint8_t finalcount[8];
-	uint32_t i;
+    uint8_t finalcount[8];
+    uint32_t i;
 
-	for (i = 0; i < 8; i++)
-		finalcount[i] = (uint8_t)((context->count[(i >= 4 ? 0 : 1)]
-		                           >> ((3-(i & 3)) * 8) ) & 255);  /* Endian independent */
+    for (i = 0; i < 8; i++)
+        finalcount[i] = (uint8_t)((context->count[(i >= 4 ? 0 : 1)]
+                                   >> ((3-(i & 3)) * 8) ) & 255);  /* Endian independent */
 
-	SHA1_update(context, "\200", 1);
-	while ((context->count[0] & 504) != 448)
-		SHA1_update(context, "\0", 1);
-	SHA1_update(context, finalcount, 8);  /* Should cause a SHA1Transform() */
+    SHA1_update(context, "\200", 1);
+    while ((context->count[0] & 504) != 448)
+        SHA1_update(context, "\0", 1);
+    SHA1_update(context, finalcount, 8);  /* Should cause a SHA1Transform() */
 
-	for (i = 0; i < 20; i++)
-		digest[i] = (uint8_t)((context->state[i>>2] >> ((3-(i & 3)) * 8) ) & 255);
+    for (i = 0; i < 20; i++)
+        digest[i] = (uint8_t)((context->state[i>>2] >> ((3-(i & 3)) * 8) ) & 255);
 }
 
 /* ============================================================================

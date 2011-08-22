@@ -137,7 +137,7 @@ static inline void byteswap_digest (uint32_t *p) {
         p[1] = z_bswap32(p[1]);
         p[2] = z_bswap32(p[2]);
         p[3] = z_bswap32(p[3]);
-		p += 4;
+        p += 4;
     }
 }
 
@@ -233,7 +233,7 @@ static void ripemd160_update (RIPEMD_Context *self,
                               const void *data,
                               size_t length)
 {
-	const uint8_t *p = (const uint8_t *)data;
+    const uint8_t *p = (const uint8_t *)data;
     unsigned int bytes_needed;
 
     while (length > 0) {
@@ -274,7 +274,7 @@ static void ripemd160_digest (RIPEMD_Context *self, uint8_t hash[20]) {
     self->buf.w[14] = z_cpu_to_le32((uint32_t)(self->length & 0xFFFFffffu));
     self->buf.w[15] = z_cpu_to_le32((uint32_t)((self->length >> 32) & 0xFFFFffffu));
 
-	self->bufpos = 64;
+    self->bufpos = 64;
     ripemd160_compress(self);
 
     /* Copy the final state into the output buffer */

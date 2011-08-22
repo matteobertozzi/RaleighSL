@@ -21,6 +21,9 @@ uint32_t z_hash32_jenkin (const void *data, unsigned int n, uint32_t seed) {
     return(hash);
 }
 
+/* ============================================================================
+ *  Hash32 Plugin
+ */
 static void __jenkin_update (z_hash32_t *hash,
                              const void *blob,
                              unsigned int n)

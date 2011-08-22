@@ -4,7 +4,7 @@
 
 #include <zcl/hash.h>
 
-#define __ROTL32(x, r)                    (((x) << (r)) | ((x) >> (32 - (r))))
+#define __ROTL32(x, r)                    z_rotl32(x, r)
 
 uint32_t z_hash32_murmur3 (const void *blob, unsigned int n, uint32_t seed) {
     unsigned int i, nblocks;
@@ -56,6 +56,9 @@ uint32_t z_hash32_murmur3 (const void *blob, unsigned int n, uint32_t seed) {
     return(h1);
 }
 
+/* ============================================================================
+ *  Hash32 Plugin
+ */
 static void __murmur3_process_block (z_hash32_t *hash, uint32_t k1) {
     uint32_t h1;
 
