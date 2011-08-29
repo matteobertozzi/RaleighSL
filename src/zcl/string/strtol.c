@@ -14,78 +14,82 @@
  *   limitations under the License.
  */
 
-#include <stdlib.h>
-#include <errno.h>
 #include <ctype.h>
 
 #include <zcl/strtol.h>
 
-int z_strtoi32 (const char *str, int base, int32_t *value) {
-    char *endptr = NULL;
-    long int i32;
+static int __strtou64 (const char *str, int base, uint64_t *value) {
+    uint64_t result = 0;
+    int converted = 0;
+    unsigned int v;
 
-    while (isspace(*str)) str++;
-    i32 = strtol(str, &endptr, base);
-    if (errno == ERANGE)
-        return(0);
-
-    if (isspace(*endptr) || (*endptr == '\0' && endptr != str)) {
-        *value = (int32_t)i32;
-        return(1);
+    if (*str == '0') {
+        switch (base) {
+            case 8: str += 1; break;
+            case 2:  if (tolower(str[1]) == 'b') str += 2; break;
+            case 16: if (tolower(str[1]) == 'x') str += 2; break;
+        }
     }
 
-    return(0);
+    while (isxdigit(*str)) {
+        v = isdigit(*str) ? *str - '0' : tolower(*str) - 'a' + 10;
+        if (v >= base)
+            break;
+
+        str++;
+        result = (result * base) + v;
+        converted = 1;
+    }
+
+    *value = result;
+    return(converted);
+}
+
+static int __strtoi64 (const char *str, int base, int64_t *value) {
+    uint64_t v;
+    int res;
+
+    if (*str == '-') {
+        res = __strtou64(str + 1, base, &v);
+        *value = -((int64_t)v);
+    } else {
+        res = __strtou64(str, base, &v);
+        *value = (int64_t)v;
+    }
+
+    return(res);
+}
+
+int z_strtoi32 (const char *str, int base, int32_t *value) {
+    int64_t v;
+    int res;
+
+    while (isspace(*str)) str++;
+    res = __strtoi64(str, base, &v);
+    *value = (int32_t)v;
+
+    return(res);
 }
 
 int z_strtou32 (const char *str, int base, uint32_t *value) {
-    unsigned long int u32;
-    char *endptr = NULL;
+    uint64_t v;
+    int res;
 
     while (isspace(*str)) str++;
-    u32 = strtoul(str, &endptr, base);
-    if (errno == ERANGE)
-        return(0);
+    res = __strtou64(str, base, &v);
+    *value = (uint32_t)v;
 
-    if (isspace(*endptr) || (*endptr == '\0' && endptr != str)) {
-        *value = (uint32_t)u32;
-        return(1);
-    }
-
-    return(0);
+    return(res);
 }
 
 int z_strtoi64 (const char *str, int base, int64_t *value) {
-    unsigned long long i64;
-    char *endptr = NULL;
-
     while (isspace(*str)) str++;
-    i64 = strtoll(str, &endptr, base);
-    if (errno == ERANGE)
-        return(0);
-
-    if (isspace(*endptr) || (*endptr == '\0' && endptr != str)) {
-        *value = (int64_t)i64;
-        return(1);
-    }
-
-    return(0);
+    return(__strtoi64(str, base, value));
 }
 
 int z_strtou64 (const char *str, int base, uint64_t *value) {
-    unsigned long long u64;
-    char *endptr = NULL;
-
     while (isspace(*str)) str++;
-    u64 = strtoull(str, &endptr, base);
-    if (errno == ERANGE)
-        return(0);
-
-    if (isspace(*endptr) || (*endptr == '\0' && endptr != str)) {
-        *value = (uint64_t)u64;
-        return(1);
-    }
-
-    return(0);
+    return(__strtou64(str, base, value));
 }
 
 int z_u64tostr (uint64_t value, char *nptr, unsigned int nptrsize, int base) {
@@ -157,5 +161,4 @@ int z_i16tostr (int16_t i16, char *nptr, unsigned int nptrsize, int base) {
 int z_i8tostr (int8_t i8, char *nptr, unsigned int nptrsize, int base) {
     return(z_i64tostr((int64_t)i8, nptr, nptrsize, base));
 }
-
 
