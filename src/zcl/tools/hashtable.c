@@ -121,6 +121,6 @@ void z_hash_table_foreach (z_hash_table_t *table,
                            z_foreach_t func,
                            void *user_data)
 {
-    return(table->plug->foreach(table, func, user_data));
+    table->plug->foreach(table, func, user_data);
 }
 
