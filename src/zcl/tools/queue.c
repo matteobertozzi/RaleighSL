@@ -38,9 +38,11 @@ void z_queue_free (z_queue_t *queue) {
 }
 
 void z_queue_clear (z_queue_t *queue) {
+    z_queue_node_t *next;
     z_queue_node_t *p;
 
-    for (p = queue->head; p != NULL; p = p->next) {
+    for (p = queue->head; p != NULL; p = next) {
+        next = p->next;
         if (queue->data_free != NULL)
             queue->data_free(queue->user_data, p->data);
         z_object_struct_free(queue, z_queue_node_t, p);

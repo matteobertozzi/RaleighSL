@@ -219,7 +219,7 @@ void z_work_queue_clear (z_work_queue_t *queue) {
     z_work_item_t *p;
 
     z_mutex_lock(&(queue->qlock));
-    for (p = queue->internal.queue.head; p != NULL; p = p->next) {
+    for (p = queue->internal.queue.head; p != NULL; p = next) {
         next = p->next;
         __work_item_free(queue, p);
     }

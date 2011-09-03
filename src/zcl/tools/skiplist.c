@@ -283,10 +283,13 @@ int z_skip_list_remove (z_skip_list_t *skip, const void *key) {
 }
 
 void z_skip_list_clear (z_skip_list_t *skip) {
+    z_skip_node_t *next;
     z_skip_node_t *p;
 
-    for (p = skip->head->next[0]; p != NULL; p = p->next[0])
+    for (p = skip->head->next[0]; p != NULL; p = next) {
+        next = p->next[0];
         __skip_node_free(skip, p);
+    }
 
     skip->levels = 1;
 }
