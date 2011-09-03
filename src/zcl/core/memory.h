@@ -26,6 +26,8 @@ __Z_BEGIN_DECLS__
 #define Z_MEMORY_POOL_SHIFT                 (4)
 #define Z_MEMORY_POOL_SIZE                  (128 >> Z_MEMORY_POOL_SHIFT)
 
+#define Z_MEMORY(x)                         Z_CAST(z_memory_t, x)
+
 Z_TYPEDEF_STRUCT(z_mempage)
 Z_TYPEDEF_STRUCT(z_memobj)
 Z_TYPEDEF_STRUCT(z_mempool)
