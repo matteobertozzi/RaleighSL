@@ -50,11 +50,13 @@
 
 #define __memcpy_backward(dst, src, n)                                      \
     do {                                                                    \
-        const unsigned long *isrc = (const unsigned long *)(src + n);       \
-        unsigned long *idst = (unsigned long *)(dst + n);                   \
-        const unsigned char *csrc;                                          \
-        unsigned char *cdst;                                                \
+        const unsigned char *csrc = (const unsigned char *)src;             \
+        unsigned char *cdst = (unsigned char *)dst;                         \
+        const unsigned long *isrc;                                          \
+        unsigned long *idst;                                                \
                                                                             \
+        idst = (unsigned long *)(cdst + n);                                 \
+        isrc = (const unsigned long *)(csrc + n);                           \
         for (; n >= sizeof(unsigned long); n -= sizeof(unsigned long))      \
             *(--idst) = *(--isrc);                                          \
                                                                             \
@@ -66,8 +68,8 @@
 
 #define __memcpy_backward_sized(type, dst, src, n)                          \
     do {                                                                    \
-        const type *isrc = (const type *)(src + n);                         \
-        type *idst = (type *)(dst + n);                                     \
+        const type *isrc = (const type *)(((const char *)src) + n);         \
+        type *idst = (type *)(((const char *)dst) + n);                     \
                                                                             \
         for (; n > sizeof(type); n -= sizeof(type))                         \
             *(--idst) = *(--isrc);                                          \
@@ -149,7 +151,7 @@ void *z_memmove (void *dest, const void *src, unsigned int n) {
 }
 
 void *z_memmove8 (void *dest, const void *src, unsigned int n) {
-    if (dest <= src || dest >= (src + n))
+    if (dest <= src || (const char *)dest >= ((const char *)src + n))
         __memcpy_forward_sized(uint8_t, dest, src, n);
     else
         __memcpy_backward_sized(uint8_t, dest, src, n);
@@ -157,7 +159,7 @@ void *z_memmove8 (void *dest, const void *src, unsigned int n) {
 }
 
 void *z_memmove16 (void *dest, const void *src, unsigned int n) {
-    if (dest <= src || dest >= (src + n))
+    if (dest <= src || (const char *)dest >= ((const char *)src + n))
         __memcpy_forward_sized(uint16_t, dest, src, n);
     else
         __memcpy_backward_sized(uint16_t, dest, src, n);
@@ -165,7 +167,7 @@ void *z_memmove16 (void *dest, const void *src, unsigned int n) {
 }
 
 void *z_memmove32 (void *dest, const void *src, unsigned int n) {
-    if (dest <= src || dest >= (src + n))
+    if (dest <= src || (const char *)dest >= ((const char *)src + n))
         __memcpy_forward_sized(uint32_t, dest, src, n);
     else
         __memcpy_backward_sized(uint32_t, dest, src, n);
@@ -173,7 +175,7 @@ void *z_memmove32 (void *dest, const void *src, unsigned int n) {
 }
 
 void *z_memmove64 (void *dest, const void *src, unsigned int n) {
-    if (dest <= src || dest >= (src + n))
+    if (dest <= src || (const char *)dest >= ((const char *)src + n))
         __memcpy_forward_sized(uint64_t, dest, src, n);
     else
         __memcpy_backward_sized(uint64_t, dest, src, n);
