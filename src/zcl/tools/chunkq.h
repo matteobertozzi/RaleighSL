@@ -23,10 +23,14 @@ __Z_BEGIN_DECLS__
 #include <zcl/object.h>
 #include <zcl/stream.h>
 #include <zcl/string.h>
+#include <zcl/rdata.h>
 #include <zcl/types.h>
 
-#define Z_CONST_CHUNKQ(x)                           Z_CONST_CAST(z_chunkq_t, x)
-#define Z_CHUNKQ(x)                                 Z_CAST(z_chunkq_t, x)
+#define Z_CONST_CHUNKQ_EXTENT(x)            Z_CONST_CAST(z_chunkq_extent_t, x)
+#define Z_CONST_CHUNKQ(x)                   Z_CONST_CAST(z_chunkq_t, x)
+
+#define Z_CHUNKQ_EXTENT(x)                  Z_CONST_CAST(z_chunkq_extent_t, x)
+#define Z_CHUNKQ(x)                         Z_CAST(z_chunkq_t, x)
 
 typedef int (*z_chunkq_compare_t) (const void *a, const void *b, unsigned int n);
 
@@ -79,9 +83,19 @@ unsigned int        z_chunkq_fetch              (z_chunkq_t *chunkq,
                                                  z_iopush_t fetch_func,
                                                  void *user_data);
 
+unsigned int        z_chunkq_update_fetch       (z_chunkq_t *chunkq,
+                                                 unsigned int offset,
+                                                 z_iofetch_t fetch_func,
+                                                 void *user_data);
+unsigned int        z_chunkq_update_rdata       (z_chunkq_t *chunkq,
+                                                 unsigned int offset,
+                                                 const z_rdata_t *rdata);
+
 unsigned int        z_chunkq_append             (z_chunkq_t *chunkq,
                                                  const void *buffer,
                                                  unsigned int size);
+unsigned int        z_chunkq_append_rdata       (z_chunkq_t *chunkq,
+                                                 const z_rdata_t *rdata);
 unsigned int        z_chunkq_append_fetch       (z_chunkq_t *chunkq,
                                                  z_iofetch_t fetch_func,
                                                  void *user_data);

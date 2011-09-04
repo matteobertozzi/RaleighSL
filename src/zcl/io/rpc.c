@@ -14,28 +14,55 @@
  *   limitations under the License.
  */
 
+#include <zcl/rpc.h>
+
 #include <sys/time.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <ctype.h>
-#include <stdio.h>
 
-#include <zcl/rpc.h>
+#if __Z_DEBUG__
+    #include <stdio.h>
+#endif
 
+#if 1
 #define __RPC_READ_BUFSIZE              (4096 - sizeof(z_chunkq_node_t) + 1)
 #define __RPC_WRITE_BUFSIZE             (4096 - sizeof(z_chunkq_node_t) + 1)
+#else
+#define __RPC_READ_BUFSIZE              (32 - sizeof(z_chunkq_node_t) + 1)
+#define __RPC_WRITE_BUFSIZE             (32 - sizeof(z_chunkq_node_t) + 1)
+#endif
 
 static z_iopoll_entity_plug_t __rpc_server_ioplug;
 static z_iopoll_entity_plug_t __rpc_client_ioplug;
 
-struct fetch_info {
-    union {
-        const z_stream_extent_t *stream;
-        const z_chunkq_extent_t *chunkq;
-    } extent;
-    unsigned int remaining;
-    unsigned int offset;
-};
+typedef int (__rpc_tokenize_t)      (z_rpc_client_t *client,
+                                     z_chunkq_extent_t *extent,
+                                     unsigned int offset);
+
+static unsigned int __rpc_ntokenize (z_rpc_client_t *client,
+                                     __rpc_tokenize_t tokenize_func,
+                                     z_chunkq_extent_t *tokens,
+                                     unsigned int max_tokens,
+                                     unsigned int offset,
+                                     unsigned int length)
+{
+    z_chunkq_extent_t *token = tokens;
+    unsigned int ntokens = 0;
+
+    while (tokenize_func(client, token, offset)) {
+        offset = token->offset + token->length + 1;
+
+        if (offset > length)
+            break;
+
+        ++token;
+        ++ntokens;
+        if (offset == length || ntokens >= max_tokens)
+            break;
+    }
+
+    return(ntokens);
+}
 
 static z_rpc_server_t *__rpc_server_alloc (z_memory_t *memory,
                                            z_rpc_protocol_t *proto,
@@ -97,15 +124,16 @@ static z_rpc_client_t *__rpc_client_alloc (z_rpc_server_t *server, int csock) {
 }
 
 static void __rpc_client_free (z_iopoll_t *iopoll, z_rpc_client_t *client) {
-    z_rpc_server_t *server = client->server;
+    const z_rpc_server_t *server = client->server;
 
-#if 1
+#if __Z_DEBUG__
     struct timeval now, r;
     gettimeofday(&now, NULL);
     timersub(&now, &(client->time), &r);
     fprintf(stderr, " -----> Client online time %.8f\n",
             r.tv_sec + (double)r.tv_usec / 1000000);
 #endif
+
     close(Z_IOPOLL_ENTITY_FD(client));
 
     if (server->protocol->disconnected != NULL)
@@ -146,34 +174,52 @@ static int __rpc_server_accept (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
 
 static int __rpc_client_read (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
     z_rpc_client_t *client = Z_RPC_CLIENT(entity);
+    const z_rpc_server_t *server = client->server;
     int ret;
 
-    z_chunkq_append_fetch_fd(&(client->rdbuffer), Z_IOPOLL_ENTITY_FD(client));
+    z_chunkq_append_fetch_fd(&(client->rdbuffer), entity->fd);
 
-    while (client->rdbuffer.size > 0) {
-        if ((ret = client->server->protocol->process(client)) < 0) {
-            z_iopoll_remove(client->server->iopoll, Z_IOPOLL_ENTITY(client));
-            return(-1);
+    if (server->protocol->process != NULL) {
+        while (client->rdbuffer.size > 0) {
+            if ((ret = server->protocol->process(client)) < 0) {
+                z_iopoll_remove(server->iopoll, entity);
+                return(-1);
+            }
+
+            if (ret != 0)
+                break;
         }
+    }  else if (server->protocol->process_line != NULL) {
+        unsigned int nline;
 
-        if (ret != 0)
-            break;
+        while (client->rdbuffer.size > 0) {
+            if (!(nline = z_rpc_has_line(client, 0)))
+                break;
+
+            if ((ret = server->protocol->process_line(client, nline + 1)) < 0) {
+                z_iopoll_remove(server->iopoll, entity);
+                return(-1);
+            }
+
+            if (ret != 0)
+                break;
+        }
     }
 
     return(0);
 }
 
 static int __rpc_client_write (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
-    z_rpc_client_t *client = Z_RPC_CLIENT(entity);
+    z_chunkq_t *wrbuffer = &(Z_RPC_CLIENT(entity)->wrbuffer);
 
-    if (client->wrbuffer.size > 0) {
+    if (wrbuffer->size > 0) {
         if (fcntl(entity->fd, F_GETFL) < 0)
             return(0);
 
-        z_chunkq_remove_push_fd(&(client->wrbuffer), entity->fd);
+        z_chunkq_remove_push_fd(wrbuffer, entity->fd);
     }
 
-    if (client->wrbuffer.size == 0)
+    if (wrbuffer->size == 0)
         z_iopoll_entity_set_writeable(iopoll, entity, 0);
 
     return(0);
@@ -244,71 +290,24 @@ int z_rpc_writev (z_rpc_client_t *client,
     return(0);
 }
 
-static unsigned int __fetch_chunkq (void *data, void *buffer, unsigned int n) {
-    struct fetch_info *fetch_info = (struct fetch_info *)data;
-    z_chunkq_t *chunkq = fetch_info->extent.chunkq->chunkq;
-    unsigned int rd;
-
-    if (n > fetch_info->remaining)
-        n = fetch_info->remaining;
-
-    rd = z_chunkq_read(chunkq, fetch_info->offset, buffer, n);
-    fetch_info->remaining -= rd;
-    fetch_info->offset += rd;
-
-    return(rd);
-}
-
 int z_rpc_write_chunk (z_rpc_client_t *client,
                        const z_chunkq_extent_t *extent)
 {
-    struct fetch_info fetch_info;
-
-    if (z_iopoll_entity_flag(client, Z_RPC_NOREPLY))
-        return(0);
-
-    fetch_info.remaining = extent->length;
-    fetch_info.extent.chunkq = extent;
-    fetch_info.offset = extent->offset;
-
-    z_chunkq_append_fetch(&(client->wrbuffer), __fetch_chunkq, &fetch_info);
+    z_rdata_t rdata;
+    z_rdata_from_chunkq(&rdata, extent);
+    z_chunkq_append_rdata(&(client->wrbuffer), &rdata);
 
     z_iopoll_entity_set_writeable(client->server->iopoll,
                                   Z_IOPOLL_ENTITY(client), 1);
     return(0);
 }
 
-static unsigned int __fetch_stream (void *data, void *buffer, unsigned int n) {
-    struct fetch_info *fetch_info = (struct fetch_info *)data;
-    unsigned int rd;
-
-    if (n > fetch_info->remaining)
-        n = fetch_info->remaining;
-
-    rd = z_stream_read(fetch_info->extent.stream->stream, buffer, n);
-    fetch_info->remaining -= rd;
-    fetch_info->offset += rd;
-
-    return(rd);
-}
-
 int z_rpc_write_stream (z_rpc_client_t *client,
                         const z_stream_extent_t *extent)
 {
-    struct fetch_info fetch_info;
-    unsigned int old_offset;
-
-    if (z_iopoll_entity_flag(client, Z_RPC_NOREPLY))
-        return(0);
-
-    fetch_info.remaining = extent->length;
-    fetch_info.extent.stream = extent;
-    fetch_info.offset = extent->offset;
-
-    old_offset = extent->stream->offset;
-    z_stream_seek(extent->stream, extent->offset);
-    z_chunkq_append_fetch(&(client->wrbuffer), __fetch_stream, &fetch_info);
-    z_stream_seek(extent->stream, old_offset);
+    z_rdata_t rdata;
+    z_rdata_from_stream(&rdata, extent);
+    z_chunkq_append_rdata(&(client->wrbuffer), &rdata);
 
     z_iopoll_entity_set_writeable(client->server->iopoll,
                                   Z_IOPOLL_ENTITY(client), 1);
@@ -323,11 +322,31 @@ int z_rpc_tokenize (z_rpc_client_t *client,
                              offset, " \t\r\n\v\f", 6));
 }
 
+unsigned int z_rpc_ntokenize (z_rpc_client_t *client,
+                              z_chunkq_extent_t *tokens,
+                              unsigned int max_tokens,
+                              unsigned int offset,
+                              unsigned int length)
+{
+    return(__rpc_ntokenize(client, z_rpc_tokenize,
+                           tokens, max_tokens, offset, length));
+}
+
 int z_rpc_tokenize_line (z_rpc_client_t *client,
                          z_chunkq_extent_t *extent,
                          unsigned int offset)
 {
     return(z_chunkq_tokenize(&(client->rdbuffer), extent, offset, "\r\n", 2));
+}
+
+unsigned int z_rpc_ntokenize_line (z_rpc_client_t *client,
+                                   z_chunkq_extent_t *tokens,
+                                   unsigned int max_tokens,
+                                   unsigned int offset,
+                                   unsigned int length)
+{
+    return(__rpc_ntokenize(client, z_rpc_tokenize_line,
+                           tokens, max_tokens, offset, length));
 }
 
 unsigned int z_rpc_has_line (z_rpc_client_t *client, unsigned int offset) {

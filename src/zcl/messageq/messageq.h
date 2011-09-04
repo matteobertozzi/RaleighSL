@@ -22,10 +22,10 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/object.h>
 #include <zcl/stream.h>
+#include <zcl/rdata.h>
 #include <zcl/types.h>
 
 Z_TYPEDEF_CONST_STRUCT(z_messageq_plug)
-Z_TYPEDEF_ENUM(z_message_flags)
 Z_TYPEDEF_STRUCT(z_message_source)
 Z_TYPEDEF_STRUCT(z_messageq)
 Z_TYPEDEF_STRUCT(z_message)
@@ -34,23 +34,28 @@ Z_TYPEDEF_STRUCT(z_message)
 #define Z_MESSAGEQ(x)                           Z_CAST(z_messageq_t, x)
 #define Z_MESSAGE(x)                            Z_CAST(z_message_t, x)
 
-typedef void (*z_message_func_t) (void *user_data, z_message_t *msg);
 
-enum z_message_flags {
-    Z_MESSAGE_ORDERED    =  1,
-    Z_MESSAGE_UNORDERED  =  2,
+typedef void (*z_message_exec_t) (void *user_data,
+                                  const z_rdata_t *object_name,
+                                  z_message_t *msg);
+typedef void (*z_message_func_t) (void *user_data,
+                                  z_message_t *msg);
 
-    Z_MESSAGE_IS_READ    =  4,
-    Z_MESSAGE_IS_WRITE   =  8,
+typedef enum z_message_flags {
+    Z_MESSAGE_ORDERED       =  1,
+    Z_MESSAGE_UNORDERED     =  2,
 
-    Z_MESSAGE_BYPASS     = 16,
-    Z_MESSAGE_REQUEST    = 32,
+    Z_MESSAGE_IS_READ       =  4,
+    Z_MESSAGE_IS_WRITE      =  8,
 
-    Z_MESSAGE_HAS_ERRORS = 64,
+    Z_MESSAGE_BYPASS        = 16,
+    Z_MESSAGE_REQUEST       = 32,
+
+    Z_MESSAGE_HAS_ERRORS    = 64,
 
     Z_MESSAGE_READ_REQUEST  = Z_MESSAGE_REQUEST | Z_MESSAGE_IS_READ,
     Z_MESSAGE_WRITE_REQUEST = Z_MESSAGE_REQUEST | Z_MESSAGE_IS_WRITE,
-};
+} z_message_flags_t;
 
 struct z_messageq_plug {
     int     (*init)         (z_messageq_t *messageq);
@@ -58,8 +63,7 @@ struct z_messageq_plug {
 
     int     (*send)         (z_messageq_t *messageq,
                              z_message_t *message,
-                             const void *object_name,
-                             unsigned int object_nlength,
+                             const z_rdata_t *object_name,
                              z_message_func_t callback,
                              void *user_data);
 };
@@ -67,8 +71,8 @@ struct z_messageq_plug {
 struct z_messageq {
     Z_OBJECT_TYPE
 
-    z_message_func_t exec_func;
-    void *           user_data;
+    z_message_exec_t   exec_func;
+    void *             user_data;
 
     z_messageq_plug_t *plug;
     z_data_t           plug_data;
@@ -81,11 +85,13 @@ extern z_messageq_plug_t z_messageq_local;
 z_messageq_t *      z_messageq_alloc            (z_messageq_t *messageq,
                                                  z_memory_t *memory,
                                                  z_messageq_plug_t *plug,
-                                                 z_message_func_t exec_func,
+                                                 z_message_exec_t exec_func,
                                                  void *user_data);
 void                z_messageq_free             (z_messageq_t *messageq);
 
 /* Source Related */
+z_message_source_t *z_message_source_alloc      (z_messageq_t *messageq);
+void                z_message_source_free       (z_message_source_t *source);
 
 /* Message Related */
 z_message_t *       z_message_alloc             (z_messageq_t *messageq,
@@ -103,6 +109,7 @@ void                z_message_set_state         (z_message_t *message,
 
 unsigned int        z_message_flags             (z_message_t *message);
 z_messageq_t *      z_message_queue             (z_message_t *message);
+z_message_source_t *z_message_source            (z_message_t *message);
 
 int                 z_message_request_stream    (z_message_t *message,
                                                  z_stream_t *stream);
@@ -110,8 +117,7 @@ int                 z_message_response_stream   (z_message_t *message,
                                                  z_stream_t *stream);
 
 int                 z_message_send              (z_message_t *message,
-                                                 const void *object_name,
-                                                 unsigned int object_nlength,
+                                                 const z_rdata_t *object_name,
                                                  z_message_func_t callback,
                                                  void *user_data);
 

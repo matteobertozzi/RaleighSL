@@ -26,7 +26,6 @@ __Z_BEGIN_DECLS__
 #define Z_TYPEDEF_CONST_STRUCT(name)    typedef const struct name name ## _t;
 #define Z_TYPEDEF_STRUCT(name)          typedef struct name name ## _t;
 #define Z_TYPEDEF_UNION(name)           typedef union name name ## _t;
-#define Z_TYPEDEF_ENUM(name)            typedef enum name name ## _t;
 
 #define Z_PREFETCH(ptr)                 __builtin_prefetch((ptr))
 #define Z_UNLIKELY(expr)                __builtin_expect(!!(expr), 0)

@@ -14,27 +14,18 @@
  *   limitations under the License.
  */
 
-#include <zcl/messageq.h>
+#ifndef _RALEIGHFS_KEY_H_
+#define _RALEIGHFS_KEY_H_
 
-static int __localq_init (z_messageq_t *messageq) {
-    return(-1);
-}
+#include <raleighfs/types.h>
 
-static void __localq_uninit (z_messageq_t *messageq) {
-}
+raleighfs_errno_t   raleighfs_key_object        (raleighfs_t *fs,
+                                                 raleighfs_key_t *key,
+                                                 const z_rdata_t *name);
 
-static int __localq_send (z_messageq_t *messageq,
-                          z_message_t *message,
-                          const z_rdata_t *object_name,
-                          z_message_func_t callback,
-                          void *user_data)
-{
-    return(-1);
-}
+int                 raleighfs_key_compare       (raleighfs_t *fs,
+                                                 const raleighfs_key_t *a,
+                                                 const raleighfs_key_t *b);
 
-z_messageq_plug_t z_messageq_local = {
-    .init   = __localq_init,
-    .uninit = __localq_uninit,
-    .send   = __localq_send,
-};
+#endif /* !_RALEIGHFS_KEY_H_ */
 

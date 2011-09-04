@@ -23,6 +23,11 @@ import os
 def execCommand(cmd):
     return commands.getstatusoutput(cmd)
 
+def dispatch(values, func):
+    import multiprocessing
+    pool = multiprocessing.Pool(multiprocessing.cpu_count())
+    return pool.map(func, values)
+
 def writeFile(filename, content):
     fd = open(filename, 'w')
     try:
@@ -67,25 +72,29 @@ def ldLibraryPathUpdate(ldlibs):
 class BuildOptions(object):
     def __init__(self):
         self.cc = _findCompiler()
-        self.ldlibs = []
-        self.cflags = []
-        self.defines = []
-        self.includes = []
+        self.ldlibs = set()
+        self.cflags = set()
+        self.defines = set()
+        self.includes = set()
+        self.pedantic = False
 
     def setCompiler(self, cc):
         self.cc = cc
 
     def addCFlags(self, cflags):
-        self.cflags.extend(cflags)
+        self.cflags |= set(cflags)
 
     def addDefines(self, defines):
-        self.defines.extend(defines)
+        self.defines |= set(defines)
 
     def addIncludePaths(self, includes):
-        self.includes.extend(includes)
+        self.includes |= set(includes)
 
     def addLdLibs(self, ldlibs):
-        self.ldlibs.extend(ldlibs)
+        self.ldlibs |= set(ldlibs)
+
+    def setPedantic(self, pedantic):
+        self.pedantic = pedantic
 
     def clone(self):
         opts = BuildOptions()
@@ -94,6 +103,7 @@ class BuildOptions(object):
         opts.addDefines(self.defines)
         opts.addIncludePaths(self.includes)
         opts.addLdLibs(self.ldlibs)
+        opts.setPedantic(self.pedantic)
         return opts
 
 class Build(object):
@@ -152,6 +162,19 @@ class Build(object):
         self._dir_inc = os.path.join(self._dir_out, 'include')
 
     def compileFile(self, filename, dump_error=True):
+        cmd = self._compileCommand(filename)
+        print ' [CC]', filename
+        exit_code, output = execCommand(cmd)
+        if exit_code != 0:
+            if dump_error:
+                print ' * Failed with Status', exit_code
+                print ' * %s' % (cmd)
+                print output
+            raise RuntimeError("Compilation Failure!")
+        elif self._options.pedantic and len(output) > 0:
+            print output
+
+    def _compileCommand(self, filename):
         obj_name, obj_path = self._objFilePath(filename)
 
         cmd = '%s -c %s %s %s %s %s -o %s' %                \
@@ -163,14 +186,7 @@ class Build(object):
                 filename,                                   \
                 obj_path)
 
-        print ' [CC]', filename
-        exit_code, output = execCommand(cmd)
-        if exit_code != 0:
-            if dump_error:
-                print ' * Failed with Status', exit_code
-                print ' * %s' % (cmd)
-                print output
-            raise RuntimeError("Compilation Failure!")
+        return cmd
 
     def compileDirectory(self, dir_src):
         return self._cFilesWalk(dir_src, self.compileFile)
@@ -311,7 +327,7 @@ class BuildConfig(Build):
         super(BuildConfig, self).__init__(name, **kwargs)
         self.src_dirs = src_dirs
 
-    def _build(self, config_file, config_head, dump_error=False):
+    def _build(self, config_file, config_head, debug=False, dump_error=False):
         print 'Running Build.Config'
         print '-' * 60
 
@@ -354,8 +370,17 @@ class BuildConfig(Build):
         fd.write('#endif\n')
         fd.write('\n')
 
+        if debug:
+            fd.write('/* Debugging Mode on! Print as much as you can! */\n')
+            fd.write('#define __Z_DEBUG__      1\n')
+            fd.write('\n')
+
+        if len(config) > 0:
+            fd.write("/* You've support for this things... */\n")
+
         for define in config:
             fd.write('#define %s_%s\n' % (config_head, define.upper().replace('-', '_')))
+
         fd.write('\n')
         fd.write('#endif /* !_%s_BUILD_CONFIG_H_ */\n' % config_head)
         fd.close()
@@ -440,7 +465,6 @@ class BuildLibrary(Build):
         print
 
     def copyHeaders(self):
-        dir_dst = os.path.join(self._dir_inc, self.name)
         self.copyHeadersFromTo(None, self.src_dirs)
         for hname, hdirs in self.copy_dirs:
             self.copyHeadersFromTo(hname, hdirs)
@@ -510,8 +534,9 @@ def _parseCmdline():
 if __name__ == '__main__':
     options = _parseCmdline()
 
-    DEFAULT_RELEASE_CFLAGS = ['-O3', '-Wall', '-Werror']
-    DEFAULT_DEBUG_CFLAGS = ['-g', '-Wall', '-Werror']
+    DEFAULT_CFLAGS = ['-Wall', '-Wmissing-field-initializers']
+    DEFAULT_RELEASE_CFLAGS = ['-O2']
+    DEFAULT_DEBUG_CFLAGS = ['-g']
     DEFAULT_DEFINES = ['-D__USE_FILE_OFFSET64']
     DEFAULT_LDLIBS = ['-lpthread']
 
@@ -519,6 +544,8 @@ if __name__ == '__main__':
     default_opts = BuildOptions()
     default_opts.addDefines(DEFAULT_DEFINES)
     default_opts.addLdLibs(DEFAULT_LDLIBS)
+    default_opts.addCFlags(DEFAULT_CFLAGS)
+    default_opts.setPedantic(options.pedantic)
 
     if options.compiler is not None:
         default_opts.setCompiler(options.compiler)
@@ -529,7 +556,11 @@ if __name__ == '__main__':
         default_opts.addCFlags(DEFAULT_DEBUG_CFLAGS)
 
     if options.pedantic:
-        default_opts.addCFlags(['-pedantic'])
+        default_opts.addCFlags(['-pedantic', '-Wignored-qualifiers',
+                                '-Wsign-compare', '-Wtype-limits',
+                                '-Wuninitialized', '-Winline', '-Wpacked'])
+    else:
+        default_opts.addCFlags(['-Werror'])
 
     # Default Library Build Options
     default_lib_opts = default_opts.clone()
@@ -553,8 +584,10 @@ if __name__ == '__main__':
 
     def buildZcl():
         if options.build_config:
-            build = BuildConfig('zcl-config', ['build.config'], options=default_opts)
-            build.build('src/zcl/config.h', 'Z', dump_error=options.verbose)
+            build_opts = default_opts.clone()
+            build_opts.addCFlags(['-Werror'])
+            build = BuildConfig('zcl-config', ['build.config'], options=build_opts)
+            build.build('src/zcl/config.h', 'Z', debug=not options.release, dump_error=options.verbose)
             build.cleanup()
 
         build = BuildLibrary('zcl', '0.5.0', ['src/zcl'], options=default_lib_opts)
@@ -577,12 +610,18 @@ if __name__ == '__main__':
         build_opts.addLdLibs(zcl_ldlibs)
         build_opts.addIncludePaths(zcl_includes)
 
-        copy_dirs = [('semantic', ['src/raleighfs-plugins/semantic']),
-                     ('objcache', ['src/raleighfs-plugins/objcache']),
-                     ('object', ['src/raleighfs-plugins/object']),
-                     ('device', ['src/raleighfs-plugins/device'])]
+        copy_dirs = [
+                     ('device', ['src/raleighfs/plugins/device']),
+                     ('key', ['src/raleighfs/plugins/key']),
+                     ('objcache', ['src/raleighfs/plugins/objcache']),
+                     ('object', ['src/raleighfs/plugins/object']),
+                     ('oid', ['src/raleighfs/plugins/oid']),
+                     ('semantic', ['src/raleighfs/plugins/semantic']),
+                     ('space', ['src/raleighfs/plugins/space']),
+                    ]
 
-        build = BuildLibrary('raleighfs', '0.5.0', ['src/raleighfs-core', 'src/raleighfs-plugins'],
+        build = BuildLibrary('raleighfs', '0.5.0',
+                             ['src/raleighfs/core', 'src/raleighfs/plugins'],
                              copy_dirs=copy_dirs, options=build_opts)
 
         if options.xcode:
@@ -604,15 +643,15 @@ if __name__ == '__main__':
     def buildServer():
         build_opts = default_opts.clone()
         build_opts.addLdLibs(zcl_ldlibs)
-        #build_opts.addLdLibs(raleighfs_ldlibs)
+        build_opts.addLdLibs(raleighfs_ldlibs)
         build_opts.addIncludePaths(zcl_includes)
-        #build_opts.addIncludePaths(raleighfs_includes)
+        build_opts.addIncludePaths(raleighfs_includes)
 
         build = BuildApp('raleigh-server', ['src/raleigh-server/'], options=build_opts)
         if not options.xcode and options.build_server:
             build.build()
 
     buildZcl()
-    #buildFs()
+    buildFs()
     buildServer()
 

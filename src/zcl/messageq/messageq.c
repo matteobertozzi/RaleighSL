@@ -18,10 +18,13 @@
 
 #include "messageq_p.h"
 
+/* ===========================================================================
+ *  MessageQ
+ */
 z_messageq_t *z_messageq_alloc (z_messageq_t *messageq,
                                 z_memory_t *memory,
                                 z_messageq_plug_t *plug,
-                                z_message_func_t exec_func,
+                                z_message_exec_t exec_func,
                                 void *user_data)
 {
     if ((messageq = z_object_alloc(memory, messageq, z_messageq_t)) == NULL)
@@ -44,7 +47,29 @@ void z_messageq_free (z_messageq_t *messageq) {
     z_object_free(messageq);
 }
 
+/* ===========================================================================
+ *  Message Source
+ */
+z_message_source_t *z_message_source_alloc (z_messageq_t *messageq) {
+    z_message_source_t *source;
 
+    if ((source = z_object_struct_alloc(messageq, z_message_source_t)) == NULL)
+        return(NULL);
+
+    source->messageq = messageq;
+    z_mutex_init(&(source->lock));
+
+    return(source);
+}
+
+void z_message_source_free (z_message_source_t *source) {
+    z_mutex_destroy(&(source->lock));
+    z_object_struct_free(source->messageq, z_message_source_t, source);
+}
+
+/* ===========================================================================
+ *  Message
+ */
 z_message_t *z_message_alloc (z_messageq_t *messageq,
                               z_message_source_t *source,
                               unsigned int flags)
@@ -109,8 +134,7 @@ z_message_source_t *z_message_source (z_message_t *message) {
 }
 
 int z_message_send (z_message_t *message,
-                    const void *obj_name,
-                    unsigned int obj_nlength,
+                    const z_rdata_t *object_name,
                     z_message_func_t callback,
                     void *udata)
 {
@@ -120,7 +144,7 @@ int z_message_send (z_message_t *message,
         return(-1);
 
     message->flags &= ~Z_MESSAGE_HAS_ERRORS;
-    return(q->plug->send(q, message, obj_name, obj_nlength, callback, udata));
+    return(q->plug->send(q, message, object_name, callback, udata));
 }
 
 

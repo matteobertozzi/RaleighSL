@@ -14,6 +14,16 @@
  *   limitations under the License.
  */
 
+#include <raleighfs/object/memcache.h>
+#include <raleighfs/object/counter.h>
+#include <raleighfs/object/deque.h>
+
+#include <raleighfs/semantic/flat.h>
+#include <raleighfs/device/memory.h>
+#include <raleighfs/key/flat.h>
+
+#include <raleighfs/raleighfs.h>
+
 #include <zcl/messageq.h>
 #include <zcl/iopoll.h>
 #include <zcl/memcpy.h>
@@ -23,29 +33,65 @@
 #include <unistd.h>
 #include <stdio.h>
 
-#include "engine.h"
-
+extern z_rpc_protocol_t raleigh_v1_protocol;
 extern z_rpc_protocol_t memcache_protocol;
 extern z_rpc_protocol_t redis_protocol;
 
-static void __request_exec (void *user_data, z_message_t *msg) {
-    storage_request_exec((struct storage *)user_data, msg);
+static void __request_exec (void *user_data,
+                            const z_rdata_t *object_name,
+                            z_message_t *msg)
+{
+    raleighfs_execute(RALEIGHFS(user_data), object_name, msg);
+}
+
+static int __init_static_objects (raleighfs_t *fs) {
+    z_rdata_t name;
+
+    z_rdata_from_blob(&name, ":memcache:", 10);
+    raleighfs_semantic_touch(fs, &raleighfs_object_memcache, &name);
+
+    return(0);
 }
 
 int main (int argc, char **argv) {
+    raleighfs_device_t device;
+    raleighfs_errno_t errno;
     z_messageq_t messageq;
-    struct storage engine;
-    z_iopoll_t iopoll;
     z_memory_t memory;
+    z_iopoll_t iopoll;
+    raleighfs_t fs;
 
     z_memory_init(&memory, z_system_allocator());
 
-    storage_alloc(&engine, &memory);
+    if (raleighfs_alloc(&fs, &memory) == NULL)
+        return(1);
+
+    /* Plug semantic layer */
+    raleighfs_plug_semantic(&fs, &raleighfs_semantic_flat);
+
+    /* Plug objects */
+    raleighfs_plug_object(&fs, &raleighfs_object_memcache);
+    raleighfs_plug_object(&fs, &raleighfs_object_counter);
+    raleighfs_plug_object(&fs, &raleighfs_object_deque);
+
+    raleighfs_memory_device(&device);
+    if ((errno = raleighfs_create(&fs, &device,
+                                  &raleighfs_key_flat,
+                                  NULL, NULL,
+                                  &raleighfs_semantic_flat)))
+    {
+        fprintf(stderr, "raleighfs_create(): %s\n",
+                raleighfs_errno_string(errno));
+        return(2);
+    }
+
+    __init_static_objects(&fs);
 
     z_iopoll_alloc(&iopoll, &memory, NULL, 0, NULL);
     z_messageq_alloc(&messageq, &memory, &z_messageq_noop,
-                     __request_exec, &engine);
+                     __request_exec, &fs);
 
+    z_rpc_plug(&memory, &iopoll, &raleigh_v1_protocol, NULL,"11215", &messageq);
     z_rpc_plug(&memory, &iopoll, &redis_protocol, NULL, "11214", &messageq);
     z_rpc_plug(&memory, &iopoll, &memcache_protocol, NULL, "11212", &messageq);
 

@@ -59,8 +59,7 @@ static void __noop_uninit (z_messageq_t *messageq) {
 
 static int __noop_send (z_messageq_t *messageq,
                         z_message_t *message,
-                        const void *object_name,
-                        unsigned int object_nlength,
+                        const z_rdata_t *object_name,
                         z_message_func_t callback,
                         void *user_data)
 {
@@ -73,7 +72,7 @@ static int __noop_send (z_messageq_t *messageq,
     if (!(z_message_flags(message) & Z_MESSAGE_BYPASS)) {
         /* Execute Message */
         if (messageq->exec_func != NULL)
-            messageq->exec_func(messageq->user_data, message);
+            messageq->exec_func(messageq->user_data, object_name, message);
     }
 
     /* Execute Callback */

@@ -14,25 +14,18 @@
  *   limitations under the License.
  */
 
+#include <raleighfs/object/memcache.h>
+
 #include <zcl/messageq.h>
+#include <zcl/snprintf.h>
 #include <zcl/iopoll.h>
 #include <zcl/memcmp.h>
 #include <zcl/memcpy.h>
 #include <zcl/strtol.h>
 #include <zcl/chunkq.h>
 #include <zcl/socket.h>
+#include <zcl/debug.h>
 #include <zcl/rpc.h>
-
-#include <stdio.h>
-
-#include "engine.h"
-
-#define __redis_message_alloc(client, type)                                   \
-    z_message_alloc((client)->server->user_data, (client)->user_data, type)
-
-#define __redis_message_send(client, msg, callback)                           \
-    z_message_send(msg, ":memcache:", 10, callback, client)
-
 
 #define __tokcmp(client, token, mem, memlen)                                  \
     z_chunkq_memcmp(&((client)->rdbuffer), (token)->offset, mem, memlen)
@@ -48,7 +41,7 @@
 #define REDIS_REQ_INLINE                        1
 
 typedef int (*redis_func_t)  (z_rpc_client_t *client,
-                              storage_code_t method_code,
+                              int method_code,
                               const z_chunkq_extent_t *tokens,
                               unsigned int ntokens,
                               unsigned int nline);
@@ -56,16 +49,28 @@ typedef int (*redis_func_t)  (z_rpc_client_t *client,
 struct redis_command {
     const char *    name;
     unsigned int    length;
-    storage_code_t  code;
+    int             code;
     int             rmline;
     redis_func_t    func;
 };
+
+#define __redis_message_alloc(client, type)                                   \
+    z_message_alloc((client)->server->user_data, (client)->user_data, type)
+
+static int __redis_message_send (z_rpc_client_t *client,
+                                 z_message_t *msg,
+                                 z_message_func_t callback)
+{
+    z_rdata_t obj_name;
+    z_rdata_from_blob(&obj_name, ":memcache:", 10);
+    return(z_message_send(msg, &obj_name, callback, client));
+}
 
 static void __complete_set (void *user_data, z_message_t *msg) {
     z_rpc_client_t *client = Z_RPC_CLIENT(user_data);
 
     switch (z_message_state(msg)) {
-        case STORAGE_STATE_STORED:
+        case RALEIGHFS_MEMCACHE_STORED:
              z_rpc_write(client, "+OK\r\n", 5);
             break;
         default:
@@ -77,7 +82,7 @@ static void __complete_set (void *user_data, z_message_t *msg) {
 }
 
 static int __process_set (z_rpc_client_t *client,
-                          storage_code_t method_code,
+                          int method_code,
                           const z_chunkq_extent_t *tokens,
                           unsigned int ntokens,
                           unsigned int nline)
@@ -124,7 +129,7 @@ static void __complete_get (void *user_data, z_message_t *msg) {
     int use_cas;
     int n;
 
-    use_cas = (z_message_type(msg) == STORAGE_MEMCACHE_GETS);
+    use_cas = (z_message_type(msg) == RALEIGHFS_MEMCACHE_GETS);
 
     z_message_response_stream(msg, &res_stream);
     z_message_request_stream(msg, &req_stream);
@@ -134,19 +139,19 @@ static void __complete_get (void *user_data, z_message_t *msg) {
     z_stream_set_extent(&req_stream, &key, req_stream.offset, klength);
 
     z_stream_read_uint32(&res_stream, &state);
-    if (state == STORAGE_STATE_NOT_EXISTS) {
-        n = snprintf(buffer, sizeof(buffer), "$-1");
+    if (state == RALEIGHFS_MEMCACHE_NOT_FOUND) {
+        n = z_snprintf(buffer, sizeof(buffer), "$-1");
         z_rpc_write(client, buffer, n);
     } else {
         z_stream_read_uint32(&res_stream, &unused32);
         z_stream_read_uint32(&res_stream, &unused32);
         z_stream_read_uint64(&res_stream, &unused64);
 
-        if (state == STORAGE_STATE_MEMCACHE_NUMBER) {
+        if (state == RALEIGHFS_MEMCACHE_NUMBER) {
             z_stream_read_uint64(&res_stream, &number);
             n = z_u64tostr(number, text_number, sizeof(text_number), 10);
             vlength = n;
-            n = snprintf(buffer, sizeof(buffer), "$%u\r\n", vlength);
+            n = z_snprintf(buffer, sizeof(buffer), "$%u4d\r\n", vlength);
             z_rpc_write(client, buffer, n);
             z_rpc_write(client, text_number, vlength);
         } else {
@@ -154,7 +159,7 @@ static void __complete_get (void *user_data, z_message_t *msg) {
             z_stream_set_extent(&res_stream, &value, res_stream.offset, vlength);
             z_stream_seek(&res_stream, res_stream.offset + vlength);
 
-            n = snprintf(buffer, sizeof(buffer), "$%u\r\n", vlength);
+            n = z_snprintf(buffer, sizeof(buffer), "$%u4d\r\n", vlength);
             z_rpc_write(client, buffer, n);
             z_rpc_write_stream(client, &value);
         }
@@ -165,7 +170,7 @@ static void __complete_get (void *user_data, z_message_t *msg) {
 }
 
 static int __process_get (z_rpc_client_t *client,
-                          storage_code_t method_code,
+                          int method_code,
                           const z_chunkq_extent_t *tokens,
                           unsigned int ntokens,
                           unsigned int nline)
@@ -190,7 +195,7 @@ static int __process_get (z_rpc_client_t *client,
 }
 
 static int __process_ping (z_rpc_client_t *client,
-                           storage_code_t method_code,
+                           int method_code,
                            const z_chunkq_extent_t *tokens,
                            unsigned int ntokens,
                            unsigned int nline)
@@ -199,7 +204,7 @@ static int __process_ping (z_rpc_client_t *client,
 }
 
 static int __process_quit (z_rpc_client_t *client,
-                           storage_code_t method_code,
+                           int method_code,
                            const z_chunkq_extent_t *tokens,
                            unsigned int ntokens,
                            unsigned int nline)
@@ -209,12 +214,12 @@ static int __process_quit (z_rpc_client_t *client,
 }
 
 static struct redis_command __redis_commands[] = {
-    { "set",        3, STORAGE_MEMCACHE_SET, 1, __process_set },
-    { "get",        3, STORAGE_MEMCACHE_GET, 1, __process_get },
+    { "set",        3, RALEIGHFS_MEMCACHE_SET, 1, __process_set },
+    { "get",        3, RALEIGHFS_MEMCACHE_GET, 1, __process_get },
 
-    { "ping",       4, 0,                    1, __process_ping },
-    { "quit",       4, 0,                    1, __process_quit },
-    { NULL,         0, 0,                    1, NULL },
+    { "ping",       4, 0,                      1, __process_ping },
+    { "quit",       4, 0,                      1, __process_quit },
+    { NULL,         0, 0,                      1, NULL },
 };
 
 /* ============================================================================
@@ -226,17 +231,15 @@ static int __redis_bind (const void *hostname, const void *service) {
     if ((socket = z_socket_tcp_bind(hostname, service, NULL)) < 0)
         return(-1);
 
-    fprintf(stderr, " - Redis Interface up and running on %s:%s...\n",
-            (const char *)hostname, (const char *)service);
+    Z_PRINT_DEBUG(" - Redis Interface up and running on %s:%s...\n",
+                  (const char *)hostname, (const char *)service);
 
     return(socket);
 }
 
 static int __redis_accept (z_rpc_server_t *server) {
-#if 0
     struct sockaddr_storage address;
     char ip[INET6_ADDRSTRLEN];
-#endif
     int csock;
 
     if ((csock = z_socket_tcp_accept(Z_IOPOLL_ENTITY_FD(server), NULL)) < 0)
@@ -244,11 +247,9 @@ static int __redis_accept (z_rpc_server_t *server) {
 
     z_socket_tcp_set_nodelay(csock);
 
-#if 0
     z_socket_address(csock, &address);
     z_socket_str_address(ip, INET6_ADDRSTRLEN, (struct sockaddr *)&address);
-    fprintf(stderr, " - Redis Accept %d %s.\n", csock, ip);
-#endif
+    Z_PRINT_DEBUG(" - Redis Accept %d %s.\n", csock, ip);
 
     return(csock);
 }
@@ -299,7 +300,7 @@ static int __redis_process_multibulk (z_rpc_client_t *client) {
         return(2);
 
     if (nargs > MAX_TOKENS) {
-        fprintf(stderr, "Too much tokens %u\n", nargs);
+        Z_PRINT_DEBUG("Too much tokens %u\n", nargs);
         return(-1);
     }
 
@@ -314,7 +315,8 @@ static int __redis_process_multibulk (z_rpc_client_t *client) {
             return(4);
 
         nline++;
-        z_chunkq_extent_set(&(tokens[ntokens]), &(client->rdbuffer), nline, size);
+        z_chunkq_extent_set(&(tokens[ntokens]), &(client->rdbuffer),
+                            nline, size);
 
         if (!(nline = z_rpc_has_line(client, nline)))
             return(5);
@@ -327,22 +329,14 @@ static int __redis_process_multibulk (z_rpc_client_t *client) {
 
 static int __redis_process_inline (z_rpc_client_t *client) {
     z_chunkq_extent_t tokens[MAX_TOKENS];
-    unsigned int ntokens = 0;
-    unsigned int offset = 0;
+    unsigned int ntokens;
     unsigned int nline;
 
     if (!(nline = z_rpc_has_line(client, 0)))
         return(1);
 
     nline++;
-    while (z_rpc_tokenize(client, &(tokens[ntokens]), offset)) {
-        offset = tokens[ntokens].offset + tokens[ntokens].length + 1;
-        if (offset >= nline)
-            break;
-
-        if (++ntokens == MAX_TOKENS)
-            break;
-    }
+    ntokens = z_rpc_ntokenize(client, tokens, MAX_TOKENS, 0, nline);
 
     return(__redis_process_command(client, tokens, ntokens, nline));
 }
@@ -367,5 +361,6 @@ z_rpc_protocol_t redis_protocol = {
     .connected      = NULL,
     .disconnected   = NULL,
     .process        = __redis_process,
+    .process_line   = NULL,
 };
 

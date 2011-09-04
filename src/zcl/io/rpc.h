@@ -31,7 +31,7 @@ __Z_BEGIN_DECLS__
 
 #define Z_RPC_NOREPLY                     (1)
 
-Z_TYPEDEF_STRUCT(z_rpc_protocol)
+Z_TYPEDEF_CONST_STRUCT(z_rpc_protocol)
 Z_TYPEDEF_STRUCT(z_rpc_server)
 Z_TYPEDEF_STRUCT(z_rpc_client)
 
@@ -47,8 +47,8 @@ struct z_rpc_server {
 struct z_rpc_client {
     Z_IOPOLL_ENTITY_TYPE
 
-    z_rpc_server_t *server;
-    void *          user_data;
+    const z_rpc_server_t *server;
+    void *                user_data;
 
     z_chunkq_t      rdbuffer;
     z_chunkq_t      wrbuffer;
@@ -62,6 +62,7 @@ struct z_rpc_protocol {
     int     (*connected)        (z_rpc_client_t *client);
     void    (*disconnected)     (z_rpc_client_t *client);
     int     (*process)          (z_rpc_client_t *client);
+    int     (*process_line)     (z_rpc_client_t *client, unsigned int n);
 };
 
 int             z_rpc_plug            (z_memory_t *memory,
@@ -85,9 +86,19 @@ int             z_rpc_write_stream    (z_rpc_client_t *client,
 int             z_rpc_tokenize        (z_rpc_client_t *client,
                                        z_chunkq_extent_t *extent,
                                        unsigned int offset);
+unsigned int    z_rpc_ntokenize       (z_rpc_client_t *client,
+                                       z_chunkq_extent_t *tokens,
+                                       unsigned int max_tokens,
+                                       unsigned int offset,
+                                       unsigned int length);
 int             z_rpc_tokenize_line   (z_rpc_client_t *client,
                                        z_chunkq_extent_t *extent,
                                        unsigned int offset);
+unsigned int    z_rpc_ntokenize_line  (z_rpc_client_t *client,
+                                       z_chunkq_extent_t *tokens,
+                                       unsigned int max_tokens,
+                                       unsigned int offset,
+                                       unsigned int length);
 
 unsigned int    z_rpc_has_line        (z_rpc_client_t *client,
                                        unsigned int offset);

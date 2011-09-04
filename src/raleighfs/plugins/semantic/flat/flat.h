@@ -14,27 +14,13 @@
  *   limitations under the License.
  */
 
-#include <zcl/messageq.h>
+#ifndef _RALEIGHFS_SEMANTIC_FLAT_H_
+#define _RALEIGHFS_SEMANTIC_FLAT_H_
 
-static int __localq_init (z_messageq_t *messageq) {
-    return(-1);
-}
+#include <raleighfs/types.h>
 
-static void __localq_uninit (z_messageq_t *messageq) {
-}
+extern const uint8_t RALEIGHFS_SEMANTIC_FLAT_UUID[16];
+extern raleighfs_semantic_plug_t raleighfs_semantic_flat;
 
-static int __localq_send (z_messageq_t *messageq,
-                          z_message_t *message,
-                          const z_rdata_t *object_name,
-                          z_message_func_t callback,
-                          void *user_data)
-{
-    return(-1);
-}
-
-z_messageq_plug_t z_messageq_local = {
-    .init   = __localq_init,
-    .uninit = __localq_uninit,
-    .send   = __localq_send,
-};
+#endif /* !_RALEIGHFS_SEMANTIC_FLAT_H_ */
 

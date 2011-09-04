@@ -14,27 +14,24 @@
  *   limitations under the License.
  */
 
-#include <zcl/messageq.h>
+#ifndef _RALEIGHFS_H_
+#define _RALEIGHFS_H_
 
-static int __localq_init (z_messageq_t *messageq) {
-    return(-1);
-}
+#define RALEIGHFS_NAME              "RaleighFS"
+#define RALEIGHFS_VERSION           0x050000        /* 0x050102 = 5.1.2 */
+#define RALEIGHFS_VERSION_STR       "v5"
 
-static void __localq_uninit (z_messageq_t *messageq) {
-}
+#include <raleighfs/errno.h>
 
-static int __localq_send (z_messageq_t *messageq,
-                          z_message_t *message,
-                          const z_rdata_t *object_name,
-                          z_message_func_t callback,
-                          void *user_data)
-{
-    return(-1);
-}
+#include <raleighfs/plugins.h>
+#include <raleighfs/types.h>
 
-z_messageq_plug_t z_messageq_local = {
-    .init   = __localq_init,
-    .uninit = __localq_uninit,
-    .send   = __localq_send,
-};
+#include <raleighfs/filesystem.h>
+#include <raleighfs/semantic.h>
+#include <raleighfs/object.h>
+#include <raleighfs/key.h>
+
+#include <raleighfs/execute.h>
+
+#endif /* !_RALEIGHFS_H_ */
 

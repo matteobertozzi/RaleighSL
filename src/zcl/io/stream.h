@@ -27,8 +27,11 @@ Z_TYPEDEF_CONST_STRUCT(z_stream_plug)
 Z_TYPEDEF_STRUCT(z_stream_extent)
 Z_TYPEDEF_STRUCT(z_stream)
 
-#define Z_STREAM_EXTENT(x)                      Z_CAST(z_stream_extent_t, x)
-#define Z_STREAM(x)                             Z_CAST(z_stream_t, x)
+#define Z_CONST_STREAM_EXTENT(x)            Z_CONST_CAST(z_stream_extent_t, x)
+#define Z_CONST_STREAM(x)                   Z_CONST_CAST(z_stream_t, x)
+
+#define Z_STREAM_EXTENT(x)                  Z_CAST(z_stream_extent_t, x)
+#define Z_STREAM(x)                         Z_CAST(z_stream_t, x)
 
 struct z_stream_plug {
     int          (*close)    (z_stream_t *stream);

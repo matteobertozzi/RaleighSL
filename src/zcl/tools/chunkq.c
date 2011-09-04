@@ -22,6 +22,7 @@
 #include <zcl/memcpy.h>
 #include <zcl/memcmp.h>
 #include <zcl/strtol.h>
+#include <zcl/rdata.h>
 
 typedef struct z_chunkq_search {
     const uint8_t *needle;
@@ -32,6 +33,12 @@ typedef struct z_chunkq_search {
     unsigned int rd;
     int state;
 } z_chunkq_search_t;
+
+typedef struct z_chunkq_rdata_info {
+    const z_rdata_t *rdata;
+    unsigned int available;
+    unsigned int offset;
+} z_chunkq_rdata_info_t;
 
 static z_chunkq_node_t *__chunkq_node_alloc (z_chunkq_t *chunkq) {
     z_chunkq_node_t *node;
@@ -301,6 +308,77 @@ unsigned int z_chunkq_fetch (z_chunkq_t *chunkq,
     }
 
     return(n);
+}
+
+static unsigned int __fetch_rdata (void *data, void *buffer, unsigned int n) {
+    z_chunkq_rdata_info_t *info = (z_chunkq_rdata_info_t *)data;
+    unsigned int rd;
+
+    rd = z_rdata_read(info->rdata, info->offset, buffer, n);
+    info->offset += rd;
+
+    return(rd);
+}
+
+unsigned int z_chunkq_append_rdata (z_chunkq_t *chunkq,
+                                     const z_rdata_t *rdata)
+{
+    z_chunkq_rdata_info_t info;
+
+    info.available = z_rdata_length(rdata);
+    info.offset = 0U;
+    info.rdata = rdata;
+
+    return(z_chunkq_append_fetch(chunkq, __fetch_rdata, &info));
+}
+
+unsigned int z_chunkq_update_fetch (z_chunkq_t *chunkq,
+                                    unsigned int offset,
+                                    z_iofetch_t fetch_func,
+                                    void *user_data)
+{
+    z_chunkq_node_t *node;
+    unsigned int n, rd;
+
+    if ((node = __chunkq_node_at_offset(chunkq, offset, &n)) == NULL)
+        return(-1);
+
+    if (node == NULL)
+        return(z_chunkq_append_fetch(chunkq, fetch_func, user_data));
+
+    /* Update chunkq */
+    offset = offset - (n - node->size);
+    n = (node->size - offset);
+
+    rd = fetch_func(user_data, node->data + node->offset + offset, n);
+    if (rd != n)
+        return(rd);
+
+    n = rd;
+    while ((node = node->next) != NULL) {
+        rd = fetch_func(user_data, node->data + node->offset, node->size);
+        n += rd;
+
+        if (rd != node->size)
+            return(n);
+    }
+
+    /* TODO: Append to chunkq */
+
+    return(0);
+}
+
+unsigned int z_chunkq_update_rdata (z_chunkq_t *chunkq,
+                                    unsigned int offset,
+                                    const z_rdata_t *rdata)
+{
+    z_chunkq_rdata_info_t info;
+
+    info.available = z_rdata_length(rdata);
+    info.offset = 0U;
+    info.rdata = rdata;
+
+    return(z_chunkq_update_fetch(chunkq, offset, __fetch_rdata, &info));
 }
 
 unsigned int z_chunkq_append (z_chunkq_t *chunkq,
