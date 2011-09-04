@@ -23,7 +23,7 @@ struct __strtol_data {
     { "-23",           10, 1, -23 },
     { "-*7",           10, 0, 0 },
     { "   -52L",       10, 1, -52 },
-    { NULL, 0, 0 },
+    { NULL, 0, 0, 0 },
 };
 
 static int __test_strtol (z_test_t *test) {
