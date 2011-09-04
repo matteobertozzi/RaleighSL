@@ -314,7 +314,11 @@ static unsigned int __fetch_rdata (void *data, void *buffer, unsigned int n) {
     z_chunkq_rdata_info_t *info = (z_chunkq_rdata_info_t *)data;
     unsigned int rd;
 
+    if (info->available < n)
+        n = info->available;
+
     rd = z_rdata_read(info->rdata, info->offset, buffer, n);
+    info->available -= rd;
     info->offset += rd;
 
     return(rd);
