@@ -82,6 +82,7 @@ int             z_rpc_write_chunk     (z_rpc_client_t *client,
                                        const z_chunkq_extent_t *extent);
 int             z_rpc_write_stream    (z_rpc_client_t *client,
                                        const z_stream_extent_t *extent);
+int             z_rpc_write_newline   (z_rpc_client_t *client);
 
 int             z_rpc_tokenize        (z_rpc_client_t *client,
                                        z_chunkq_extent_t *extent,

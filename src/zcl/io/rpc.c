@@ -314,6 +314,10 @@ int z_rpc_write_stream (z_rpc_client_t *client,
     return(0);
 }
 
+int z_rpc_write_newline (z_rpc_client_t *client) {
+    return(z_rpc_write(client, "\r\n", 2));
+}
+
 int z_rpc_tokenize (z_rpc_client_t *client,
                     z_chunkq_extent_t *extent,
                     unsigned int offset)
