@@ -199,6 +199,24 @@ int z_tree_remove (z_tree_t *tree,
     return(tree->plug->remove(tree, key));
 }
 
+int z_tree_remove_min (z_tree_t *tree) {
+    void *key;
+
+    if ((key = z_tree_lookup_min(tree)) == NULL)
+        return(1);
+
+    return(z_tree_remove(tree, key));
+}
+
+int z_tree_remove_max (z_tree_t *tree) {
+    void *key;
+
+    if ((key = z_tree_lookup_max(tree)) == NULL)
+        return(1);
+
+    return(z_tree_remove(tree, key));
+}
+
 int z_tree_remove_range (z_tree_t *tree,
                          const void *min_key,
                          const void *max_key)

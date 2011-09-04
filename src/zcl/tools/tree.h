@@ -88,6 +88,8 @@ int         z_tree_insert               (z_tree_t *tree,
                                          void *data);
 int         z_tree_remove               (z_tree_t *tree,
                                          const void *key);
+int         z_tree_remove_min           (z_tree_t *tree);
+int         z_tree_remove_max           (z_tree_t *tree);
 int         z_tree_remove_range         (z_tree_t *tree,
                                          const void *min_key,
                                          const void *max_key);
