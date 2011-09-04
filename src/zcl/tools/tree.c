@@ -70,6 +70,54 @@ static void *__tree_iter_lookup_child (z_tree_iter_t *iter,
     return(NULL);
 }
 
+void *__tree_iter_lookup_near (z_tree_iter_t *iter,
+                               z_compare_t key_compare,
+                               const void *key,
+                               int ceil)
+{
+    z_tree_node_t *node;
+    int nceil = !ceil;
+    void *user_data;
+    int cmp;
+
+    iter->height = 0;
+    iter->current = NULL;
+    node = iter->tree->root;
+    user_data = iter->tree->user_data;
+
+    while (node != NULL) {
+        iter->stack[++(iter->height)] = node;
+
+        if (!(cmp = key_compare(user_data, node->data, key))) {
+            iter->current = node;
+            return(node->data);
+        }
+
+        if (ceil ? (cmp > 0) : (cmp < 0)) {
+            if (node->child[nceil] != NULL) {
+                node = node->child[nceil];
+            } else {
+                iter->current = node;
+                return(node->data);
+            }
+        } else {
+            if (node->child[ceil] != NULL) {
+                node = node->child[ceil];
+            } else {
+                z_tree_node_t *parent = iter->stack[--(iter->height)];
+                while (parent != NULL && node == parent->child[ceil]) {
+                    node = parent;
+                    parent = iter->stack[--(iter->height)];
+                }
+                iter->current = parent;
+                return((parent != NULL) ? parent->data : NULL);
+            }
+        }
+    }
+
+    return(NULL);
+}
+
 static void *__tree_iter_traverse (z_tree_iter_t *iter,
                                    int dir)
 {
@@ -235,7 +283,7 @@ int z_tree_remove_range (z_tree_t *tree,
     user_data = tree->user_data;
 
     while (z_tree_iter_next(&iter)) {
-        if ((cmp = key_compare(user_data, max_key, iter.current->data)) <= 0) {
+        if ((cmp = key_compare(user_data, iter.current->data, max_key)) >= 0) {
             /* if (!cmp)
                 tree->plug->remove(tree, iter.current->data); */
             break;
@@ -251,10 +299,56 @@ int z_tree_remove_range (z_tree_t *tree,
     return(0);
 }
 
+int z_tree_remove_index (z_tree_t *tree,
+                         unsigned long start,
+                         unsigned long length)
+{
+    z_tree_node_t *next;
+    z_tree_iter_t iter;
+    unsigned long i;
+    void *key;
+
+    z_tree_iter_init(&iter, tree);
+
+    /* Loop until i == start */
+    key = z_tree_iter_lookup_min(&iter);
+    for (i = 0; i < start && key != NULL; ++i)
+        key = z_tree_iter_next(&iter);
+
+    /* Loop for length items */
+    for (i = 0; i < length && key != NULL; ++i) {
+        z_tree_iter_next(&iter);
+        next = iter.current;
+
+        tree->plug->remove(tree, key);
+
+        if (next != NULL)
+            key = __tree_iter_lookup_node(&iter, next);
+    }
+
+    return(0);
+}
+
 void *z_tree_lookup (const z_tree_t *tree,
                      const void *key)
 {
     return(z_tree_lookup_custom(tree, tree->key_compare, key));
+}
+
+void *z_tree_lookup_ceil (const z_tree_t *tree,
+                          const void *key)
+{
+    z_tree_iter_t iter;
+    z_tree_iter_init(&iter, tree);
+    return(z_tree_iter_lookup_ceil(&iter, key));
+}
+
+void *z_tree_lookup_floor (const z_tree_t *tree,
+                           const void *key)
+{
+    z_tree_iter_t iter;
+    z_tree_iter_init(&iter, tree);
+    return(z_tree_iter_lookup_floor(&iter, key));
 }
 
 void *z_tree_lookup_custom (const z_tree_t *tree,
@@ -275,6 +369,24 @@ void *z_tree_lookup_custom (const z_tree_t *tree,
     }
 
     return(NULL);
+}
+
+void *z_tree_lookup_ceil_custom (const z_tree_t *tree,
+                                 z_compare_t key_compare,
+                                 const void *key)
+{
+    z_tree_iter_t iter;
+    z_tree_iter_init(&iter, tree);
+    return(z_tree_iter_lookup_floor_custom(&iter, key_compare, key));
+}
+
+void *z_tree_lookup_floor_custom (const z_tree_t *tree,
+                                  z_compare_t key_compare,
+                                  const void *key)
+{
+    z_tree_iter_t iter;
+    z_tree_iter_init(&iter, tree);
+    return(z_tree_iter_lookup_floor_custom(&iter, key_compare, key));
 }
 
 void *z_tree_lookup_min (const z_tree_t *tree) {
@@ -303,6 +415,18 @@ void *z_tree_iter_lookup (z_tree_iter_t *iter,
     return(z_tree_iter_lookup_custom(iter, iter->tree->key_compare, key));
 }
 
+void *z_tree_iter_lookup_ceil (z_tree_iter_t *iter,
+                               const void *key)
+{
+    return(z_tree_iter_lookup_ceil_custom(iter, iter->tree->key_compare, key));
+}
+
+void *z_tree_iter_lookup_floor (z_tree_iter_t *iter,
+                                const void *key)
+{
+    return(z_tree_iter_lookup_floor_custom(iter, iter->tree->key_compare, key));
+}
+
 void *z_tree_iter_lookup_custom (z_tree_iter_t *iter,
                                  z_compare_t key_compare,
                                  const void *key)
@@ -328,6 +452,20 @@ void *z_tree_iter_lookup_custom (z_tree_iter_t *iter,
 
     iter->height = 0;
     return(NULL);
+}
+
+void *z_tree_iter_lookup_ceil_custom (z_tree_iter_t *iter,
+                                      z_compare_t key_compare,
+                                      const void *key)
+{
+    return(__tree_iter_lookup_near(iter, key_compare, key, 1));
+}
+
+void *z_tree_iter_lookup_floor_custom (z_tree_iter_t *iter,
+                                       z_compare_t key_compare,
+                                       const void *key)
+{
+    return(__tree_iter_lookup_near(iter, key_compare, key, 0));
 }
 
 void *z_tree_iter_lookup_min (z_tree_iter_t *iter) {

@@ -93,11 +93,24 @@ int         z_tree_remove_max           (z_tree_t *tree);
 int         z_tree_remove_range         (z_tree_t *tree,
                                          const void *min_key,
                                          const void *max_key);
+int         z_tree_remove_index         (z_tree_t *tree,
+                                         unsigned long start,
+                                         unsigned long length);
 int         z_tree_clear                (z_tree_t *tree);
 
 void *      z_tree_lookup               (const z_tree_t *tree,
                                          const void *key);
+void *      z_tree_lookup_ceil          (const z_tree_t *tree,
+                                         const void *key);
+void *      z_tree_lookup_floor         (const z_tree_t *tree,
+                                         const void *key);
 void *      z_tree_lookup_custom        (const z_tree_t *tree,
+                                         z_compare_t key_compare,
+                                         const void *key);
+void *      z_tree_lookup_ceil_custom   (const z_tree_t *tree,
+                                         z_compare_t key_compare,
+                                         const void *key);
+void *      z_tree_lookup_floor_custom  (const z_tree_t *tree,
                                          z_compare_t key_compare,
                                          const void *key);
 void *      z_tree_lookup_min           (const z_tree_t *tree);
@@ -105,19 +118,31 @@ void *      z_tree_lookup_max           (const z_tree_t *tree);
 
 
 /* Tree Iterator methods */
-int         z_tree_iter_init            (z_tree_iter_t *iter,
-                                         const z_tree_t *tree);
+int         z_tree_iter_init                (z_tree_iter_t *iter,
+                                             const z_tree_t *tree);
 
-void *      z_tree_iter_next            (z_tree_iter_t *iter);
-void *      z_tree_iter_prev            (z_tree_iter_t *iter);
+void *      z_tree_iter_next                 (z_tree_iter_t *iter);
+void *      z_tree_iter_prev                 (z_tree_iter_t *iter);
 
-void *      z_tree_iter_lookup          (z_tree_iter_t *iter,
-                                         const void *key);
-void *      z_tree_iter_lookup_custom   (z_tree_iter_t *iter,
-                                         z_compare_t key_compare,
-                                         const void *key);
-void *      z_tree_iter_lookup_min      (z_tree_iter_t *iter);
-void *      z_tree_iter_lookup_max      (z_tree_iter_t *iter);
+void *      z_tree_iter_lookup               (z_tree_iter_t *iter,
+                                              const void *key);
+void *      z_tree_iter_lookup_ceil          (z_tree_iter_t *iter,
+                                              const void *key);
+void *      z_tree_iter_lookup_floor         (z_tree_iter_t *iter,
+                                              const void *key);
+void *      z_tree_iter_lookup               (z_tree_iter_t *iter,
+                                              const void *key);
+void *      z_tree_iter_lookup_custom        (z_tree_iter_t *iter,
+                                              z_compare_t key_compare,
+                                              const void *key);
+void *      z_tree_iter_lookup_ceil_custom   (z_tree_iter_t *iter,
+                                              z_compare_t key_compare,
+                                              const void *key);
+void *      z_tree_iter_lookup_floor_custom  (z_tree_iter_t *iter,
+                                              z_compare_t key_compare,
+                                              const void *key);
+void *      z_tree_iter_lookup_min            (z_tree_iter_t *iter);
+void *      z_tree_iter_lookup_max            (z_tree_iter_t *iter);
 
 __Z_END_DECLS__
 
