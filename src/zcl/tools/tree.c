@@ -113,10 +113,10 @@ static void *__tree_lookup_child (const z_tree_t *tree,
 
     node = tree->root;
     while (node != NULL) {
-        if (node->child[0] == NULL)
+        if (node->child[child] == NULL)
             return(node->data);
 
-        node = node->child[0];
+        node = node->child[child];
     }
 
     return(NULL);
