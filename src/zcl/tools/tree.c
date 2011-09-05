@@ -30,8 +30,8 @@ static void *__tree_iter_lookup_node (z_tree_iter_t *iter,
     iter->height = 0;
     iter->current = NULL;
     node = iter->tree->root;
-    user_data = iter->tree->user_data;
-    key_compare = iter->tree->key_compare;
+    user_data = iter->tree->info.user_data;
+    key_compare = iter->tree->info.key_compare;
 
     while (node != NULL) {
         if (node == key) {
@@ -83,7 +83,7 @@ void *__tree_iter_lookup_near (z_tree_iter_t *iter,
     iter->height = 0;
     iter->current = NULL;
     node = iter->tree->root;
-    user_data = iter->tree->user_data;
+    user_data = iter->tree->info.user_data;
 
     while (node != NULL) {
         iter->stack[++(iter->height)] = node;
@@ -177,8 +177,8 @@ static void __tree_clear (z_tree_t *tree,
         __tree_clear(tree, node->child[0]);
         __tree_clear(tree, node->child[1]);
 
-        if (tree->data_free != NULL)
-            tree->data_free(tree->user_data, node->data);
+        if (tree->info.data_free != NULL)
+            tree->info.data_free(tree->info.user_data, node->data);
 
         z_object_struct_free(tree, z_tree_node_t, node);
     }
@@ -214,10 +214,10 @@ int z_tree_init (z_tree_t *tree,
                  z_mem_free_t data_free,
                  void *user_data)
 {
-    tree->plug = plug;
-    tree->data_free = data_free;
-    tree->key_compare = key_compare;
-    tree->user_data = user_data;
+    tree->info.plug = plug;
+    tree->info.data_free = data_free;
+    tree->info.key_compare = key_compare;
+    tree->info.user_data = user_data;
     tree->root = NULL;
     tree->size = 0U;
     return(0);
@@ -235,16 +235,30 @@ int z_tree_clear (z_tree_t *tree) {
     return(0);
 }
 
+#define __tree_insert(tree, data)                                           \
+    (tree)->info.plug->insert(&((tree)->info), z_object_memory(tree),       \
+                              &((tree)->root), data)
+
+#define __tree_remove(tree, key)                                            \
+    (tree)->info.plug->remove(&((tree)->info), z_object_memory(tree),       \
+                              &((tree)->root), key)
+
 int z_tree_insert (z_tree_t *tree,
                    void *data)
 {
-    return(tree->plug->insert(tree, data));
+    int r;
+    if (!(r = __tree_insert(tree, data)))
+        tree->size++;
+    return(r < 0);
 }
 
 int z_tree_remove (z_tree_t *tree,
                    const void *key)
 {
-    return(tree->plug->remove(tree, key));
+    int r;
+    if (!(r = __tree_remove(tree, key)))
+        tree->size--;
+    return(r);
 }
 
 int z_tree_remove_min (z_tree_t *tree) {
@@ -279,8 +293,8 @@ int z_tree_remove_range (z_tree_t *tree,
     z_tree_iter_lookup(&iter, min_key);
     min_node = iter.current;
 
-    key_compare = tree->key_compare;
-    user_data = tree->user_data;
+    key_compare = tree->info.key_compare;
+    user_data = tree->info.user_data;
 
     while (z_tree_iter_next(&iter)) {
         if ((cmp = key_compare(user_data, iter.current->data, max_key)) >= 0) {
@@ -289,7 +303,8 @@ int z_tree_remove_range (z_tree_t *tree,
             break;
         }
 
-        tree->plug->remove(tree, iter.current->data);
+        tree->size--;
+        __tree_remove(tree, iter.current->data);
         __tree_iter_lookup_node(&iter, min_node);
     }
 
@@ -320,7 +335,8 @@ int z_tree_remove_index (z_tree_t *tree,
         z_tree_iter_next(&iter);
         next = iter.current;
 
-        tree->plug->remove(tree, key);
+        tree->size--;
+        __tree_remove(tree, key);
 
         if (next != NULL)
             key = __tree_iter_lookup_node(&iter, next);
@@ -332,7 +348,7 @@ int z_tree_remove_index (z_tree_t *tree,
 void *z_tree_lookup (const z_tree_t *tree,
                      const void *key)
 {
-    return(z_tree_lookup_custom(tree, tree->key_compare, key));
+    return(z_tree_lookup_custom(tree, tree->info.key_compare, key));
 }
 
 void *z_tree_lookup_ceil (const z_tree_t *tree,
@@ -360,7 +376,7 @@ void *z_tree_lookup_custom (const z_tree_t *tree,
     int cmp;
 
     node = tree->root;
-    user_data = tree->user_data;
+    user_data = tree->info.user_data;
     while (node != NULL) {
         if (!(cmp = key_compare(user_data, node->data, key)))
             return(node->data);
@@ -412,19 +428,19 @@ int z_tree_iter_init (z_tree_iter_t *iter,
 void *z_tree_iter_lookup (z_tree_iter_t *iter,
                           const void *key)
 {
-    return(z_tree_iter_lookup_custom(iter, iter->tree->key_compare, key));
+    return(z_tree_iter_lookup_custom(iter, iter->tree->info.key_compare, key));
 }
 
 void *z_tree_iter_lookup_ceil (z_tree_iter_t *iter,
                                const void *key)
 {
-    return(z_tree_iter_lookup_ceil_custom(iter, iter->tree->key_compare, key));
+    return(z_tree_iter_lookup_ceil_custom(iter, iter->tree->info.key_compare, key));
 }
 
 void *z_tree_iter_lookup_floor (z_tree_iter_t *iter,
                                 const void *key)
 {
-    return(z_tree_iter_lookup_floor_custom(iter, iter->tree->key_compare, key));
+    return(z_tree_iter_lookup_floor_custom(iter, iter->tree->info.key_compare, key));
 }
 
 void *z_tree_iter_lookup_custom (z_tree_iter_t *iter,
@@ -438,7 +454,7 @@ void *z_tree_iter_lookup_custom (z_tree_iter_t *iter,
     iter->height = 0;
     iter->current = NULL;
     node = iter->tree->root;
-    user_data = iter->tree->user_data;
+    user_data = iter->tree->info.user_data;
 
     while (node != NULL) {
         if (!(cmp = key_compare(user_data, node->data, key))) {

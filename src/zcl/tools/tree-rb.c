@@ -19,129 +19,121 @@
 #define __BLACK      (0)
 #define __RED        (1)
 
-static int __redblack_insert (z_tree_t *tree, void *data) {
+struct rb_data {
     z_tree_node_t *pa[Z_TREE_MAX_HEIGHT];/* Nodes on stack. */
     unsigned char da[Z_TREE_MAX_HEIGHT]; /* Directions moved from stack nodes */
-    z_tree_node_t *p;           /* Traverses tree looking for insertion point */
-    z_tree_node_t *n;           /* Newly inserted node. */
-    int k;                      /* Stack height. */
+    int k;                               /* Stack height. */
+};
 
-    pa[0] = (z_tree_node_t *) &tree->root;
-    da[0] = 0;
-    k = 1;
-    for (p = tree->root; p != NULL; p = p->child[da[k - 1]]) {
+static z_tree_node_t **__do_insert_lookup (const z_tree_info_t *tree,
+                                           struct rb_data *v,
+                                           z_tree_node_t **root,
+                                           void *data)
+{
+    z_tree_node_t *p;
+
+    v->pa[0] = (z_tree_node_t *)root;
+    v->da[0] = 0;
+    v->k = 1;
+    for (p = *root; p != NULL; p = p->child[v->da[v->k - 1]]) {
         int cmp = tree->key_compare(tree->user_data, data, p->data);
         if (cmp == 0) {
             if (p->data != data && tree->data_free != NULL)
                 tree->data_free(tree->user_data, p->data);
 
             p->data = data;
-            return(0);
+            return(NULL);
         }
 
-        pa[k] = p;
-        da[k++] = cmp > 0;
+        v->pa[v->k] = p;
+        v->da[v->k++] = cmp > 0;
     }
 
-    n = pa[k-1]->child[da[k-1]] = z_object_struct_alloc(tree, z_tree_node_t);
-    if (n == NULL)
-        return 1;
+    return(&(v->pa[v->k-1]->child[v->da[v->k-1]]));
+}
 
-    n->data = data;
+static int __do_insert (const z_tree_info_t *tree,
+                        struct rb_data *v,
+                        z_tree_node_t **root,
+                        z_tree_node_t *n)
+{
+    z_tree_node_t *y;
+
     n->child[0] = n->child[1] = NULL;
     n->balance = __RED;
 
-    while (k >= 3 && pa[k - 1]->balance == __RED) {
-        if (da[k - 2] == 0) {
-            z_tree_node_t *y = pa[k - 2]->child[1];
+    while (v->k >= 3 && v->pa[v->k - 1]->balance == __RED) {
+        if (v->da[v->k - 2] == 0) {
+            y = v->pa[v->k - 2]->child[1];
 
             if (y != NULL && y->balance == __RED) {
-                pa[k - 1]->balance = y->balance = __BLACK;
-                pa[k - 2]->balance = __RED;
-                k -= 2;
+                v->pa[v->k - 1]->balance = y->balance = __BLACK;
+                v->pa[v->k - 2]->balance = __RED;
+                v->k -= 2;
             } else {
                 z_tree_node_t *x;
 
-                if (da[k - 1] == 0) {
-                    y = pa[k - 1];
+                if (v->da[v->k - 1] == 0) {
+                    y = v->pa[v->k - 1];
                 } else {
-                    x = pa[k - 1];
+                    x = v->pa[v->k - 1];
                     y = x->child[1];
                     x->child[1] = y->child[0];
                     y->child[0] = x;
-                    pa[k - 2]->child[0] = y;
+                    v->pa[v->k - 2]->child[0] = y;
                 }
 
-                x = pa[k - 2];
+                x = v->pa[v->k - 2];
                 x->balance = __RED;
                 y->balance = __BLACK;
 
                 x->child[0] = y->child[1];
                 y->child[1] = x;
-                pa[k - 3]->child[da[k - 3]] = y;
+                v->pa[v->k - 3]->child[v->da[v->k - 3]] = y;
                 break;
             }
         } else {
-            z_tree_node_t *y = pa[k - 2]->child[0];
+            y = v->pa[v->k - 2]->child[0];
 
             if (y != NULL && y->balance == __RED) {
-                pa[k - 1]->balance = y->balance = __BLACK;
-                pa[k - 2]->balance = __RED;
-                k -= 2;
+                v->pa[v->k - 1]->balance = y->balance = __BLACK;
+                v->pa[v->k - 2]->balance = __RED;
+                v->k -= 2;
             } else {
                 z_tree_node_t *x;
 
-                if (da[k - 1] == 1) {
-                    y = pa[k - 1];
+                if (v->da[v->k - 1] == 1) {
+                    y = v->pa[v->k - 1];
                 } else {
-                    x = pa[k - 1];
+                    x = v->pa[v->k - 1];
                     y = x->child[0];
                     x->child[0] = y->child[1];
                     y->child[1] = x;
-                    pa[k - 2]->child[1] = y;
+                    v->pa[v->k - 2]->child[1] = y;
                 }
 
-                x = pa[k - 2];
+                x = v->pa[v->k - 2];
                 x->balance = __RED;
                 y->balance = __BLACK;
 
                 x->child[1] = y->child[0];
                 y->child[0] = x;
-                pa[k - 3]->child[da[k - 3]] = y;
+                v->pa[v->k - 3]->child[v->da[v->k - 3]] = y;
                 break;
             }
         }
     }
-    tree->root->balance = __BLACK;
+    (*root)->balance = __BLACK;
 
     return(0);
 }
 
-static int __redblack_remove (z_tree_t *tree, const void *key) {
-    z_tree_node_t *pa[Z_TREE_MAX_HEIGHT];/* Nodes on stack. */
-    unsigned char da[Z_TREE_MAX_HEIGHT]; /* Directions moved from stack nodes */
-    z_tree_node_t *p;    /* The node to delete, or a node part way to it. */
-    int cmp;             /* Result of comparison between |item| and |p|. */
-    int k;               /* Stack height. */
-
-    k = 0;
-    p = (z_tree_node_t *)&tree->root;
-    for (cmp = -1;
-         cmp != 0;
-         cmp = tree->key_compare(tree->user_data, key, p->data))
-    {
-        int dir = cmp > 0;
-
-        pa[k] = p;
-        da[k++] = dir;
-
-        p = p->child[dir];
-        if (p == NULL)
-            return 1;
-    }
-
+static void __do_remove (const z_tree_info_t *tree,
+                         struct rb_data *v,
+                         z_tree_node_t *p)
+{
     if (p->child[1] == NULL) {
-        pa[k - 1]->child[da[k - 1]] = p->child[0];
+        v->pa[v->k - 1]->child[v->da[v->k - 1]] = p->child[0];
     } else {
         z_tree_node_t *r = p->child[1];
         int t;
@@ -151,16 +143,16 @@ static int __redblack_remove (z_tree_t *tree, const void *key) {
             t = r->balance;
             r->balance = p->balance;
             p->balance = t;
-            pa[k - 1]->child[da[k - 1]] = r;
-            da[k] = 1;
-            pa[k++] = r;
+            v->pa[v->k - 1]->child[v->da[v->k - 1]] = r;
+            v->da[v->k] = 1;
+            v->pa[v->k++] = r;
         } else {
             z_tree_node_t *s;
-            int j = k++;
+            int j = v->k++;
 
             for (;;) {
-                da[k] = 0;
-                pa[k++] = r;
+                v->da[v->k] = 0;
+                v->pa[v->k++] = r;
                 s = r->child[0];
                 if (s->child[0] == NULL)
                     break;
@@ -168,9 +160,9 @@ static int __redblack_remove (z_tree_t *tree, const void *key) {
                 r = s;
             }
 
-            da[j] = 1;
-            pa[j] = s;
-            pa[j - 1]->child[da[j - 1]] = s;
+            v->da[j] = 1;
+            v->pa[j] = s;
+            v->pa[j - 1]->child[v->da[j - 1]] = s;
 
             s->child[0] = p->child[0];
             r->child[0] = s->child[1];
@@ -183,33 +175,36 @@ static int __redblack_remove (z_tree_t *tree, const void *key) {
     }
 
     if (p->balance == __BLACK) {
+        z_tree_node_t *w;
+        z_tree_node_t *x;
+
         for (;;) {
-            z_tree_node_t *x = pa[k - 1]->child[da[k - 1]];
+            x = v->pa[v->k - 1]->child[v->da[v->k - 1]];
             if (x != NULL && x->balance == __RED) {
                 x->balance = __BLACK;
                 break;
             }
 
-            if (k < 2)
+            if (v->k < 2)
                 break;
 
-            if (da[k - 1] == 0) {
-                z_tree_node_t *w = pa[k - 1]->child[1];
+            if (v->da[v->k - 1] == 0) {
+                w = v->pa[v->k - 1]->child[1];
 
                 if (w->balance == __RED) {
                     w->balance = __BLACK;
-                    pa[k - 1]->balance = __RED;
+                    v->pa[v->k - 1]->balance = __RED;
 
-                    pa[k - 1]->child[1] = w->child[0];
-                    w->child[0] = pa[k - 1];
-                    pa[k - 2]->child[da[k - 2]] = w;
+                    v->pa[v->k - 1]->child[1] = w->child[0];
+                    w->child[0] = v->pa[v->k - 1];
+                    v->pa[v->k - 2]->child[v->da[v->k - 2]] = w;
 
-                    pa[k] = pa[k - 1];
-                    da[k] = 0;
-                    pa[k - 1] = w;
-                    k++;
+                    v->pa[v->k] = v->pa[v->k - 1];
+                    v->da[v->k] = 0;
+                    v->pa[v->k - 1] = w;
+                    v->k++;
 
-                    w = pa[k - 1]->child[1];
+                    w = v->pa[v->k - 1]->child[1];
                 }
 
                 if ((w->child[0] == NULL || w->child[0]->balance == __BLACK) &&
@@ -224,35 +219,35 @@ static int __redblack_remove (z_tree_t *tree, const void *key) {
                         w->balance = __RED;
                         w->child[0] = y->child[1];
                         y->child[1] = w;
-                        w = pa[k - 1]->child[1] = y;
+                        w = v->pa[v->k - 1]->child[1] = y;
                     }
 
-                    w->balance = pa[k - 1]->balance;
-                    pa[k - 1]->balance = __BLACK;
+                    w->balance = v->pa[v->k - 1]->balance;
+                    v->pa[v->k - 1]->balance = __BLACK;
                     w->child[1]->balance = __BLACK;
 
-                    pa[k - 1]->child[1] = w->child[0];
-                    w->child[0] = pa[k - 1];
-                    pa[k - 2]->child[da[k - 2]] = w;
+                    v->pa[v->k - 1]->child[1] = w->child[0];
+                    w->child[0] = v->pa[v->k - 1];
+                    v->pa[v->k - 2]->child[v->da[v->k - 2]] = w;
                     break;
                 }
             } else {
-                z_tree_node_t *w = pa[k - 1]->child[0];
+                w = v->pa[v->k - 1]->child[0];
 
                 if (w->balance == __RED) {
                     w->balance = __BLACK;
-                    pa[k - 1]->balance = __RED;
+                    v->pa[v->k - 1]->balance = __RED;
 
-                    pa[k - 1]->child[0] = w->child[1];
-                    w->child[1] = pa[k - 1];
-                    pa[k - 2]->child[da[k - 2]] = w;
+                    v->pa[v->k - 1]->child[0] = w->child[1];
+                    w->child[1] = v->pa[v->k - 1];
+                    v->pa[v->k - 2]->child[v->da[v->k - 2]] = w;
 
-                    pa[k] = pa[k - 1];
-                    da[k] = 1;
-                    pa[k - 1] = w;
-                    k++;
+                    v->pa[v->k] = v->pa[v->k - 1];
+                    v->da[v->k] = 1;
+                    v->pa[v->k - 1] = w;
+                    v->k++;
 
-                    w = pa[k - 1]->child[0];
+                    w = v->pa[v->k - 1]->child[0];
                 }
 
                 if ((w->child[0] == NULL || w->child[0]->balance == __BLACK) &&
@@ -267,35 +262,106 @@ static int __redblack_remove (z_tree_t *tree, const void *key) {
                         w->balance = __RED;
                         w->child[1] = y->child[0];
                         y->child[0] = w;
-                        w = pa[k - 1]->child[0] = y;
+                        w = v->pa[v->k - 1]->child[0] = y;
                     }
 
-                    w->balance = pa[k - 1]->balance;
-                    pa[k - 1]->balance = __BLACK;
+                    w->balance = v->pa[v->k - 1]->balance;
+                    v->pa[v->k - 1]->balance = __BLACK;
                     w->child[0]->balance = __BLACK;
 
-                    pa[k - 1]->child[0] = w->child[1];
-                    w->child[1] = pa[k - 1];
-                    pa[k - 2]->child[da[k - 2]] = w;
+                    v->pa[v->k - 1]->child[0] = w->child[1];
+                    w->child[1] = v->pa[v->k - 1];
+                    v->pa[v->k - 2]->child[v->da[v->k - 2]] = w;
                     break;
                 }
             }
 
-            k--;
+            v->k--;
         }
     }
+}
+
+static int __redblack_attach (const z_tree_info_t *tree,
+                              z_tree_node_t **root,
+                              z_tree_node_t *node)
+{
+    z_tree_node_t **p;
+    struct rb_data v;
+
+    if ((p = __do_insert_lookup(tree, &v, root, node->data)) == NULL)
+        return(1);
+
+    *p = node;
+    return(__do_insert(tree, &v, root, node));
+}
+
+static int __redblack_insert (const z_tree_info_t *tree,
+                              z_memory_t *memory,
+                              z_tree_node_t **root,
+                              void *data)
+{
+    z_tree_node_t **p;
+    struct rb_data v;
+
+    if ((p = __do_insert_lookup(tree, &v, root, data)) == NULL)
+        return(1);
+
+    if ((*p = z_memory_struct_alloc(memory, z_tree_node_t)) == NULL)
+        return(-1);
+
+    (*p)->data = data;
+    return(__do_insert(tree, &v, root, *p));
+}
+
+static z_tree_node_t *__redblack_detach (const z_tree_info_t *tree,
+                                         z_tree_node_t **root,
+                                         const void *key)
+{
+    struct rb_data v;
+    z_tree_node_t *p;
+    int cmp, dir;
+
+    v.k = 0;
+    p = (z_tree_node_t *)root;
+    for (cmp = -1;
+         cmp != 0;
+         cmp = tree->key_compare(tree->user_data, key, p->data))
+    {
+        dir = cmp > 0;
+
+        v.pa[v.k] = p;
+        v.da[v.k++] = dir;
+
+        if ((p = p->child[dir]) == NULL)
+            return(NULL);
+    }
+
+    __do_remove(tree, &v, p);
+
+    return(p);
+}
+
+static int __redblack_remove (const z_tree_info_t *tree,
+                              z_memory_t *memory,
+                              z_tree_node_t **root,
+                              const void *key)
+{
+    z_tree_node_t *p;
+
+    if ((p = __redblack_detach(tree, root, key)) == NULL)
+        return(1);
 
     /* Free Node */
     if (tree->data_free != NULL)
         tree->data_free(tree->user_data, p->data);
-
-    z_object_struct_free(tree, z_tree_node_t, p);
-    tree->size--;
+    z_memory_struct_free(memory, z_tree_node_t, p);
 
     return(0);
 }
 
 z_tree_plug_t z_tree_red_black = {
+    .attach = __redblack_attach,
+    .detach = __redblack_detach,
     .insert = __redblack_insert,
     .remove = __redblack_remove,
 };

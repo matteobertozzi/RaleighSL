@@ -29,6 +29,7 @@ __Z_BEGIN_DECLS__
 
 Z_TYPEDEF_CONST_STRUCT(z_tree_plug)
 Z_TYPEDEF_STRUCT(z_tree_node)
+Z_TYPEDEF_STRUCT(z_tree_info)
 Z_TYPEDEF_STRUCT(z_tree_iter)
 Z_TYPEDEF_STRUCT(z_tree)
 
@@ -42,20 +43,37 @@ struct z_tree_node {
 };
 
 struct z_tree_plug {
-    int (*insert)       (z_tree_t *tree, void *data);
-    int (*remove)       (z_tree_t *tree, const void *key);
+    int             (*attach)   (const z_tree_info_t *tree,
+                                 z_tree_node_t **root,
+                                 z_tree_node_t *node);
+    z_tree_node_t * (*detach)   (const z_tree_info_t *tree,
+                                 z_tree_node_t **root,
+                                 const void *key);
+
+    int             (*insert)   (const z_tree_info_t *tree,
+                                 z_memory_t *memory,
+                                 z_tree_node_t **root,
+                                 void *data);
+    int             (*remove)   (const z_tree_info_t *tree,
+                                 z_memory_t *memory,
+                                 z_tree_node_t **root,
+                                 const void *key);
+};
+
+struct z_tree_info {
+    z_tree_plug_t *plug;
+    z_compare_t    key_compare;
+    z_mem_free_t   data_free;
+    void *         user_data;
 };
 
 struct z_tree {
     Z_OBJECT_TYPE
 
-    z_tree_plug_t *     plug;               /* Tree Plugin (balancing) */
-    z_tree_node_t *     root;
+    z_tree_node_t *root;
+    z_tree_info_t  info;
 
-    z_compare_t         key_compare;
-    z_mem_free_t        data_free;
-    void *              user_data;
-    unsigned long       size;
+    unsigned long  size;
 };
 
 struct z_tree_iter {
