@@ -52,7 +52,7 @@ void __z_log (FILE *fp,
     va_list ap;
 
     __date_time(datetime);
-    fprintf(stderr, "[%s] %s:%d %s - ",
+    fprintf(stderr, "[%s] %s:%d %s() - ",
             datetime, file, line, func);
 
     va_start(ap, format);

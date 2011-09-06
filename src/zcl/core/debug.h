@@ -27,15 +27,15 @@ __Z_BEGIN_DECLS__
         Z_FLOG(stderr, format, ##__VA_ARGS__)
 
     #define Z_FLOG(fp, format, ...)                                         \
-        __z_log(fp, __FILE__, __LINE__, __PRETTY_FUNCTION__,                \
+        __z_log(fp, __FILE__, __LINE__, __FUNCTION__,                       \
                 format, ##__VA_ARGS__)
 
     #define Z_BUG(format, ...)                                              \
-        __z_bug(__FILE__, __LINE__, __PRETTY_FUNCTION__,                    \
+        __z_bug(__FILE__, __LINE__, __FUNCTION__,                           \
                 format, ##__VA_ARGS__)
 
     #define Z_ASSERT(cond, format, ...)                                     \
-        __z_assert(__FILE__, __LINE__, __PRETTY_FUNCTION__,                 \
+        __z_assert(__FILE__, __LINE__, __FUNCTION__,                        \
                    cond, #cond, ##__VA_ARGS__)
 
     #define Z_PRINT_DEBUG(format, ...)                                      \
