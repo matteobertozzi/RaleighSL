@@ -14,19 +14,34 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-import threading
-import commands
+from commands import getstatusoutput as execCommand
+from multiprocessing import cpu_count
+from contextlib import contextmanager
+from collections import deque
+from threading import Thread
+
 import shutil
 import string
+import time
 import sys
 import os
 
-def msg_write(*args):
-    data = ' '.join([str(x) for x in args]) if len(args) > 0 else ''
-    sys.stdout.write('%s\n' % data)
+SYSTEM_CPU_COUNT = cpu_count()
+NO_OUTPUT = False
 
-def execCommand(cmd):
-    return commands.getstatusoutput(cmd)
+def msg_write(*args):
+    if not NO_OUTPUT:
+        data = ' '.join([str(x) for x in args]) if len(args) > 0 else ''
+        sys.stdout.write('%s\n' % data)
+
+@contextmanager
+def bench(format):
+    st = time.time()
+    try:
+        yield
+    finally:
+        et = time.time()
+        msg_write(format, (et - st))
 
 def writeFile(filename, content):
     fd = open(filename, 'w')
@@ -51,7 +66,7 @@ def removeDirectoryContents(path):
 
 def _findCompiler():
     paths = os.getenv('PATH', '/usr/bin').split(':')
-    compilers = ['clang', 'gcc']
+    compilers = ['clang', 'gcc', 'distcc']
 
     for compiler in compilers:
         for path in paths:
@@ -70,37 +85,33 @@ def ldLibraryPathUpdate(ldlibs):
         os.environ[env_name] = env
 
 class ThreadPool(object):
-    class Worker(threading.Thread):
+    class Worker(Thread):
         def __init__(self, pool):
-            threading.Thread.__init__(self)
+            Thread.__init__(self)
             self.pool = pool
             self.start()
 
         def run(self):
-            while self.pool.running:
-                job_func = self._fetchJob()
-                if job_func is None:
+            pool = self.pool
+            while pool.running:
+                try:
+                    job_func = pool.jobs.popleft()
+                except IndexError:
+                    time.sleep(0)
                     continue
 
                 try:
-                    job_func()
+                    result = job_func()
+                    pool.job_results.append(result)
                 except:
-                    self.pool.job_failures += 1
-
-        def _fetchJob(self):
-            try:
-                jobs = self.pool.jobs
-                if len(jobs) < 1:
-                    return None
-                return jobs.pop(0)
-            except IndexError:
-                return None
+                    pool.job_failures += 1
 
     def __init__(self):
         self.running = True
-        self.jobs = []
+        self.jobs = deque()
+        self.job_results = []
         self.job_failures = 0
-        self._workers = self._createWorkers()
+        self._workers = [self.Worker(self) for _ in xrange(SYSTEM_CPU_COUNT)]
 
     def push(self, job, *args, **kwargs):
         self.jobs.append(lambda: job(*args, **kwargs))
@@ -109,6 +120,7 @@ class ThreadPool(object):
         while len(self.jobs) > 0:
             if raise_failure and self.job_failures > 0:
                 break
+
         self.running = False
         for worker in self._workers:
             worker.join()
@@ -116,13 +128,10 @@ class ThreadPool(object):
         if raise_failure and self.job_failures > 0:
             raise Exception('%d Job Failures' % self.job_failures)
 
+        return self.job_results
+
     def hasFailures(self):
         return self.job_failures > 0
-
-    def _createWorkers(self):
-        import multiprocessing
-        ncore = multiprocessing.cpu_count()
-        return [self.Worker(self) for _ in xrange(ncore)]
 
 class BuildOptions(object):
     def __init__(self):
@@ -225,19 +234,6 @@ class Build(object):
         self._dir_inc = os.path.join(self._dir_out, 'include')
 
     def compileFile(self, filename, dump_error=True):
-        cmd = self._compileCommand(filename)
-        msg_write(' [CC]', filename)
-        exit_code, output = execCommand(cmd)
-        if exit_code != 0:
-            if dump_error:
-                msg_write(' * Failed with Status %d\n' % exit_code,
-                          ' * %s\n' % (cmd),
-                           output)
-            raise RuntimeError("Compilation Failure!")
-        elif self._options.pedantic and len(output) > 0:
-            msg_write(output)
-
-    def _compileCommand(self, filename):
         obj_name, obj_path = self._objFilePath(filename)
 
         cmd = '%s -c %s %s %s %s %s -o %s' %                \
@@ -249,18 +245,26 @@ class Build(object):
                 filename,                                   \
                 obj_path)
 
-        return cmd
+        msg_write(' [CC]', filename)
+        exit_code, output = execCommand(cmd)
+        if exit_code != 0:
+            if dump_error:
+                msg_write(' * Failed with Status %d\n * %s\n%s' % (exit_code, cmd, output))
+            raise RuntimeError("Compilation Failure!")
+
+        if self._options.pedantic and len(output) > 0:
+            msg_write(output)
 
     def compileDirectories(self, dirs_src):
-        n = 0
         pool = ThreadPool()
+        compileFunc = lambda f: pool.push(self.compileFile, f)
         for src in dirs_src:
-            n += self._cFilesWalk(src, lambda f: pool.push(self.compileFile, f))
-        pool.join()
-        return n
+            self._cFilesWalk(src, compileFunc)
+        results = pool.join()
+        return len(results)
 
     def linkFile(self, filename, dump_error=True):
-        obj_name, obj_path = self._objFilePath(filename)
+        _, obj_path = self._objFilePath(filename)
         app_name, app_path = self._appFilePathFromObj(obj_path)
 
         cmd = '%s -o %s %s %s' %                            \
@@ -270,12 +274,14 @@ class Build(object):
         exit_code, output = execCommand(cmd)
         if exit_code != 0:
             if dump_error:
-                msg_write(' * Failed with Status %d\n' % exit_code,
-                          ' * %s\n' % cmd,
-                          output)
+                msg_write(' * Failed with Status %d\n * %s\n%s' % (exit_code, cmd, output))
             raise RuntimeError("Linking Failure!")
 
+        return app_path
+
     def _objFilePath(self, filename):
+        if filename.endswith('.o'):
+            return os.path.basename(filename), filename
         objname = os.path.normpath(filename).replace('/', '_')
         objname = objname[:objname.rindex('.')] + '.o'
         objpath = os.path.join(self._dir_obj, objname)
@@ -291,13 +297,10 @@ class Build(object):
         return app_name, app_path
 
     def _cFilesWalk(self, dir_src, func):
-        count = 0
         for root, dirs, files in os.walk(dir_src, topdown=False):
             for name in files:
                 if name.endswith('.c'):
                     func(os.path.join(root, name))
-                    count += 1
-        return count
 
     def buildNumber(self, major, minor, inc=1):
         mx = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -326,7 +329,7 @@ class BuildApp(Build):
         self.src_dirs = src_dirs
 
     def _build(self):
-        msg_write('Building ', self.name)
+        msg_write('Building', self.name)
         msg_write('-' * 60)
 
         if not self.compileDirectories(self.src_dirs):
@@ -334,7 +337,6 @@ class BuildApp(Build):
 
         obj_list = os.listdir(self._dir_obj)
         obj_list = [os.path.join(self._dir_obj, f) for f in obj_list]
-
         app_path = os.path.join(self._dir_out, self.name)
 
         cmd = '%s -o %s %s %s' %                            \
@@ -345,9 +347,7 @@ class BuildApp(Build):
         msg_write(' [LD]', self.name)
         exit_code, output = execCommand(cmd)
         if exit_code != 0:
-            msg_write(' * Failed with Status', exit_code)
-            msg_write(' *', cmd)
-            msg_write(output)
+            msg_write(' * Failed with Status %d\n * %s\n%s' % (exit_code, cmd, output))
             sys.exit(1)
         msg_write()
 
@@ -357,30 +357,16 @@ class BuildMiniTools(Build):
         self.src_dirs = src_dirs
 
     def _build(self):
-        msg_write('Building ', self.name)
+        msg_write('Building', self.name)
         msg_write('-' * 60)
 
         if not self.compileDirectories(self.src_dirs):
             return []
 
-        tools = []
+        pool = ThreadPool()
         for obj_name in os.listdir(self._dir_obj):
-            app_name = obj_name[obj_name.rfind('_') + 1:-2]
-            app_path = os.path.join(self._dir_out, app_name)
-            obj_path = os.path.join(self._dir_obj, obj_name)
-
-            cmd = '%s -o %s %s %s' %                            \
-                    (self._options.cc, app_path, obj_path,      \
-                     string.join(self._options.ldlibs, ' '))
-            msg_write(' [LD]', app_name)
-            exit_code, output = execCommand(cmd)
-            if exit_code != 0:
-                msg_write(' * Failed with Status', exit_code)
-                msg_write(' *', cmd)
-                msg_write(output)
-                sys.exit(1)
-
-            tools.append(app_path)
+            pool.push(self.linkFile, os.path.join(self._dir_obj, obj_name))
+        tools = pool.join()
 
         msg_write()
         return sorted(tools)
@@ -394,31 +380,34 @@ class BuildConfig(Build):
         msg_write('Running Build.Config')
         msg_write('-' * 60)
 
-        config = []
-        def _testApp(filename):
-            try:
-                self.compileFile(filename, dump_error=dump_error)
-                self.linkFile(filename, dump_error=dump_error)
-            except:
-                msg_write(' [!!]', filename)
-                return
-
-            obj_name, obj_path = self._objFilePath(filename)
-            app_name, app_path = self._appFilePathFromObj(obj_path)
-
-            ldLibraryPathUpdate([self._dir_lib])
-            exit_code, output = execCommand(app_path)
-            if exit_code != 0:
-                msg_write(' [!!]', filename)
-                return
-
-            config.append(app_name)
-
         pool = ThreadPool()
+        test_func = lambda f: pool.push(self._testApp, f, dump_error)
         for src_dir in self.src_dirs:
-            self._cFilesWalk(src_dir, lambda f: pool.push(_testApp, f))
-        pool.join(raise_failure=False)
+            self._cFilesWalk(src_dir, test_func)
+        config = pool.join(raise_failure=False)
 
+        self._writeConfigFile(config_file, config_head, config, debug)
+
+    def _testApp(self, filename, dump_error):
+        try:
+            self.compileFile(filename, dump_error=dump_error)
+            self.linkFile(filename, dump_error=dump_error)
+        except:
+            msg_write(' [!!]', filename)
+            raise Exception('Config Test %s failed' % filename)
+
+        obj_name, obj_path = self._objFilePath(filename)
+        app_name, app_path = self._appFilePathFromObj(obj_path)
+
+        ldLibraryPathUpdate([self._dir_lib])
+        exit_code, output = execCommand(app_path)
+        if exit_code != 0:
+            msg_write(' [!!]', filename)
+            raise Exception('Config Test %s failed' % app_name)
+
+        return app_name
+
+    def _writeConfigFile(self, config_file, config_head, config, debug):
         msg_write(' [WR] Write config', config_file)
         fd = open(config_file, 'w')
         fd.write('#ifndef _%s_BUILD_CONFIG_H_\n' % config_head)
@@ -511,9 +500,7 @@ class BuildLibrary(Build):
         msg_write(' [LD]', lib_name_full)
         exit_code, output = execCommand(cmd)
         if exit_code != 0:
-            msg_write(' * Failed with Status', exit_code)
-            msg_write(' *', cmd)
-            msg_write(output)
+            msg_write(' * Failed with Status %d\n * %s\n%s' % (exit_code, cmd, output))
             sys.exit(1)
 
         cwd = os.getcwd()
@@ -571,14 +558,15 @@ def _parseCmdline():
                         help='Compiler to use')
 
     parser.add_argument('-x', '--xcode', dest='xcode', action='store_true', default=False,
-                        help="Use XCode to build everithing")
+                        help="Use XCode to build everything (copy headers only)")
     parser.add_argument('-r', '--release', dest='release', action='store_true', default=False,
                         help="Use release flags during compilation")
     parser.add_argument('-p', '--pedantic', dest='pedantic', action='store_true', default=False,
                         help="Issue all the warnings demanded by strict ISO C")
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', default=False,
                         help="Show traceback infomation if something fails")
-
+    parser.add_argument('--no-output', dest='no_output', action='store_true', default=False,
+                        help='Do not print messages')
     parser.add_argument('--no-zcl', dest='build_zcl', action='store_false', default=True,
                         help='Do not build Zcl Library')
     parser.add_argument('--no-fs', dest='build_fs', action='store_false', default=True,
@@ -594,6 +582,8 @@ def _parseCmdline():
 
 if __name__ == '__main__':
     options = _parseCmdline()
+
+    NO_OUTPUT = options.no_output
 
     DEFAULT_CFLAGS = ['-Wall', '-Wmissing-field-initializers']
     DEFAULT_RELEASE_CFLAGS = ['-O2']
@@ -712,7 +702,8 @@ if __name__ == '__main__':
         if not options.xcode and options.build_server:
             build.build()
 
-    buildZcl()
-    buildFs()
-    buildServer()
+    with bench('[T] Build Time'):
+        buildZcl()
+        buildFs()
+        buildServer()
 
