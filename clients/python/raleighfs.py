@@ -252,6 +252,121 @@ class Counter(_AbstractObject):
             raise Exception(line[1:])
         return tuple(int(v) for v in _trim_split(line[1:]))
 
+class SSet(_AbstractContainer):
+    def insert(self, key, value):
+        data  = 'sset insert %s %s %d\n%s\n' % (self.name, key, len(value), value)
+        return self._sendAndCheckOkResponse(data)
+
+    def update(self, key, value, cas=None):
+        data  = 'sset update %s %s %d\n%s\n' % (self.name, key, len(value), value)
+        return self._sendAndCheckOkResponse(data)
+
+    def clear(self):
+        data = 'sset clear %s\n' % (self.name)
+        return self._sendAndCheckOkResponse(data)
+
+    def remove(self, keys):
+        data = 'sset rm %s %s\n' % (self.name, ' '.join(keys))
+        return self._sendRequest(data)
+
+    def removeFirst(self):
+        data = 'sset rm-first %s\n' % (self.name)
+        return self._sendRequest(data)
+
+    def removeLast(self):
+        data = 'sset rm-last %s\n' % (self.name)
+        return self._sendRequest(data)
+
+    def removeRange(self, key_start, key_end):
+        data = 'sset rm-range %s %s %s\n' % (self.name, key_start, key_end)
+        return self._sendRequest(data)
+
+    def removeIndex(self, index_start, index_end):
+        data = 'sset rm-index %s %u %u\n' % (self.name, index_start, index_end)
+        return self._sendRequest(data)
+
+    def get(self, keys):
+        data = 'sset get %s %s\n' % (self.name, ' '.join(keys))
+        return self._sendGetRequest(data)
+
+    def getFirst(self):
+        data = 'sset get-first %s\n' % (self.name)
+        return self._sendGetRequest(data)
+
+    def getLast(self):
+        data = 'sset get-last %s\n' % (self.name)
+        return self._sendGetRequest(data)
+
+    def getRange(self, key_start, key_end):
+        data = 'sset get-range %s %s %s\n' % (self.name, key_start, key_end)
+        return self._sendGetRequest(data)
+
+    def getIndex(self, index_start, index_end):
+        data = 'sset get-index %s %d %d\n' % (self.name, index_start, index_end)
+        return self._sendGetRequest(data)
+
+    def keys(self):
+        data = 'sset keys %s\n' % (self.name)
+        return self._sendGetKeys(data)
+
+    def length(self):
+        data = 'sset length %s\n' % self.name
+        return int(self._sendRequest(data))
+
+    def stats(self):
+        data = 'sset stats %s\n' % self.name
+        return self._sendRequest(data)
+
+    def _sendGetKeys(self, data):
+        self.fs.send(data)
+        response = self.fs.recv().split('\r\n')
+        if response[0][0] == '-':
+            raise Exception(response[0])
+
+        keys = []
+        count = int(response.pop(0))
+        while True:
+            for line in response:
+                keys.append(line)
+
+            if len(keys) >= count:
+                break
+
+            response = self.fs.recv().split('\r\n')
+
+        return keys
+
+    def _sendGetRequest(self, data):
+        self.fs.send(data)
+        response = self.fs.recv().split('\r\n')
+        if response[0][0] == '-':
+            raise Exception(response[0])
+
+        key = None
+        vsize = 0
+        value = ''
+        values = {}
+        while True:
+            for line in response:
+                if line == 'END':
+                    return values
+
+                if key is None:
+                    vsize, key = line.split()
+                    vsize = int(vsize)
+                    assert vsize > 0
+                    value = ''
+                else:
+                    value += line
+
+                    if vsize == len(value):
+                        values[key] = value
+                        key = None
+
+            response = self.fs.recv().split('\r\n')
+
+        return None
+
 if __name__ == '__main__':
     fs = RaleighFS()
     with fs.connection('127.0.0.1', 11215):

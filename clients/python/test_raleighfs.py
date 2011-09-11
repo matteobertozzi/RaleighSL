@@ -63,6 +63,104 @@ class _RaleighFSObjectTestCase(_RaleighFSTestCase):
         self.assertTrue(self.fs.exists(self.OBJECT_NAME))
         self.assertFalse(self.fs.exists(new_name))
 
+class TestSSet(_RaleighFSObjectTestCase):
+    OBJECT_TYPE = raleighfs.SSet
+    OBJECT_NAME = '/tests/sset'
+
+    def testInsert(self):
+        keys = []
+        for i in xrange(20):
+            key = 'key-%02d' % i
+            value = 'value %02d' % i
+            self.assertTrue(self.fsobject.insert(key, value))
+            self.assertEquals(self.fsobject.get([key]), {key:value})
+            self.assertEquals(self.fsobject.length(), i + 1)
+            keys.append(key)
+        self.assertEquals(self.fsobject.keys(), keys)
+
+    def testUpdate(self):
+        for i in xrange(20):
+            key = 'key-%02d' % i
+            value = 'value %d' % i
+            self.assertTrue(self.fsobject.insert(key, value))
+            self.assertEquals(self.fsobject.get([key]), {key:value})
+
+        self.assertEquals(self.fsobject.length(), 20)
+        for i in xrange(20):
+            key = 'key-%02d' % i
+            value1 = 'value %d' % i
+            value2 = 'value2 %d' % i
+            self.assertEquals(self.fsobject.get([key]), {key:value1})
+            self.assertTrue(self.fsobject.update(key, value2))
+            self.assertEquals(self.fsobject.get([key]), {key:value2})
+            self.assertEquals(self.fsobject.length(), 20)
+
+    def testClear(self):
+        for i in xrange(20):
+            self.assertTrue(self.fsobject.insert('K%d' % i, 'V%d' % i))
+        self.assertEquals(self.fsobject.length(), 20)
+        self.assertTrue(self.fsobject.clear())
+        self.assertEquals(self.fsobject.length(), 0)
+        self.assertEquals(self.fsobject.keys(), [])
+
+    def testGetFirst(self):
+        for i in xrange(9, 0, -1):
+            key = 'key-%02d' % i
+            value = 'value %02d' % i
+            self.assertTrue(self.fsobject.insert(key, value))
+            self.assertEquals(self.fsobject.get([key]), {key:value})
+            self.assertEquals(self.fsobject.getFirst(), {key:value})
+            self.assertEquals(self.fsobject.getLast(), {'key-09':'value 09'})
+
+        self.assertEquals(self.fsobject.getIndex(0, 4), dict(('key-%02d' % i, 'value %02d' % i) for i in range(1, 5)))
+        self.assertEquals(self.fsobject.getIndex(3, 6), dict(('key-%02d' % i, 'value %02d' % i) for i in range(4, 10)))
+
+        self.assertEquals(self.fsobject.getRange('key-01', 'key-04'), dict(('key-%02d' % i, 'value %02d' % i) for i in range(1, 5)))
+        self.assertEquals(self.fsobject.getRange('key-04', 'key-09'), dict(('key-%02d' % i, 'value %02d' % i) for i in range(4, 10)))
+
+    def testRemove(self):
+        for i in xrange(20):
+            self.assertTrue(self.fsobject.insert('key-%02d' % i, 'value %02d' % i))
+
+        for i in xrange(20):
+            key = 'key-%02d' % i
+            self.assertEquals(self.fsobject.get([key]), {key:'value %02d' % i})
+            self.assertTrue(self.fsobject.remove([key]))
+            self.assertEquals(self.fsobject.get([key]), {})
+            self.assertEquals(self.fsobject.length(), 19 - i)
+
+    def testRemoveRange(self):
+        for i in xrange(20):
+            self.assertTrue(self.fsobject.insert('key-%02d' % i, 'value %02d' % i))
+
+        self.assertEquals(self.fsobject.length(), 20)
+        self.assertTrue(self.fsobject.removeRange('key-00', 'key-10'))
+        self.assertEquals(self.fsobject.length(), 9)
+        keys = self.fsobject.getIndex(0, 20).keys()
+        self.assertEquals(len(keys), 9)
+        self.assertEquals(set(keys), set('key-%02d' % i for i in range(11, 20)))
+        self.assertEquals(set(self.fsobject.keys()), set(keys))
+
+        self.fsobject.removeRange('key-15', 'key-25')
+        keys = self.fsobject.getIndex(0, 20).keys()
+        self.assertEquals(len(keys), 4)
+        self.assertEquals(set(keys), set('key-%02d' % i for i in range(11, 15)))
+        self.assertEquals(set(self.fsobject.keys()), set(keys))
+
+    def testRemoveIndex(self):
+        for i in xrange(20):
+            self.assertTrue(self.fsobject.insert('key-%02d' % i, 'value %02d' % i))
+
+        self.fsobject.removeIndex(0, 10)
+        keys = self.fsobject.getIndex(0, 20).keys()
+        self.assertEquals(len(keys), 10)
+        self.assertEquals(set(keys), set('key-%02d' % i for i in range(10, 20)))
+
+        self.fsobject.removeIndex(5, 4)
+        keys = self.fsobject.getIndex(0, 20).keys()
+        self.assertEquals(len(keys), 6)
+        self.assertEquals(set(keys), set(['key-10', 'key-11', 'key-12', 'key-13', 'key-14', 'key-19']))
+
 class TestDeque(_RaleighFSObjectTestCase):
     OBJECT_TYPE = raleighfs.Deque
     OBJECT_NAME = '/tests/deque'
@@ -274,7 +372,6 @@ def load_tests(loader, tests, pattern):
     for suite in tests:
         # Filter test class that starts with _
         ts = [t for t in suite if not t.__class__.__name__.startswith('_')]
-        print t.__class__, ts
         if len(ts) > 0:
             ftests.append(loader.suiteClass(ts))
     return loader.suiteClass(ftests)

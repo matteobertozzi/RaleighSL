@@ -1,5 +1,6 @@
 #include <raleighfs/object/counter.h>
 #include <raleighfs/object/deque.h>
+#include <raleighfs/object/sset.h>
 #include <raleighfs/raleighfs.h>
 
 #include <zcl/messageq.h>
@@ -140,6 +141,9 @@ static int __rpc_send_error (z_rpc_client_t *client, rpc_errno_t errno) {
  */
 static const uint8_t *__semantic_object_type (const z_chunkq_extent_t *name) {
     switch (name->length) {
+        case 4:
+            if (!__tokcmp(name, "sset", 4))
+                return(RALEIGHFS_OBJECT_SSET_UUID);
         case 5:
             if (!__tokcmp(name, "deque", 5))
                 return(RALEIGHFS_OBJECT_DEQUE_UUID);
@@ -259,6 +263,378 @@ static int __rpc_semantic_rename (z_rpc_client_t *client,
 }
 
 /* ============================================================================
+ *  Sorted Set Objects Commands
+ */
+static void __complete_sset_update (void *client, z_message_t *msg) {
+    __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+}
+
+static int __rpc_sset_update (z_rpc_client_t *client,
+                              unsigned int method_code,
+                              const z_chunkq_extent_t *tokens,
+                              unsigned int ntokens,
+                              unsigned int nline)
+{
+    const z_chunkq_extent_t *key;
+    z_stream_t stream;
+    z_message_t *msg;
+    uint32_t vlength;
+    int res;
+
+    if (ntokens != 5)
+        return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+
+    key = &(tokens[ARG0_TOKEN]);
+    if (!__tok2u32(&(tokens[ARG1_TOKEN]), &vlength))
+        return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+
+    /* Data is not available yet */
+    if (client->rdbuffer.size < (nline + vlength))
+        return(1);
+
+    msg = __rpc_message_alloc(client, Z_MESSAGE_WRITE_REQUEST);
+    z_message_set_type(msg, method_code);
+    z_message_request_stream(msg, &stream);
+    z_stream_write_uint32(&stream, key->length);
+    z_stream_write_uint32(&stream, vlength);
+    z_stream_write_chunkq(&stream, key->chunkq, key->offset, key->length);
+    z_stream_write_chunkq(&stream, &(client->rdbuffer), nline, vlength);
+    res = __rpc_message_send(client, tokens, msg, __complete_sset_update);
+
+    /* Remove request */
+    __rpc_client_remove_to_eol(client, nline + vlength);
+
+    return(res);
+}
+
+static void __complete_sset_get (void *client, z_message_t *msg) {
+    if (z_message_state(msg) != RALEIGHFS_ERRNO_NONE) {
+        __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    } else {
+        z_stream_extent_t value;
+        z_stream_extent_t key;
+        z_stream_t stream;
+        uint32_t klength;
+        uint32_t vlength;
+        char buffer[16];
+        int n;
+
+        z_message_response_stream(msg, &stream);
+
+        while (1) {
+            z_stream_read_uint32(&stream, &klength);
+            if (!klength) break;
+
+            z_stream_read_uint32(&stream, &vlength);
+            z_stream_set_extent(&stream, &key, stream.offset, klength);
+            z_stream_set_extent(&stream, &value, stream.offset + klength, vlength);
+            z_stream_seek(&stream, value.offset + value.length);
+
+            n = z_snprintf(buffer, sizeof(buffer), "+%u4d ", vlength);
+            z_rpc_write(Z_RPC_CLIENT(client), buffer, n);
+            z_rpc_write_stream(Z_RPC_CLIENT(client), &key);
+            z_rpc_write_newline(Z_RPC_CLIENT(client));
+
+            if (vlength > 0) {
+                z_rpc_write_stream(Z_RPC_CLIENT(client), &value);
+                z_rpc_write_newline(Z_RPC_CLIENT(client));
+            }
+        }
+
+        z_rpc_write(Z_RPC_CLIENT(client), "END\r\n", 5);
+    }
+}
+
+
+static void __complete_sset_remove (void *client, z_message_t *msg) {
+    __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+}
+
+static int __rpc_sset_range (z_rpc_client_t *client,
+                             unsigned int method_code,
+                             const z_chunkq_extent_t *tokens,
+                             unsigned int ntokens,
+                             unsigned int nline)
+{
+    const z_chunkq_extent_t *a;
+    const z_chunkq_extent_t *b;
+    z_message_func_t callback;
+    unsigned int msg_flags;
+    z_message_t *msg;
+    z_stream_t stream;
+
+    if (ntokens != 5)
+        return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+
+    switch (method_code) {
+        case RALEIGHFS_SSET_POP_RANGE:
+        case RALEIGHFS_SSET_GET_RANGE:
+            callback = __complete_sset_get;
+            msg_flags = Z_MESSAGE_READ_REQUEST;
+            break;
+        case RALEIGHFS_SSET_RM_RANGE:
+            callback = __complete_sset_remove;
+            msg_flags = Z_MESSAGE_WRITE_REQUEST;
+            break;
+        default:
+            /* Never reached! */
+            break;
+    }
+
+    a = &(tokens[ARG0_TOKEN]);
+    b = &(tokens[ARG1_TOKEN]);
+
+    msg = __rpc_message_alloc(client, msg_flags);
+    z_message_set_type(msg, method_code);
+    z_message_request_stream(msg, &stream);
+    z_stream_write_uint32(&stream, a->length);
+    z_stream_write_uint32(&stream, b->length);
+    z_stream_write_chunkq(&stream, a->chunkq, a->offset, a->length);
+    z_stream_write_chunkq(&stream, b->chunkq, b->offset, b->length);
+
+    return(__rpc_message_send(client, tokens, msg, callback));
+}
+
+static int __rpc_sset_index (z_rpc_client_t *client,
+                             unsigned int method_code,
+                             const z_chunkq_extent_t *tokens,
+                             unsigned int ntokens,
+                             unsigned int nline)
+{
+    z_message_func_t callback;
+    unsigned int msg_flags;
+    z_stream_t stream;
+    z_message_t *msg;
+    uint64_t a, b;
+
+    if (ntokens != 5)
+        return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+
+    if (!__tok2u64(&(tokens[ARG0_TOKEN]), &a))
+        return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+
+    if (!__tok2u64(&(tokens[ARG1_TOKEN]), &b))
+        return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+
+    switch (method_code) {
+        case RALEIGHFS_SSET_POP_INDEX:
+        case RALEIGHFS_SSET_GET_INDEX:
+            callback = __complete_sset_get;
+            msg_flags = Z_MESSAGE_READ_REQUEST;
+            break;
+        case RALEIGHFS_SSET_RM_INDEX:
+            callback = __complete_sset_remove;
+            msg_flags = Z_MESSAGE_WRITE_REQUEST;
+            break;
+        default:
+            /* Never reached! */
+            break;
+    }
+
+    msg = __rpc_message_alloc(client, msg_flags);
+    z_message_set_type(msg, method_code);
+    z_message_request_stream(msg, &stream);
+    z_stream_write_uint64(&stream, a);
+    z_stream_write_uint64(&stream, b);
+
+    return(__rpc_message_send(client, tokens, msg, callback));
+}
+
+static int __rpc_sset_items (z_rpc_client_t *client,
+                             unsigned int method_code,
+                             const z_chunkq_extent_t *tokens,
+                             unsigned int ntokens,
+                             unsigned int nline)
+{
+    const z_chunkq_extent_t *tk;
+    z_message_func_t callback;
+    unsigned int msg_flags;
+    z_stream_t stream;
+    z_message_t *msg;
+    unsigned int i;
+
+    switch (method_code) {
+        case RALEIGHFS_SSET_RM:
+        case RALEIGHFS_SSET_GET:
+        case RALEIGHFS_SSET_POP:
+            if (ntokens > 4)
+                return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+            break;
+        default:
+            if (ntokens != 3)
+                return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+            break;
+    }
+
+    switch (method_code) {
+        case RALEIGHFS_SSET_POP:
+        case RALEIGHFS_SSET_GET:
+        case RALEIGHFS_SSET_POP_LAST:
+        case RALEIGHFS_SSET_GET_LAST:
+        case RALEIGHFS_SSET_POP_FIRST:
+        case RALEIGHFS_SSET_GET_FIRST:
+            callback = __complete_sset_get;
+            msg_flags = Z_MESSAGE_READ_REQUEST;
+            break;
+        case RALEIGHFS_SSET_RM:
+        case RALEIGHFS_SSET_RM_LAST:
+        case RALEIGHFS_SSET_RM_FIRST:
+            callback = __complete_sset_remove;
+            msg_flags = Z_MESSAGE_WRITE_REQUEST;
+            break;
+        default:
+            /* Never reached! */
+            break;
+    }
+
+    msg = __rpc_message_alloc(client, msg_flags);
+    z_message_set_type(msg, method_code);
+    z_message_request_stream(msg, &stream);
+
+    if ((ntokens - ARG0_TOKEN) > 0) {
+        z_stream_write_uint32(&stream, ntokens - ARG0_TOKEN);
+
+        for (i = ARG0_TOKEN; i < ntokens; ++i) {
+            tk = &(tokens[i]);
+            z_stream_write_uint32(&stream, tk->length);
+            z_stream_write_chunkq(&stream, tk->chunkq, tk->offset, tk->length);
+        }
+    }
+
+    return(__rpc_message_send(client, tokens, msg, callback));
+}
+
+static void __complete_sset_keys (void *client, z_message_t *msg) {
+    if (z_message_state(msg) != RALEIGHFS_ERRNO_NONE) {
+        __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    } else {
+        z_stream_extent_t key;
+        z_stream_t stream;
+        uint32_t klength;
+        char buffer[16];
+        uint64_t count;
+        int n;
+
+        z_message_response_stream(msg, &stream);
+        z_stream_read_uint64(&stream, &count);
+
+        n = z_snprintf(buffer, sizeof(buffer), "+%u8d\r\n", count);
+        z_rpc_write(Z_RPC_CLIENT(client), buffer, n);
+
+        while (count--) {
+            z_stream_read_uint32(&stream, &klength);
+            z_stream_set_extent(&stream, &key, stream.offset, klength);
+            z_stream_seek(&stream, key.offset + key.length);
+
+            z_rpc_write_stream(Z_RPC_CLIENT(client), &key);
+            z_rpc_write_newline(Z_RPC_CLIENT(client));
+        }
+    }
+}
+
+static int __rpc_sset_keys (z_rpc_client_t *client,
+                            unsigned int method_code,
+                            const z_chunkq_extent_t *tokens,
+                            unsigned int ntokens,
+                            unsigned int nline)
+{
+    z_message_t *msg;
+
+    if (ntokens != 3)
+        return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+
+    msg = __rpc_message_alloc(client, Z_MESSAGE_READ_REQUEST);
+    z_message_set_type(msg, method_code);
+
+    return(__rpc_message_send(client, tokens, msg, __complete_sset_keys));
+}
+
+static void __complete_sset_wquery (void *client, z_message_t *msg) {
+    __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+}
+
+static int __rpc_sset_wquery (z_rpc_client_t *client,
+                              unsigned int method_code,
+                              const z_chunkq_extent_t *tokens,
+                              unsigned int ntokens,
+                              unsigned int nline)
+{
+    z_message_t *msg;
+
+    if (ntokens != 3)
+        return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+
+    msg = __rpc_message_alloc(client, Z_MESSAGE_WRITE_REQUEST);
+    z_message_set_type(msg, method_code);
+
+    return(__rpc_message_send(client, tokens, msg, __complete_sset_wquery));
+}
+
+static void __complete_sset_length (void *client, z_message_t *msg) {
+    if (z_message_state(msg) != RALEIGHFS_ERRNO_NONE) {
+        __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    } else {
+        z_stream_t stream;
+        uint64_t length;
+        char buffer[32];
+        int n;
+
+        z_message_response_stream(msg, &stream);
+        z_stream_read_uint64(&stream, &length);
+
+        n = z_snprintf(buffer, sizeof(buffer), "+%u8d\r\n", length);
+        z_rpc_write(Z_RPC_CLIENT(client), buffer, n);
+    }
+}
+
+static int __rpc_sset_length (z_rpc_client_t *client,
+                               unsigned int method_code,
+                               const z_chunkq_extent_t *tokens,
+                               unsigned int ntokens,
+                               unsigned int nline)
+{
+    z_message_t *msg;
+
+    if (ntokens != 3)
+        return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+
+    msg = __rpc_message_alloc(client, Z_MESSAGE_READ_REQUEST);
+    z_message_set_type(msg, method_code);
+
+    return(__rpc_message_send(client, tokens, msg, __complete_sset_length));
+}
+
+static void __complete_sset_stats (void *client, z_message_t *msg) {
+    if (z_message_state(msg) != RALEIGHFS_ERRNO_NONE) {
+        __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    } else {
+        char buffer[32];
+        int n;
+
+        /* TODO: Key/Value stats */
+        n = z_snprintf(buffer, sizeof(buffer), "+TODO\r\n");
+        z_rpc_write(Z_RPC_CLIENT(client), buffer, n);
+    }
+}
+
+static int __rpc_sset_stats (z_rpc_client_t *client,
+                             unsigned int method_code,
+                             const z_chunkq_extent_t *tokens,
+                             unsigned int ntokens,
+                             unsigned int nline)
+{
+    z_message_t *msg;
+
+    if (ntokens != 3)
+        return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
+
+    msg = __rpc_message_alloc(client, Z_MESSAGE_READ_REQUEST);
+    z_message_set_type(msg, method_code);
+
+    return(__rpc_message_send(client, tokens, msg, __complete_sset_stats));
+}
+
+/* ============================================================================
  *  Deque Object Commands
  */
 static void __complete_deque_push (void *client, z_message_t *msg) {
@@ -312,7 +688,7 @@ static void __complete_deque_get (void *client, z_message_t *msg) {
         z_message_response_stream(msg, &stream);
         z_stream_read_uint32(&stream, &vlength);
 
-        n = z_snprintf(buffer, sizeof(buffer), "+%u8d\r\n", vlength);
+        n = z_snprintf(buffer, sizeof(buffer), "+%u4d\r\n", vlength);
         z_rpc_write(Z_RPC_CLIENT(client), buffer, n);
 
         if (vlength > 0) {
@@ -525,6 +901,33 @@ static int __rpc_server_quit (z_rpc_client_t *client,
  *  RPC Commands
  */
 
+/* Sorted Set Object */
+static const struct rpc_command __sset_commands[] = {
+    { "insert",      6, RALEIGHFS_SSET_INSERT,     0, __rpc_sset_update,  0 },
+    { "update",      6, RALEIGHFS_SSET_UPDATE,     0, __rpc_sset_update,  0 },
+    { "pop",         3, RALEIGHFS_SSET_POP,        1, __rpc_sset_items,   4 },
+        { "-range",  6, RALEIGHFS_SSET_POP_RANGE,  1, __rpc_sset_range,   0 },
+        { "-index",  6, RALEIGHFS_SSET_POP_INDEX,  1, __rpc_sset_index,   0 },
+        { "-first",  6, RALEIGHFS_SSET_POP_FIRST,  1, __rpc_sset_items,   0 },
+        { "-last",   5, RALEIGHFS_SSET_POP_LAST,   1, __rpc_sset_items,   0 },
+    { "get",         3, RALEIGHFS_SSET_GET,        1, __rpc_sset_items,   4 },
+        { "-range",  6, RALEIGHFS_SSET_GET_RANGE,  1, __rpc_sset_range,   0 },
+        { "-index",  6, RALEIGHFS_SSET_GET_INDEX,  1, __rpc_sset_index,   0 },
+        { "-first",  6, RALEIGHFS_SSET_GET_FIRST,  1, __rpc_sset_items,   0 },
+        { "-last",   5, RALEIGHFS_SSET_GET_LAST,   1, __rpc_sset_items,   0 },
+    { "rm",          2, RALEIGHFS_SSET_RM,         1, __rpc_sset_items,   4 },
+        { "-range",  6, RALEIGHFS_SSET_RM_RANGE,   1, __rpc_sset_range,   0 },
+        { "-index",  6, RALEIGHFS_SSET_RM_INDEX,   1, __rpc_sset_index,   0 },
+        { "-first",  6, RALEIGHFS_SSET_RM_FIRST,   1, __rpc_sset_items,   0 },
+        { "-last",   5, RALEIGHFS_SSET_RM_LAST,    1, __rpc_sset_items,   0 },
+    { "keys",        4, RALEIGHFS_SSET_GET_KEYS,   1, __rpc_sset_keys,    0 },
+    { "clear",       5, RALEIGHFS_SSET_CLEAR,      1, __rpc_sset_wquery,  0 },
+    { "reverse",     7, RALEIGHFS_SSET_REVERSE,    1, __rpc_sset_wquery,  0 },
+    { "length",      6, RALEIGHFS_SSET_LENGTH,     1, __rpc_sset_length,  0 },
+    { "stats",       5, RALEIGHFS_SSET_STATS,      1, __rpc_sset_stats,   0 },
+    { NULL,          0, 0, 0, NULL, 0 },
+};
+
 /* Deque Object */
 static const struct rpc_command __deque_commands[] = {
     { "push",       4, RALEIGHFS_DEQUE_PUSH_BACK,  0, __rpc_deque_push,   2 },
@@ -572,6 +975,7 @@ static const struct rpc_command __server_commands[] = {
 };
 
 static const struct rpc_command_group __rpc_command_group[] = {
+    { "sset",     4, __sset_commands },
     { "deque",    5, __deque_commands },
     { "counter",  7, __counter_commands },
 

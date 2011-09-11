@@ -17,6 +17,7 @@
 #include <raleighfs/object/memcache.h>
 #include <raleighfs/object/counter.h>
 #include <raleighfs/object/deque.h>
+#include <raleighfs/object/sset.h>
 
 #include <raleighfs/semantic/flat.h>
 #include <raleighfs/device/memory.h>
@@ -73,6 +74,7 @@ int main (int argc, char **argv) {
     raleighfs_plug_object(&fs, &raleighfs_object_memcache);
     raleighfs_plug_object(&fs, &raleighfs_object_counter);
     raleighfs_plug_object(&fs, &raleighfs_object_deque);
+    raleighfs_plug_object(&fs, &raleighfs_object_sset);
 
     raleighfs_memory_device(&device);
     if ((errno = raleighfs_create(&fs, &device,
