@@ -20,74 +20,13 @@
 #include <zcl/memcpy.h>
 #include <zcl/macros.h>
 
-#include <stdarg.h>
-
-static int __snprint_string (char *buf, unsigned int bufsize, va_list arg) {
-    int nchars;
-    char *s;
-
-    if ((s = va_arg(arg, char *)) == NULL) {
-        nchars = z_min(bufsize, 6);
-        z_memcpy(buf, "(none)", nchars);
-    } else {
-        nchars = z_min(bufsize, z_strlen(s));
-        z_memcpy(buf, s, nchars);
-    }
-
-    return(nchars);
-}
-
-static int __snprint_number (char *buf, unsigned int bufsize,
-                             const char *frmt, va_list arg)
-{
-    int has_sign;
-    int nchars;
-    int base;
-
-    has_sign = (frmt[0] == 'i');
-    switch (frmt[2]) {
-        case 'd': base = 10; break;
-        case 'x': base = 16; break;
-        case 'o': base = 8;  break;
-        case 'b': base = 2;  break;
-        default:  base = 10; break;
-    }
-
-    switch (frmt[1]) {
-        case '1':
-            if (has_sign)
-                nchars = z_i8tostr(va_arg(arg, int), buf, bufsize, base);
-            else
-                nchars = z_u8tostr(va_arg(arg, int), buf, bufsize, base);
-            break;
-        case '2':
-            if (has_sign)
-                nchars = z_i16tostr(va_arg(arg, int), buf, bufsize, base);
-            else
-                nchars = z_u16tostr(va_arg(arg, int), buf, bufsize, base);
-            break;
-        case '4':
-            if (has_sign)
-                nchars = z_i32tostr(va_arg(arg, int32_t), buf, bufsize, base);
-            else
-                nchars = z_u32tostr(va_arg(arg, uint32_t), buf, bufsize, base);
-            break;
-        case '8':
-            if (has_sign)
-                nchars = z_i64tostr(va_arg(arg, int64_t), buf, bufsize, base);
-            else
-                nchars = z_u64tostr(va_arg(arg, uint64_t), buf, bufsize, base);
-            break;
-    }
-
-    return(nchars);
-}
-
 int z_vsvnprintf (char *buf, unsigned int bufsize,
-                  const char *frmt, va_list arg)
+                  const char *frmt, va_list ap)
 {
     unsigned int avail;
     int n, nchars;
+    int base;
+    char *s;
     char c;
 
     if (bufsize == 0)
@@ -102,7 +41,7 @@ int z_vsvnprintf (char *buf, unsigned int bufsize,
             continue;
         }
 
-        /* 
+        /*
          * %% -> %
          * %c -> char
          * %s -> string
@@ -112,26 +51,55 @@ int z_vsvnprintf (char *buf, unsigned int bufsize,
          */
         switch ((c = *frmt++)) {
             case 's':
-                n = __snprint_string(buf, avail, arg);
+                if ((s = va_arg(ap, char *)) == NULL) {
+                    n = z_min(bufsize, 6);
+                    z_memcpy(buf, "(none)", n);
+                } else {
+                    n = z_min(bufsize, z_strlen(s));
+                    z_memcpy(buf, s, n);
+                }
                 nchars += n;
                 buf += n;
                 break;
             case 'u':
             case 'i':
-                n = __snprint_number(buf, avail, frmt - 1, arg);
+                switch (frmt[1]) {
+                    case 'd': base = 10; break;
+                    case 'x': base = 16; break;
+                    case 'o': base = 8;  break;
+                    case 'b': base = 2;  break;
+                    default:  base = 10; break;
+                }
+
+                switch (frmt[0]) {
+                  case '1':
+                  case '2':
+                  case '4':
+                     if (c == 'i')
+                         n = z_i32tostr(va_arg(ap, int32_t), buf, avail, base);
+                     else
+                         n = z_u32tostr(va_arg(ap, uint32_t), buf, avail, base);
+                     break;
+                  case '8':
+                     if (c == 'i')
+                         n = z_i64tostr(va_arg(ap, int64_t), buf, avail, base);
+                     else
+                         n = z_u64tostr(va_arg(ap, uint64_t), buf, avail, base);
+                     break;
+                }
                 nchars += n;
                 frmt += 2;
                 buf += n;
                 break;
             case 'c':
-                *buf++ = va_arg(arg, int);
+                *buf++ = (char)va_arg(ap, int);
                 nchars++;
                 break;
             case '%':
                 *buf++ = '%';
                 nchars++;
                 break;
-        }        
+        }
     }
 
     *buf = '\0';
