@@ -17,14 +17,19 @@
 #ifndef _Z_SNPRINTF_H_
 #define _Z_SNPRINTF_H_
 
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
+
 #include <stdarg.h>
 
-int     z_snprintf      (char *buf, 
-                         unsigned int bufsize, 
-                         const char *frmt, ...);
-int     z_vsvnprintf    (char *buf, 
+int     z_snprintf      (char *buf,
                          unsigned int bufsize,
-                         const char *frmt, 
-                         va_list arg);
+                         const char *frmt, ...);
+int     z_vsvnprintf    (char *buf,
+                         unsigned int bufsize,
+                         const char *frmt,
+                         va_list ap);
+
+__Z_END_DECLS__
 
 #endif /* !_Z_SNPRINTF_H_ */
