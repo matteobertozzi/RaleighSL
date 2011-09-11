@@ -91,7 +91,7 @@ class RaleighFS(object):
             v = self._sock.recv(length)
             if not v: break
             data.append(v)
-            if '\n' in v: break
+            if v.endswith('\n'): break
         return ''.join(data).rstrip()
 
     def sendSingleLineRequest(self, data):
