@@ -93,20 +93,6 @@ __Z_BEGIN_DECLS__
 #define z_min(a, b)                     ((a) < (b) ? (a) : (b))
 #define z_max(a, b)                     ((a) > (b) ? (a) : (b))
 
-#define z_bit_test(x, n)                (!!((x) & (1 << (n))))
-
-#define z_bit_set(x, n)                                                     \
-    do { (x) |= 1 << (n); } while (0)
-
-#define z_bit_clear(x, n)                                                   \
-    do { (x) &= ~(1 << (n)); } while (0)
-
-#define z_bit_toggle(x, n)                                                  \
-    do { (x) ^= 1 << (n); } while (0)
-
-#define z_bit_change(x, n, v)                                               \
-    do { (x) = (((x) & ~(1 << (n))) | ((!!v) << (n))); } while (0)
-
 __Z_END_DECLS__
 
 #endif /* !_Z_MACROS_H_ */
