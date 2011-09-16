@@ -68,7 +68,7 @@ static void *__iothread_poll (void *arg) {
 #endif /* Z_IOPOLL_USE_IOTHREAD */
 
 static unsigned int __iopoll_fd_hash (void *data, const void *key) {
-    return(Z_INT_PTR_VALUE(key));
+    return(Z_UINT_PTR_VALUE(key));
 }
 
 static int __iopoll_fd_compare (void *data, const void *a, const void *b) {
@@ -266,10 +266,10 @@ int z_iopoll_entity_set_readable (z_iopoll_t *iopoll,
                                   z_iopoll_entity_t *entity,
                                   int readable)
 {
-    if (z_bit_test(entity->flags, 0) == readable)
+    if (z_bit_test(&(entity->flags), 0) == readable)
         return(0);
 
-    z_bit_change(entity->flags, 0, readable);
+    z_bit_change(&(entity->flags), 0, readable);
     return(iopoll->plug->mod(__entity_thread(iopoll, entity), entity));
 }
 
@@ -277,10 +277,10 @@ int z_iopoll_entity_set_writeable (z_iopoll_t *iopoll,
                                    z_iopoll_entity_t *entity,
                                    int writeable)
 {
-    if (z_bit_test(entity->flags, 1) == writeable)
+    if (z_bit_test(&(entity->flags), 1) == writeable)
         return(0);
 
-    z_bit_change(entity->flags, 1, writeable);
+    z_bit_change(&(entity->flags), 1, writeable);
     return(iopoll->plug->mod(__entity_thread(iopoll, entity), entity));
 }
 

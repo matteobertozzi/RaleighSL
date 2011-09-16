@@ -21,6 +21,7 @@
 __Z_BEGIN_DECLS__
 
 #include <zcl/hashtable.h>
+#include <zcl/bitops.h>
 #include <zcl/object.h>
 #include <zcl/types.h>
 
@@ -148,25 +149,25 @@ int                 z_iopoll_loop       (z_iopoll_t *iopoll);
     } while (0)
 
 #define z_iopoll_entity_flag(entity, nflag)                                  \
-    z_bit_test(Z_IOPOLL_ENTITY(entity)->flags, (nflag) + 2)
+    z_bit_test(&(Z_IOPOLL_ENTITY(entity)->flags), (nflag) + 2)
 
 #define z_iopoll_entity_set_flag(entity, nflag)                              \
-    z_bit_set(Z_IOPOLL_ENTITY(entity)->flags, (nflag) + 2)
+    z_bit_set(&(Z_IOPOLL_ENTITY(entity)->flags), (nflag) + 2)
 
 #define z_iopoll_entity_clear_flag(entity, nflag)                            \
-    z_bit_clear(Z_IOPOLL_ENTITY(entity)->flags, (nflag) + 2)
+    z_bit_clear(&(Z_IOPOLL_ENTITY(entity)->flags), (nflag) + 2)
 
 #define z_iopoll_entity_change_flag(entity, nflag, value)                    \
-    z_bit_change(Z_IOPOLL_ENTITY(entity)->flags, (nflag) + 2, value)
+    z_bit_change(&(Z_IOPOLL_ENTITY(entity)->flags), (nflag) + 2, value)
 
 #define z_iopoll_entity_reset_flags(entity)                                  \
     do { Z_IOPOLL_ENTITY(entity)->flags &= 3; } while (0)
 
 #define z_iopoll_entity_is_readable(entity)                                  \
-    z_bit_test(Z_IOPOLL_ENTITY(entity)->flags, 0)
+    z_bit_test(&(Z_IOPOLL_ENTITY(entity)->flags), 0)
 
 #define z_iopoll_entity_is_writeable(entity)                                 \
-    z_bit_test(Z_IOPOLL_ENTITY(entity)->flags, 1)
+    z_bit_test(&(Z_IOPOLL_ENTITY(entity)->flags), 1)
 
 int     z_iopoll_entity_set_readable    (z_iopoll_t *iopoll,
                                          z_iopoll_entity_t *entity,
