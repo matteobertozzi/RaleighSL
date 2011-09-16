@@ -644,7 +644,7 @@ if __name__ == '__main__':
         build = BuildLibrary('zcl', '0.5.0', ['src/zcl'], options=default_lib_opts)
         if options.xcode:
             build.copyHeaders()
-        elif options.build_zcl:
+        else:
             build.build()
 
         if not options.xcode and options.build_tests:
@@ -677,7 +677,7 @@ if __name__ == '__main__':
 
         if options.xcode:
             build.copyHeaders()
-        elif options.build_fs:
+        else:
             build.build()
 
         if not options.xcode and options.build_tests:
@@ -699,11 +699,11 @@ if __name__ == '__main__':
         build_opts.addIncludePaths(raleighfs_includes)
 
         build = BuildApp('raleigh-server', ['src/raleigh-server/'], options=build_opts)
-        if not options.xcode and options.build_server:
+        if not options.xcode:
             build.build()
 
     with bench('[T] Build Time'):
-        buildZcl()
-        buildFs()
-        buildServer()
+        if options.build_zcl: buildZcl()
+        if options.build_fs: buildFs()
+        if options.build_server: buildServer()
 
