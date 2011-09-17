@@ -165,6 +165,7 @@ static const uint8_t *__semantic_object_type (const z_chunkq_extent_t *name) {
 
 static void __complete_semantic_create (void *client, z_message_t *msg) {
     __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    z_message_free(msg);
 }
 
 static int __rpc_semantic_create (z_rpc_client_t *client,
@@ -194,6 +195,7 @@ static int __rpc_semantic_create (z_rpc_client_t *client,
 
 static void __complete_semantic_unlink (void *client, z_message_t *msg) {
     __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    z_message_free(msg);
 }
 
 static int __rpc_semantic_unlink (z_rpc_client_t *client,
@@ -225,6 +227,7 @@ static void __complete_semantic_exists (void *client, z_message_t *msg) {
             __rpc_write_fserrno(Z_RPC_CLIENT(client), errno);
             break;
     }
+    z_message_free(msg);
 }
 
 static int __rpc_semantic_exists (z_rpc_client_t *client,
@@ -244,6 +247,7 @@ static int __rpc_semantic_exists (z_rpc_client_t *client,
 
 static void __complete_semantic_rename (void *client, z_message_t *msg) {
     __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    z_message_free(msg);
 }
 
 static int __rpc_semantic_rename (z_rpc_client_t *client,
@@ -451,7 +455,6 @@ static int __rpc_kv_update (z_rpc_client_t *client,
     int res;
 
     /* kv set /object <key> <length> <cas> */
-    printf("ntokens %d\n", ntokens);
     if (ntokens < 4 || ntokens > 6)
         return(__rpc_send_error(client, RPC_ERRNO_BAD_LINE));
 
@@ -621,6 +624,7 @@ static void __complete_sset_get (void *client, z_message_t *msg) {
 
         z_rpc_write(Z_RPC_CLIENT(client), "END\r\n", 5);
     }
+    z_message_free(msg);
 }
 
 
@@ -808,6 +812,7 @@ static void __complete_sset_keys (void *client, z_message_t *msg) {
             z_rpc_write_newline(Z_RPC_CLIENT(client));
         }
     }
+    z_message_free(msg);
 }
 
 static int __rpc_sset_keys (z_rpc_client_t *client,
@@ -863,6 +868,7 @@ static void __complete_sset_length (void *client, z_message_t *msg) {
         n = z_snprintf(buffer, sizeof(buffer), "+%u8d\r\n", length);
         z_rpc_write(Z_RPC_CLIENT(client), buffer, n);
     }
+    z_message_free(msg);
 }
 
 static int __rpc_sset_length (z_rpc_client_t *client,
@@ -893,6 +899,7 @@ static void __complete_sset_stats (void *client, z_message_t *msg) {
         n = z_snprintf(buffer, sizeof(buffer), "+TODO\r\n");
         z_rpc_write(Z_RPC_CLIENT(client), buffer, n);
     }
+    z_message_free(msg);
 }
 
 static int __rpc_sset_stats (z_rpc_client_t *client,
@@ -917,6 +924,7 @@ static int __rpc_sset_stats (z_rpc_client_t *client,
  */
 static void __complete_deque_push (void *client, z_message_t *msg) {
     __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    z_message_free(msg);
 }
 
 static int __rpc_deque_push (z_rpc_client_t *client,
@@ -975,6 +983,7 @@ static void __complete_deque_get (void *client, z_message_t *msg) {
             z_rpc_write(Z_RPC_CLIENT(client), "\r\n", 2);
         }
     }
+    z_message_free(msg);
 }
 
 static int __rpc_deque_get (z_rpc_client_t *client,
@@ -996,6 +1005,7 @@ static int __rpc_deque_get (z_rpc_client_t *client,
 
 static void __complete_deque_remove (void *client, z_message_t *msg) {
     __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    z_message_free(msg);
 }
 
 static int __rpc_deque_remove (z_rpc_client_t *client,
@@ -1030,6 +1040,7 @@ static void __complete_deque_length (void *client, z_message_t *msg) {
         n = z_snprintf(buffer, sizeof(buffer), "+%u8d\r\n", length);
         z_rpc_write(Z_RPC_CLIENT(client), buffer, n);
     }
+    z_message_free(msg);
 }
 
 static int __rpc_deque_length (z_rpc_client_t *client,
@@ -1103,6 +1114,8 @@ static void __complete_counter_math (void *client, z_message_t *msg) {
         n = z_snprintf(buffer, sizeof(buffer), "+%u8d %u8d\r\n", value, cas);
         z_rpc_write(Z_RPC_CLIENT(client), buffer, n);
     }
+
+    z_message_free(msg);
 }
 
 static int __rpc_counter_get (z_rpc_client_t *client,
