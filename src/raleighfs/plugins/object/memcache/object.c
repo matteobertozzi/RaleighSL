@@ -58,6 +58,7 @@ static raleighfs_errno_t __object_sync (raleighfs_t *fs,
 static raleighfs_errno_t __object_unlink (raleighfs_t *fs,
                                           raleighfs_object_t *object)
 {
+    memcache_free(__MEMCACHE_TABLE(object));
     return(RALEIGHFS_ERRNO_NONE);
 }
 
