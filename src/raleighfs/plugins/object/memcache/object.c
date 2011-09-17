@@ -58,9 +58,8 @@ static raleighfs_errno_t __object_sync (raleighfs_t *fs,
 static raleighfs_errno_t __object_unlink (raleighfs_t *fs,
                                           raleighfs_object_t *object)
 {
-    return(RALEIGHFS_ERRNO_NOT_IMPLEMENTED);
+    return(RALEIGHFS_ERRNO_NONE);
 }
-
 
 static raleighfs_errno_t __object_query (raleighfs_t *fs,
                                          raleighfs_object_t *object,
@@ -198,6 +197,7 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
         /* Set Item Flags */
         item->exptime = exptime;
         item->flags = flags;
+        item->cas++;
 
         /* Read Item Data */
         memcache_object_set(item, __MEMCACHE_TABLE(object)->memory, &value);
@@ -208,6 +208,7 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
             return(RALEIGHFS_ERRNO_NONE);
         }
 
+        item->cas++;
         memcache_object_append(item, __MEMCACHE_TABLE(object)->memory, &value);
     } else if (msg_type == RALEIGHFS_MEMCACHE_PREPEND) {
         /* add this data to an existing key before existing data */
@@ -216,6 +217,7 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
             return(RALEIGHFS_ERRNO_NONE);
         }
 
+        item->cas++;
         memcache_object_prepend(item, __MEMCACHE_TABLE(object)->memory, &value);
     }
 

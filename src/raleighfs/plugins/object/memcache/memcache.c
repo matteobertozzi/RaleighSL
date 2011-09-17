@@ -200,6 +200,8 @@ memcache_object_t *memcache_object_alloc (z_memory_t *memory,
     memcache_object_t *obj;
     unsigned int size;
 
+    /* TODO: Use a custom allocator with pool */
+
     size = sizeof(memcache_object_t) + (key_size - 1);
     if ((obj = z_memory_block_alloc(memory, memcache_object_t, size)) != NULL) {
         obj->key_size = key_size;

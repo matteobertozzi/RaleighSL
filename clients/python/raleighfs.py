@@ -108,7 +108,7 @@ class RaleighFS(object):
 
     def sendAndCheckOkResponse(self, data):
         response = self.sendSingleLineRequest(data)
-        if response != '+OK':
+        if not response.startswith('+OK'):
           raise Exception(response)
         return True
 
@@ -139,6 +139,42 @@ class _AbstractContainer(_AbstractObject):
 
     def stats(self):
         raise NotImplementedError
+
+    def _sendGetKVRequest(self, data):
+        self.fs.send(data)
+        response = self.fs.recv().split('\r\n')
+        if response[0][0] == '-':
+            raise Exception(response[0])
+
+        key = None
+        vsize = 0
+        value = ''
+        extra = None
+        values = {}
+        while True:
+            for line in response:
+                if line == 'END':
+                    return values
+
+                if key is None:
+                    litems = line.split()
+                    vsize = int(litems[0])
+                    key = litems[-1]
+                    assert vsize > 0
+                    extra = litems[1:-1]
+                    value = ''
+                else:
+                    value += line
+
+                    if vsize == len(value):
+                        if extra:
+                            values[key] = (extra, value)
+                        else:
+                            values[key] = value
+                        key = None
+
+            response = self.fs.recv().split('\r\n')
+        return None
 
 class Deque(_AbstractContainer):
     def push(self, value):
@@ -287,23 +323,23 @@ class SSet(_AbstractContainer):
 
     def get(self, keys):
         data = 'sset get %s %s\n' % (self.name, ' '.join(keys))
-        return self._sendGetRequest(data)
+        return self._sendGetKVRequest(data)
 
     def getFirst(self):
         data = 'sset get-first %s\n' % (self.name)
-        return self._sendGetRequest(data)
+        return self._sendGetKVRequest(data)
 
     def getLast(self):
         data = 'sset get-last %s\n' % (self.name)
-        return self._sendGetRequest(data)
+        return self._sendGetKVRequest(data)
 
     def getRange(self, key_start, key_end):
         data = 'sset get-range %s %s %s\n' % (self.name, key_start, key_end)
-        return self._sendGetRequest(data)
+        return self._sendGetKVRequest(data)
 
     def getIndex(self, index_start, index_end):
         data = 'sset get-index %s %d %d\n' % (self.name, index_start, index_end)
-        return self._sendGetRequest(data)
+        return self._sendGetKVRequest(data)
 
     def keys(self):
         data = 'sset keys %s\n' % (self.name)
@@ -336,36 +372,33 @@ class SSet(_AbstractContainer):
 
         return keys
 
-    def _sendGetRequest(self, data):
-        self.fs.send(data)
-        response = self.fs.recv().split('\r\n')
-        if response[0][0] == '-':
-            raise Exception(response[0])
+class Kv(_AbstractContainer):
+    def set(self, key, value):
+        data = 'kv set %s %s %d\n%s\n' % (self.name, key, len(value), value)
+        return self._sendAndCheckOkResponse(data)
 
-        key = None
-        vsize = 0
-        value = ''
-        values = {}
-        while True:
-            for line in response:
-                if line == 'END':
-                    return values
+    def cas(self, key, value, cas):
+        data = 'kv cas %s %s %d %d\n%s\n' % (self.name, key, len(value), cas, value)
+        try:
+            return self._sendAndCheckOkResponse(data)
+        except Exception:
+            return False
 
-                if key is None:
-                    vsize, key = line.split()
-                    vsize = int(vsize)
-                    assert vsize > 0
-                    value = ''
-                else:
-                    value += line
+    def get(self, keys):
+        data = 'kv get %s %s\n' % (self.name, ' '.join(keys))
+        return self._sendGetKVRequest(data)
 
-                    if vsize == len(value):
-                        values[key] = value
-                        key = None
+    def append(self, key, value):
+        data = 'kv append %s %s %d\n%s\n' % (self.name, key, len(value), value)
+        return self._sendAndCheckOkResponse(data)
 
-            response = self.fs.recv().split('\r\n')
+    def prepend(self, key, value):
+        data = 'kv prepend %s %s %d\n%s\n' % (self.name, key, len(value), value)
+        return self._sendAndCheckOkResponse(data)
 
-        return None
+    def remove(self, key):
+        data = 'kv remove %s %s\n' % (self.name, key)
+        return self._sendAndCheckOkResponse(data)
 
 if __name__ == '__main__':
     fs = RaleighFS()

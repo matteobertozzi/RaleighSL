@@ -63,6 +63,69 @@ class _RaleighFSObjectTestCase(_RaleighFSTestCase):
         self.assertTrue(self.fs.exists(self.OBJECT_NAME))
         self.assertFalse(self.fs.exists(new_name))
 
+class TestKeyValue(_RaleighFSObjectTestCase):
+    OBJECT_TYPE = raleighfs.Kv
+    OBJECT_NAME = '/test/kv'
+
+    def testSet(self):
+        for i in range(20):
+            key = 'key-%02d' % i
+            value = 'Value %d' % i
+            self.assertTrue(self.fsobject.set(key, value))
+            self.assertEquals(self.fsobject.get([key]), {key:(['0'], value)})
+
+    def testCas(self):
+        key = 'keyX'
+        self.assertTrue(self.fsobject.set(key, 'V0'))
+        self.assertEquals(self.fsobject.get([key]), {key:(['0'], 'V0')})
+
+        self.assertFalse(self.fsobject.cas(key, 'V1', 1))
+        self.assertEquals(self.fsobject.get([key]), {key:(['0'], 'V0')})
+
+        self.assertTrue(self.fsobject.cas(key, 'V1', 0))
+        self.assertEquals(self.fsobject.get([key]), {key:(['1'], 'V1')})
+
+        self.assertFalse(self.fsobject.cas(key, 'V2', 0))
+        self.assertEquals(self.fsobject.get([key]), {key:(['1'], 'V1')})
+
+        self.assertTrue(self.fsobject.cas(key, 'V2', 1))
+        self.assertEquals(self.fsobject.get([key]), {key:(['2'], 'V2')})
+
+    def testClear(self):
+        for i in range(20):
+            self.assertTrue(self.fsobject.set('key-%02d' % i, 'Value %d' % i))
+
+        for i in range(20):
+            self.assertEquals(self.fsobject.get('key-%02d' % i), {})
+
+    def testRemove(self):
+        for i in range(20):
+            self.assertTrue(self.fsobject.set('key-%02d' % i, 'Value %d' % i))
+
+        for i in range(0, 20, 2):
+            self.assertTrue(self.fsobject.remove('key-%02d' % i))
+
+        for i in range(1, 20, 2):
+            key = 'key-%02d' % i
+            self.assertEquals(self.fsobject.get([key]), {key: (['0'], 'Value %d' % i)})
+
+        for i in range(0, 20, 2):
+            self.assertEquals(self.fsobject.get(['key-%02d' % i]), {})
+
+    def testModifyData(self):
+        key = 'KeyX'
+        self.assertTrue(self.fsobject.set(key, 'Hello'))
+        self.assertEquals(self.fsobject.get([key]), {key:(['0'], 'Hello')})
+
+        self.assertTrue(self.fsobject.append(key, ' World'))
+        self.assertEquals(self.fsobject.get([key]), {key:(['1'], 'Hello World')})
+
+        self.assertTrue(self.fsobject.prepend(key, 'This is a '))
+        self.assertEquals(self.fsobject.get([key]), {key:(['2'], 'This is a Hello World')})
+
+        self.assertTrue(self.fsobject.append(key, ' Test!'))
+        self.assertEquals(self.fsobject.get([key]), {key:(['3'], 'This is a Hello World Test!')})
+
 class TestSSet(_RaleighFSObjectTestCase):
     OBJECT_TYPE = raleighfs.SSet
     OBJECT_NAME = '/tests/sset'
