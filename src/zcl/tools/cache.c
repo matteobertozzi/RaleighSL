@@ -32,7 +32,7 @@ static z_cache_node_t *__cache_node_add (z_cache_t *cache) {
     z_cache_node_t *head;
     z_cache_node_t *node;
 
-    if ((node = (z_cache_node_t *) malloc(sizeof(z_cache_node_t))) == NULL)
+    if ((node = z_object_struct_alloc(cache, z_cache_node_t)) == NULL)
         return(NULL);
 
     node->data = NULL;
