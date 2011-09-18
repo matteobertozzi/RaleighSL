@@ -354,9 +354,7 @@ static raleighfs_errno_t __object_remove (raleighfs_t *fs,
             __object_range(fs, object, msg, &stream, __sset_rm_range);
             break;
         case RALEIGHFS_SSET_RM_INDEX:
-            printf("[S] Remove INDEX\n");
             __object_index(fs, object, msg, &stream, __sset_rm_index);
-            printf("[E] Remove INDEX\n");
             break;
         case RALEIGHFS_SSET_RM_FIRST:
             sset_remove_first(__SSET(object));
