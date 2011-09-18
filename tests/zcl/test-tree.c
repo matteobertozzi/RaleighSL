@@ -236,6 +236,7 @@ int main (int argc, char **argv) {
         printf(" [ !! ] Tree (AVL) %d\n", res);
     else
         printf(" [ ok ] Tree (AVL)\n");
+    if (res) return(res);
 
     data.plug = &z_tree_red_black;
     if ((res = z_test_run(&__test_tree, &data)))

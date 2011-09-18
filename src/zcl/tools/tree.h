@@ -134,7 +134,6 @@ void *      z_tree_lookup_floor_custom  (const z_tree_t *tree,
 void *      z_tree_lookup_min           (const z_tree_t *tree);
 void *      z_tree_lookup_max           (const z_tree_t *tree);
 
-
 /* Tree Iterator methods */
 int         z_tree_iter_init                (z_tree_iter_t *iter,
                                              const z_tree_t *tree);
