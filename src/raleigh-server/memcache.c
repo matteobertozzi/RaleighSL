@@ -146,6 +146,13 @@ static int __memcache_send_state (z_rpc_client_t *client,
     return(__memcache_message_send(client, msg, __complete_state));
 }
 
+static int __memcache_send_error (z_rpc_client_t *client,
+                                  raleighfs_memcache_state_t state)
+{
+    z_chunkq_clear(&(client->rdbuffer));
+    return(__memcache_send_state(client, state));
+}
+
 static void __set_noreply (z_rpc_client_t *client,
                            const z_chunkq_extent_t *tokens,
                            unsigned int ntokens)
@@ -266,11 +273,11 @@ static int __process_get (z_rpc_client_t *client,
     z_stream_t stream;
 
     if (ntokens < 3)
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
 
     for (key = &(tokens[KEY_TOKEN]); key->length != 0; ++key) {
         if (key->length > KEY_MAX_LENGTH)
-            return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
+            return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
     }
 
     /* Send GET Operation Command! */
@@ -309,27 +316,27 @@ static int __process_update (z_rpc_client_t *client,
     int res;
 
     if (ntokens < 6 || ntokens > 8)
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
 
     /* check for noreply flag */
     __set_noreply(client, tokens, ntokens);
 
     key = &(tokens[KEY_TOKEN]);
     if (key->length > KEY_MAX_LENGTH)
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
 
     if (!__tok2u32(&(tokens[4]), &vlength))
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
 
     /* Data is not available yet */
     if (client->rdbuffer.size < (nline + vlength))
         return(1);
 
     if (!(__tok2u32(&(tokens[2]), &flags) && __tok2u32(&(tokens[3]), &exptime)))
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
 
     if (code == RALEIGHFS_MEMCACHE_CAS && !__tok2u64(&(tokens[5]), &req_cas_id))
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
 
     /* Send SET Operation Command! */
     msg = __memcache_message_alloc(client, Z_MESSAGE_WRITE_REQUEST);
@@ -390,17 +397,17 @@ static int __process_arithmetic (z_rpc_client_t *client,
     uint64_t delta;
 
     if (ntokens != 4 && ntokens != 5)
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
 
     /* check for noreply flag */
     __set_noreply(client, tokens, ntokens);
 
     key = &(tokens[KEY_TOKEN]);
     if (key->length > KEY_MAX_LENGTH)
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_BAD_CMDLINE));
 
     if (!__tok2u64(&(tokens[2]), &delta))
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_INVALID_DELTA));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_INVALID_DELTA));
 
     /* Send Arithmetic Operation Command! */
     msg = __memcache_message_alloc(client, Z_MESSAGE_WRITE_REQUEST);
@@ -430,7 +437,7 @@ static int __process_delete (z_rpc_client_t *client,
     z_stream_t stream;
 
     if (ntokens < 3 || ntokens > 5)
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
 
     /* check for noreply flag */
     __set_noreply(client, tokens, ntokens);
@@ -461,7 +468,7 @@ static int __process_flush_all (z_rpc_client_t *client,
     z_message_t *msg;
 
     if (ntokens < 2 || ntokens > 4)
-         return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
+         return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
 
     /* check for noreply flag */
     __set_noreply(client, tokens, ntokens);
@@ -479,7 +486,7 @@ static int __process_stats (z_rpc_client_t *client,
                             unsigned int nline)
 {
     if (ntokens < 2)
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
 
     /*
         STAT pid 14414
@@ -532,7 +539,7 @@ static int __process_version (z_rpc_client_t *client,
                               unsigned int nline)
 {
     if (ntokens != 2)
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
 
     return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_VERSION));
 }
@@ -546,7 +553,7 @@ static int __process_verbosity (z_rpc_client_t *client,
     uint32_t level;
 
     if (ntokens < 3 || ntokens > 4)
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
 
     /* check for noreply flag */
     __set_noreply(client, tokens, ntokens);
@@ -563,7 +570,7 @@ static int __process_quit (z_rpc_client_t *client,
                            unsigned int nline)
 {
     if (ntokens != 2)
-        return(__memcache_send_state(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
+        return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
     return(-1);
 }
 
@@ -687,14 +694,7 @@ static int __memcache_process_line (z_rpc_client_t *client,
     }
 
     /* Invalid Command */
-    if (!z_chunkq_startswith(&(client->rdbuffer), 0, "\r", 1) &&
-        !z_chunkq_startswith(&(client->rdbuffer), 0, "\n", 1))
-    {
-        __memcache_send_state(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC);
-    }
-
-    z_chunkq_remove(&(client->rdbuffer), nline);
-    return(0);
+    return(__memcache_send_error(client, RALEIGHFS_MEMCACHE_ERROR_GENERIC));
 }
 
 z_rpc_protocol_t memcache_protocol = {

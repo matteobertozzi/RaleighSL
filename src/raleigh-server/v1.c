@@ -122,6 +122,7 @@ static int __rpc_write_fserrno (z_rpc_client_t *client,
 }
 
 static int __rpc_send_error (z_rpc_client_t *client, rpc_errno_t errno) {
+    z_chunkq_clear(&(client->rdbuffer));
     switch (errno) {
         case RPC_ERRNO_GENERIC:
             return(z_rpc_write(client, "-ERR\r\n", 6));
@@ -1408,7 +1409,6 @@ static int __rpc_process_line (z_rpc_client_t *client, unsigned int n) {
     }
 
     /* Invalid Command */
-    z_chunkq_remove(&(client->rdbuffer), n);
     return(__rpc_send_error(client, RPC_ERRNO_INVALID_COMMAND));
 }
 
