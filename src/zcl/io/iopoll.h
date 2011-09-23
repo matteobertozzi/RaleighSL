@@ -29,9 +29,13 @@ __Z_BEGIN_DECLS__
 #ifdef Z_IOPOLL_USE_IOTHREAD
     #include <zcl/thread.h>
     #ifndef Z_IOPOLL_NTHREADS
-        #define Z_IOPOLL_NTHREADS       (8)
+        #define Z_IOPOLL_NTHREADS           (8)
     #endif /* !Z_IOPOLL_NTHREADS */
 #endif /* Z_IOPOLL_USE_IOTHREAD */
+
+#ifndef Z_IOPOLL_DEFAULT_TIMEOUT
+    #define Z_IOPOLL_DEFAULT_TIMEOUT        (5000)
+#endif /* !Z_IOPOLL_DEFAULT_TIMEOUT */
 
 #define Z_IOPOLL_ENTITY_TYPE                z_iopoll_entity_t __base__;
 #define Z_IOPOLL_ENTITY(x)                  Z_CAST(z_iopoll_entity_t, x)

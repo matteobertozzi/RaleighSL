@@ -165,25 +165,23 @@ static int __kqueue_merge_events (z_iopoll_event_t *ioevents,
 static int __kqueue_poll (z_iothread_t *iothread) {
     z_iopoll_event_t ioevents[__IO_KQUEUE_EVENTS];
     struct kevent events[__IO_KQUEUE_EVENTS];
-    struct timespec *ptimeout;
     struct timespec timeout;
     int n;
 
     if (iothread->iopoll->timeout > 0) {
         timeout.tv_sec = 0;
         timeout.tv_nsec = iothread->iopoll->timeout * 100;
-        ptimeout = &timeout;
     } else {
-        ptimeout = NULL;
+        timeout.tv_sec = Z_IOPOLL_TIMEOUT / 1000;
     }
 
     while (z_iopoll_is_looping(iothread->iopoll)) {
         n = kevent(iothread->data.fd, NULL, 0,
-                   events, __IO_KQUEUE_EVENTS, ptimeout);
+                   events, __IO_KQUEUE_EVENTS, &timeout);
 
         if (n < 0) {
             perror("kevent()");
-            return(-1);
+            continue;
         }
 
         n = __kqueue_merge_events(ioevents, events, n);
