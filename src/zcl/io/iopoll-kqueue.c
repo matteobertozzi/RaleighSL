@@ -169,10 +169,11 @@ static int __kqueue_poll (z_iothread_t *iothread) {
     int n;
 
     if (iothread->iopoll->timeout > 0) {
-        timeout.tv_sec = 0;
-        timeout.tv_nsec = iothread->iopoll->timeout * 100;
+        timeout.tv_sec = iothread->iopoll->timeout / 1000;
+        timeout.tv_nsec = 0;
     } else {
-        timeout.tv_sec = Z_IOPOLL_TIMEOUT / 1000;
+        timeout.tv_sec = Z_IOPOLL_DEFAULT_TIMEOUT / 1000;
+        timeout.tv_nsec = 0;
     }
 
     while (z_iopoll_is_looping(iothread->iopoll)) {
