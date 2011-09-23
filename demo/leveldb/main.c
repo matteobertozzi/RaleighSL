@@ -25,7 +25,7 @@
 
 static const char *DEFAULT_PORT = "11213";
 
-extern z_rpc_protocol_t leveldb_protocol;
+extern struct z_rpc_protocol leveldb_protocol;
 
 int main (int argc, char **argv) {
     z_leveldb_t leveldb;
@@ -37,7 +37,7 @@ int main (int argc, char **argv) {
         printf("usage: demo-leveldb <filename> [port]\n");
         return(1);
     }
-    
+
     port = (argc > 2) ? argv[2] : DEFAULT_PORT;
 
     if (z_leveldb_open(&leveldb, argv[1], DEFAULT_CACHE_SIZE))
