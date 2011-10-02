@@ -62,6 +62,11 @@ union z_data {
 typedef int          (*z_compare_t)         (void *user_data,
                                              const void *a,
                                              const void *b);
+typedef int          (*z_vcompare_t)        (void *user_data,
+                                             const void *a,
+                                             unsigned int alen,
+                                             const void *b,
+                                             unsigned int blen);
 
 typedef unsigned int (*z_object_hash_t)     (void *user_data,
                                              const void *data);
