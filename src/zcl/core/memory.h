@@ -28,28 +28,17 @@ __Z_BEGIN_DECLS__
 
 #define Z_MEMORY(x)                         Z_CAST(z_memory_t, x)
 
-Z_TYPEDEF_STRUCT(z_mempage)
-Z_TYPEDEF_STRUCT(z_memobj)
-Z_TYPEDEF_STRUCT(z_mempool)
+Z_TYPEDEF_STRUCT(z_memory_page)
+Z_TYPEDEF_STRUCT(z_memory_pool)
 Z_TYPEDEF_STRUCT(z_memory)
 
-struct z_mempage {
-    z_mempage_t *next;              /* Next page with header */
-    uint8_t *    blocks[1];         /* List of full pages */
-};
-
-struct z_memobj {
-    z_memobj_t *next;
-    unsigned int used;
-};
-
-struct z_mempool {
-    z_mempage_t *pages;             /* Page Head */
-    z_memobj_t * objects;           /* Object Stack */
+struct z_memory_pool {
+    z_memory_page_t *head;
+    z_memory_page_t *tail;
 };
 
 struct z_memory {
-    z_mempool_t pool[Z_MEMORY_POOL_SIZE];
+    z_memory_pool_t pool[3]; /* 16/24/32 */
     z_allocator_t * allocator;
 };
 
