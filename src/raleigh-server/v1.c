@@ -549,6 +549,7 @@ static int __rpc_kv_clear (z_rpc_client_t *client,
  */
 static void __complete_sset_update (void *client, z_message_t *msg) {
     __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    z_message_free(msg);
 }
 
 static int __rpc_sset_update (z_rpc_client_t *client,
@@ -631,6 +632,7 @@ static void __complete_sset_get (void *client, z_message_t *msg) {
 
 static void __complete_sset_remove (void *client, z_message_t *msg) {
     __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    z_message_free(msg);
 }
 
 static int __rpc_sset_range (z_rpc_client_t *client,
@@ -835,6 +837,7 @@ static int __rpc_sset_keys (z_rpc_client_t *client,
 
 static void __complete_sset_wquery (void *client, z_message_t *msg) {
     __rpc_write_fserrno(Z_RPC_CLIENT(client), z_message_state(msg));
+    z_message_free(msg);
 }
 
 static int __rpc_sset_wquery (z_rpc_client_t *client,
@@ -1072,6 +1075,7 @@ static void __complete_deque_stats (void *client, z_message_t *msg) {
         n = z_snprintf(buffer, sizeof(buffer), "+TODO\r\n");
         z_rpc_write(Z_RPC_CLIENT(client), buffer, n);
     }
+    z_message_free(msg);
 }
 
 static int __rpc_deque_stats (z_rpc_client_t *client,

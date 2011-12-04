@@ -134,6 +134,7 @@ static int __memcache_write_state (z_rpc_client_t *client,
 
 static void __complete_state (void *client, z_message_t *msg) {
     __memcache_write_state(Z_RPC_CLIENT(client), z_message_state(msg));
+    z_message_free(msg);
 }
 
 static int __memcache_send_state (z_rpc_client_t *client,
