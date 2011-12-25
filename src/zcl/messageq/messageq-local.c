@@ -15,26 +15,43 @@
  */
 
 #include <zcl/messageq.h>
+#include <zcl/thread.h>
 
+#include "messageq_p.h"
+
+struct localq {
+};
+
+/* ============================================================================
+ *  Dispatch
+ */
+
+/* ============================================================================
+ *  Localq plugin
+ */
 static int __localq_init (z_messageq_t *messageq) {
-    return(-1);
+    return(0);
 }
 
 static void __localq_uninit (z_messageq_t *messageq) {
 }
 
-static int __localq_send (z_messageq_t *messageq,
-                          z_message_t *message,
-                          const z_rdata_t *object_name,
-                          z_message_func_t callback,
-                          void *user_data)
+static int __localq_send (z_messageq_t *messageq, 
+                          const z_rdata_t *object,
+                          z_message_t *message)
 {
-    return(-1);
+    return(0);
+}
+
+static void __localq_yield (z_messageq_t *messageq, 
+                            z_message_t *message)
+{
 }
 
 z_messageq_plug_t z_messageq_local = {
     .init   = __localq_init,
     .uninit = __localq_uninit,
     .send   = __localq_send,
+    .yield  = __localq_yield,
 };
 
