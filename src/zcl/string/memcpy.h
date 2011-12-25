@@ -20,7 +20,13 @@
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
-void *  z_memcpy      (void *dest, const void *src, unsigned int n);
+#ifndef Z_STRING_HAS_MEMCPY
+    void *  z_memcpy      (void *dest, const void *src, unsigned int n);
+#else
+    #include <string.h>
+    #define z_memcpy      memcpy
+#endif /* !Z_STRING_HAS_MEMCPY */
+
 void *  z_memcpy8     (void *dest, const void *src, unsigned int n);
 void *  z_memcpy16    (void *dest, const void *src, unsigned int n);
 void *  z_memcpy32    (void *dest, const void *src, unsigned int n);
@@ -32,7 +38,13 @@ void *  z_membcpy16   (void *dest, const void *src, unsigned int n);
 void *  z_membcpy32   (void *dest, const void *src, unsigned int n);
 void *  z_membcpy64   (void *dest, const void *src, unsigned int n);
 
-void *  z_memmove     (void *dest, const void *src, unsigned int n);
+#ifndef Z_STRING_HAS_MEMMOVE
+    void *  z_memmove     (void *dest, const void *src, unsigned int n);
+#else
+    #include <string.h>
+    #define z_memmove     memmove
+#endif /* !Z_STRING_HAS_MEMMOVE */
+
 void *  z_memmove8    (void *dest, const void *src, unsigned int n);
 void *  z_memmove16   (void *dest, const void *src, unsigned int n);
 void *  z_memmove32   (void *dest, const void *src, unsigned int n);

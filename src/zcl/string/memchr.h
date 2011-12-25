@@ -22,7 +22,13 @@ __Z_BEGIN_DECLS__
 
 #include <stdint.h>
 
-void *  z_memchr      (const void *s, uint8_t c, unsigned int n);
+#ifndef Z_STRING_HAS_MEMCHR
+    void *  z_memchr      (const void *s, uint8_t c, unsigned int n);
+#else
+    #include <string.h>
+    #define z_memchr      memchr
+#endif
+
 void *  z_memchr8     (const void *s, uint8_t c, unsigned int n);
 void *  z_memchr16    (const void *s, uint8_t c, unsigned int n);
 void *  z_memchr32    (const void *s, uint8_t c, unsigned int n);

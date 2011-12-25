@@ -116,18 +116,16 @@ void *z_memchr64 (const void *s, uint8_t c, unsigned int n) {
     return(NULL);
 }
 
-void *z_memchr (const void *s, uint8_t c, unsigned int n) {
 #ifndef Z_STRING_HAS_MEMCHR
+void *z_memchr (const void *s, uint8_t c, unsigned int n) {
     switch ((n < sizeof(unsigned long)) ? n : sizeof(unsigned long)) {
         case 8: return(z_memchr64(s, c, n));
         case 4: return(z_memchr32(s, c, n));
         case 2: return(z_memchr16(s, c, n));
     }
     return(z_memchr8(s, c, n));
-#else
-    return(memchr(s, c, n));
-#endif /* !Z_STRING_HAS_MEMCHR */
 }
+#endif /* !Z_STRING_HAS_MEMCHR */
 
 void *z_memrchr8 (const void *s, uint8_t c, unsigned int n) {
     register const uint8_t *p = (const uint8_t *)s;

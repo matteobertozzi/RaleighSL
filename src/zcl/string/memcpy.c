@@ -78,14 +78,12 @@
 /*
  * Mem-Copy Forward
  */
-void *z_memcpy (void *dest, const void *src, unsigned int n) {
 #ifndef Z_STRING_HAS_MEMCPY
+void *z_memcpy (void *dest, const void *src, unsigned int n) {
     __memcpy_forward(dest, src, n);
     return(dest);
-#else
-    return(memcpy(dest, src, n));
-#endif /* !Z_STRING_HAS_MEMCPY */
 }
+#endif /* !Z_STRING_HAS_MEMCPY */
 
 void *z_memcpy8 (void *dest, const void *src, unsigned int n) {
     __memcpy_forward_sized(uint8_t, dest, src, n);
@@ -138,17 +136,15 @@ void *z_membcpy64 (void *dest, const void *src, unsigned int n) {
 /*
  * Mem-Move
  */
-void *z_memmove (void *dest, const void *src, unsigned int n) {
 #ifndef Z_STRING_HAS_MEMMOVE
+void *z_memmove (void *dest, const void *src, unsigned int n) {
     if (dest <= src || dest >= (src + n))
         __memcpy_forward(dest, src, n);
     else
         __memcpy_backward(dest, src, n);
     return(dest);
-#else
-    return(memmove(dest, src, n));
-#endif /* !Z_STRING_HAS_MEMMOVE */
 }
+#endif /* !Z_STRING_HAS_MEMMOVE */
 
 void *z_memmove8 (void *dest, const void *src, unsigned int n) {
     if (dest <= src || (const char *)dest >= ((const char *)src + n))
