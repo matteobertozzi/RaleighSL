@@ -14,6 +14,7 @@
  *   limitations under the License.
  */
 
+#include <string.h>
 #include <ctype.h>
 
 #include <zcl/config.h>
@@ -24,21 +25,37 @@
 #define __tolower(c)     ((!isalpha(c) || islower(c)) ? (c) : ((c) - 'A' + 'a'))
 
 int z_strncmp (const char *s1, const char *s2, unsigned int n) {
+#ifndef Z_STRING_HAS_STRNCMP
     unsigned int l1, l2;
+    unsigned int cmp;
 
     if ((l1 = z_strlen(s1)) < n) n = l1;
     if ((l2 = z_strlen(s2)) < n) n = l2;
 
-    return(z_memcmp(s1, s2, n));
+    if ((cmp = z_memcmp(s1, s2, n)))
+        return(cmp);
+
+    return(l1 - l2);
+#else
+    return(strncmp(s1, s2, n));
+#endif
 }
 
 int z_strcmp (const char *s1, const char *s2) {
+#ifndef Z_STRING_HAS_STRCMP
     unsigned int l1, l2;
+    int cmp;
 
     l1 = z_strlen(s1);
     l2 = z_strlen(s2);
 
-    return(z_memcmp(s1, s2, l1 < l2 ? l1 : l2));
+    if ((cmp = z_memcmp(s1, s2, l1 < l2 ? l1 : l2)))
+        return(cmp);
+
+    return(l1 - l2);
+#else
+    return(strcmp(s1, s2));
+#endif
 }
 
 int z_strncasecmp (const char *s1, const char *s2, unsigned int n) {

@@ -32,11 +32,17 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 #include <stdio.h>
 
 extern z_rpc_protocol_t raleigh_v1_protocol;
 extern z_rpc_protocol_t memcache_protocol;
 extern z_rpc_protocol_t redis_protocol;
+
+static int __is_running = 1;
+static void __signal_handler (int signum) {
+    __is_running = 0;
+}
 
 static void __request_exec (void *user_data, z_message_t *msg) {
     raleighfs_execute(RALEIGHFS(user_data), msg);
@@ -58,6 +64,8 @@ int main (int argc, char **argv) {
     z_memory_t memory;
     z_iopoll_t iopoll;
     raleighfs_t fs;
+
+    signal(SIGINT, __signal_handler);
 
     z_memory_init(&memory, z_system_allocator());
 
@@ -86,7 +94,7 @@ int main (int argc, char **argv) {
 
     __init_static_objects(&fs);
 
-    z_iopoll_alloc(&iopoll, &memory, NULL, 0, NULL);
+    z_iopoll_alloc(&iopoll, &memory, NULL, 0, &__is_running);
     z_messageq_alloc(&messageq, &memory, &z_messageq_noop,
                      __request_exec, &fs);
 
@@ -97,6 +105,8 @@ int main (int argc, char **argv) {
     z_iopoll_loop(&iopoll);
     z_iopoll_free(&iopoll);
     z_messageq_free(&messageq);
+    raleighfs_close(&fs);
+    raleighfs_free(&fs);
 
     return(0);
 }

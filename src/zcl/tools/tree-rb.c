@@ -36,7 +36,7 @@ static z_tree_node_t **__do_insert_lookup (const z_tree_info_t *tree,
     v->da[0] = 0;
     v->k = 1;
     for (p = *root; p != NULL; p = p->child[v->da[v->k - 1]]) {
-        int cmp = tree->key_compare(tree->user_data, data, p->data);
+        int cmp = tree->key_compare(tree->user_data, p->data, data);
         if (cmp == 0) {
             if (p->data != data && tree->data_free != NULL)
                 tree->data_free(tree->user_data, p->data);
@@ -46,7 +46,7 @@ static z_tree_node_t **__do_insert_lookup (const z_tree_info_t *tree,
         }
 
         v->pa[v->k] = p;
-        v->da[v->k++] = cmp > 0;
+        v->da[v->k++] = cmp < 0;
     }
 
     return(&(v->pa[v->k-1]->child[v->da[v->k-1]]));
@@ -323,11 +323,11 @@ static z_tree_node_t *__redblack_detach (const z_tree_info_t *tree,
 
     v.k = 0;
     p = (z_tree_node_t *)root;
-    for (cmp = -1;
+    for (cmp = 1;
          cmp != 0;
-         cmp = tree->key_compare(tree->user_data, key, p->data))
+         cmp = tree->key_compare(tree->user_data, p->data, key))
     {
-        dir = cmp > 0;
+        dir = cmp < 0;
 
         v.pa[v.k] = p;
         v.da[v.k++] = dir;

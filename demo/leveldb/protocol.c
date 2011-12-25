@@ -85,6 +85,7 @@ static int __leveldb_write_error (z_rpc_client_t *client,
             break;
     }
 
+    z_chunkq_clear(&(client->rdbuffer));
     z_rpc_write(client, message, length);
     return(errno);
 }
@@ -418,30 +419,16 @@ static int __leveldb_process_line (z_rpc_client_t *client,
     }
 
     /* Invalid Command */
-    if (!z_chunkq_startswith(&(client->rdbuffer), 0, "\r", 1) &&
-        !z_chunkq_startswith(&(client->rdbuffer), 0, "\n", 1))
-    {
-        __leveldb_write_error(client, LEVELDB_ERRNO_GENERIC);
-    }
-
-    z_chunkq_remove(&(client->rdbuffer), nline);
+    __leveldb_write_error(client, LEVELDB_ERRNO_GENERIC);
     return(0);
 }
 
-static int __leveldb_process (z_rpc_client_t *client) {
-    unsigned int nline;
-
-    if ((nline = z_rpc_has_line(client, 0)) > 0)
-        return(__leveldb_process_line(client, nline + 1));
-
-    return(1);
-}
-
-z_rpc_protocol_t leveldb_protocol = {
+struct z_rpc_protocol leveldb_protocol = {
     __leveldb_bind,
     __leveldb_accept,
     __leveldb_connected,
     __leveldb_disconnected,
-    __leveldb_process,
+    NULL,
+    __leveldb_process_line,
 };
 

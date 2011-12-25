@@ -40,8 +40,8 @@ static void *__tree_iter_lookup_node (z_tree_iter_t *iter,
         }
 
         iter->stack[iter->height++] = node;
-        cmp = key_compare(user_data, key->data, node->data);
-        node = node->child[cmp > 0];
+        cmp = key_compare(user_data, node->data, key->data);
+        node = node->child[cmp < 0];
     }
 
     iter->height = 0;

@@ -129,13 +129,16 @@ static int __epoll_poll (z_iothread_t *iothread) {
     int timeout;
     int n;
 
-    timeout = (iothread->iopoll->timeout > 0) ? iothread->iopoll->timeout : -1;
+    if (iothread->iopoll->timeout > 0)
+        timeout = iothread->iopoll->timeout;
+    else
+        timeout = Z_IOPOLL_DEFAULT_TIMEOUT;
+
     while (z_iopoll_is_looping(iothread->iopoll)) {
         n = epoll_wait(iothread->data.fd, events, __IO_EPOLL_FDS, timeout);
 
         if (n < 0) {
             perror("epoll_wait()");
-            //return(-1);
             continue;
         }
 
