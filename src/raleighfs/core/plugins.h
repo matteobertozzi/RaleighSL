@@ -58,9 +58,10 @@ Z_TYPEDEF_CONST_STRUCT(raleighfs_plug)
 
 Z_TYPEDEF_STRUCT(raleighfs_plug_data)
 Z_TYPEDEF_STRUCT(raleighfs_objdata)
-Z_TYPEDEF_STRUCT(raleighfs_master)
 Z_TYPEDEF_STRUCT(raleighfs_object)
+Z_TYPEDEF_STRUCT(raleighfs_master)
 Z_TYPEDEF_STRUCT(raleighfs_device)
+Z_TYPEDEF_STRUCT(raleighfs_rwlock)
 Z_TYPEDEF_STRUCT(raleighfs_key)
 Z_TYPEDEF_STRUCT(raleighfs)
 

@@ -56,7 +56,7 @@ struct memcache_command {
 };
 
 #define __memcache_message_alloc(client, type)                                \
-    z_message_alloc((client)->server->user_data, (client)->user_data, type)
+    z_message_alloc((client)->user_data, type)
 
 static int __memcache_message_send (z_rpc_client_t *client,
                                     z_message_t *msg,

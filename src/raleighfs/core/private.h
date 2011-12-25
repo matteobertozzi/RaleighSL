@@ -19,6 +19,8 @@
 
 #include <raleighfs/types.h>
 
+#include <zcl/thread.h>
+
 /* ============================================================================
  *  Plugin call related
  */
@@ -178,6 +180,21 @@ void                __object_set_key    (raleighfs_t *fs,
 /* TODO: Make this operations atomic! */
 #define __object_inc_ref(object)        (++((object)->internal->refs))
 #define __object_dec_ref(object)        (--((object)->internal->refs))
+
+/* ============================================================================
+ *  Read/Write Lock related
+ */
+#define __rwlock_init(rwlock)                                               \
+    do {                                                                    \
+        z_spin_init(&((rwlock)->lock));                                     \
+        (rwlock)->access_count = 0;                                         \
+        (rwlock)->wr_waiting = 0;                                           \
+    } while (0)
+
+#define __rwlock_uninit(rwlock)                                             \
+    do {                                                                    \
+        z_spin_destroy(&((rwlock)->lock));                                  \
+    } while (0)
 
 /* ============================================================================
  *  Observers related

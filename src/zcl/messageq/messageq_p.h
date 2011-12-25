@@ -18,38 +18,46 @@
 #define _Z_MESSAGEQ_PRIVATE_H_
 
 #include <zcl/messageq.h>
+#include <zcl/thread.h>
 #include <zcl/chunkq.h>
 
-#include <zcl/thread.h>
+Z_TYPEDEF_STRUCT(z_message_queue)
 
 struct z_message_source {
     z_messageq_t *messageq;
-    z_mutex_t lock;
-
-    /* pending */
-    void *pending_head;
-    void *pending_tail;
-
-    /* ordered */
-    void *ordered_head;
-    void *ordered_tail;
-
-    /* unordered */
-    void *unordered_head;
-    void *unordered_tail;
 };
 
 struct z_message {
-    z_message_source_t *source;
-    z_messageq_t *      messageq;
+    z_message_source_t *source;          /* Source of the message */
+    z_message_t *       next;            /* Next message in the messageq */
 
-    unsigned int        flags;
-    unsigned int        state;
-    unsigned int        type;
+    z_message_func_t    callback;        /* User callback function */
+    void *              data;            /* User data associated with the msg */
 
-    z_chunkq_t          request;
-    z_chunkq_t          response;
+    z_rdata_t *         object;          /* Destination object id */
+
+    z_message_func_t    i_func;          /* Internal function */
+    void *              i_data;          /* Internal data */
+
+    z_chunkq_t          *request;        /* Request data */
+    z_chunkq_t          *response;       /* Response data */
+
+    unsigned int        flags;           /* Message flags */
+    unsigned int        state;           /* Message state */
+    unsigned int        type;            /* Message type */
 };
+
+struct z_message_queue {
+    z_message_t *head;
+    z_message_t *tail;
+    z_spinlock_t lock;
+};
+
+void            z_message_queue_open    (z_message_queue_t *queue);
+void            z_message_queue_close   (z_message_queue_t *queue);
+void            z_message_queue_push    (z_message_queue_t *queue,
+                                         z_message_t *message);
+z_message_t *   z_message_queue_pop     (z_message_queue_t *queue);
 
 #endif /* !_Z_MESSAGEQ_PRIVATE_H_ */
 

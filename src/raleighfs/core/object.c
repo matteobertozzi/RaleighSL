@@ -16,6 +16,7 @@
 
 #include <raleighfs/object.h>
 
+#include <zcl/thread.h>
 #include <zcl/memcpy.h>
 
 #include "private.h"
@@ -35,6 +36,9 @@ raleighfs_errno_t __object_alloc (raleighfs_t *fs,
     objdata->membufs = NULL;
     objdata->plug = NULL;
     objdata->refs = 1U;
+
+    /* Initialize Object Read-Write ock */
+    __rwlock_init(&(objdata->lock));
 
     object->internal = objdata;
     return(RALEIGHFS_ERRNO_NONE);
@@ -62,6 +66,7 @@ raleighfs_errno_t __object_copy (raleighfs_t *fs,
 
 void __object_free (raleighfs_t *fs, raleighfs_object_t *object) {
     raleighfs_objdata_t *objdata = object->internal;
+    __rwlock_uninit(&(objdata->lock));
     z_object_struct_free(fs, raleighfs_objdata_t, objdata);
 }
 

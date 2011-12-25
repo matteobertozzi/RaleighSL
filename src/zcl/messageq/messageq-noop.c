@@ -14,8 +14,12 @@
  *   limitations under the License.
  */
 
+#include <stdio.h>
+
 #include <zcl/messageq.h>
 #include <zcl/thread.h>
+
+#include "messageq_p.h"
 
 #define __NOOPQ_USE_LOCK                    1
 
@@ -32,7 +36,10 @@ struct noopq {
 };
 #endif /* __NOOPQ_USE_LOCK */
 
-static int __noop_init (z_messageq_t *messageq) {
+/* ============================================================================
+ *  Noopq plugin
+ */
+static int __noopq_init (z_messageq_t *messageq) {
 #if __NOOPQ_USE_LOCK
     struct noopq *noopq;
 
@@ -49,7 +56,7 @@ static int __noop_init (z_messageq_t *messageq) {
     return(0);
 }
 
-static void __noop_uninit (z_messageq_t *messageq) {
+static void __noopq_uninit (z_messageq_t *messageq) {
 #if __NOOPQ_USE_LOCK
     struct noopq *noopq = __NOOPQ(messageq->plug_data.ptr);
     __NOOPQ_LOCK_DESTROY(noopq);
@@ -57,11 +64,9 @@ static void __noop_uninit (z_messageq_t *messageq) {
 #endif /* __NOOPQ_USE_LOCK */
 }
 
-static int __noop_send (z_messageq_t *messageq,
-                        z_message_t *message,
-                        const z_rdata_t *object_name,
-                        z_message_func_t callback,
-                        void *user_data)
+static int __noopq_send (z_messageq_t *messageq, 
+                         const z_rdata_t *object,
+                         z_message_t *message)
 {
 #if __NOOPQ_USE_LOCK
     struct noopq *noopq = __NOOPQ(messageq->plug_data.ptr);
@@ -69,26 +74,33 @@ static int __noop_send (z_messageq_t *messageq,
     __NOOPQ_LOCK(noopq);
 #endif /* __NOOPQ_USE_LOCK */
 
-    if (!(z_message_flags(message) & Z_MESSAGE_BYPASS)) {
-        /* Execute Message */
+    /* object doesn't need to be copied with noop queue */
+    message->object = (z_rdata_t *)object;
+    
+    if (!z_message_is_bypass(message)) {
         if (messageq->exec_func != NULL)
-            messageq->exec_func(messageq->user_data, object_name, message);
+            messageq->exec_func(messageq->user_data, message);
+
+        while (message->i_func != NULL)
+            message->i_func(messageq->user_data, message);
     }
 
-    /* Execute Callback */
-    if (callback != NULL)
-        callback(user_data, message);
+    if (message->callback != NULL)
+        message->callback(message->data, message);
+
+    /* unset object for the next free */
+    message->object = NULL;
 
 #if __NOOPQ_USE_LOCK
     __NOOPQ_UNLOCK(noopq);
 #endif /* __NOOPQ_USE_LOCK */
-
     return(0);
 }
 
 z_messageq_plug_t z_messageq_noop = {
-    .init   = __noop_init,
-    .uninit = __noop_uninit,
-    .send   = __noop_send,
+    .init   = __noopq_init,
+    .uninit = __noopq_uninit,
+    .send   = __noopq_send,
+    .yield  = NULL,
 };
 

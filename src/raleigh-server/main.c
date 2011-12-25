@@ -38,11 +38,8 @@ extern z_rpc_protocol_t raleigh_v1_protocol;
 extern z_rpc_protocol_t memcache_protocol;
 extern z_rpc_protocol_t redis_protocol;
 
-static void __request_exec (void *user_data,
-                            const z_rdata_t *object_name,
-                            z_message_t *msg)
-{
-    raleighfs_execute(RALEIGHFS(user_data), object_name, msg);
+static void __request_exec (void *user_data, z_message_t *msg) {
+    raleighfs_execute(RALEIGHFS(user_data), msg);
 }
 
 static int __init_static_objects (raleighfs_t *fs) {

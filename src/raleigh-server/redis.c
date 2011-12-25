@@ -54,8 +54,8 @@ struct redis_command {
     redis_func_t    func;
 };
 
-#define __redis_message_alloc(client, type)                                   \
-    z_message_alloc((client)->server->user_data, (client)->user_data, type)
+#define __redis_message_alloc(client, type)                   \
+    z_message_alloc((client)->user_data, type)
 
 static int __redis_message_send (z_rpc_client_t *client,
                                  z_message_t *msg,
@@ -126,10 +126,7 @@ static void __complete_get (void *user_data, z_message_t *msg) {
     uint32_t vlength;
     uint64_t number;
     uint32_t state;
-    int use_cas;
     int n;
-
-    use_cas = (z_message_type(msg) == RALEIGHFS_MEMCACHE_GETS);
 
     z_message_response_stream(msg, &res_stream);
     z_message_request_stream(msg, &req_stream);
@@ -254,6 +251,20 @@ static int __redis_accept (z_rpc_server_t *server) {
     return(csock);
 }
 
+static int __redis_connected (z_rpc_client_t *client) {
+    z_message_source_t *source;
+
+    if ((source = z_message_source_alloc((client)->server->user_data)) == NULL)
+        return(1);
+
+    client->user_data = source;
+    return(0);
+}
+
+static void __redis_disconnected (z_rpc_client_t *client) {
+    z_message_source_free(client->user_data);
+}
+
 static int __redis_process_command (z_rpc_client_t *client,
                                     const z_chunkq_extent_t *tokens,
                                     unsigned int ntokens,
@@ -358,8 +369,8 @@ static int __redis_process (z_rpc_client_t *client) {
 z_rpc_protocol_t redis_protocol = {
     .bind           = __redis_bind,
     .accept         = __redis_accept,
-    .connected      = NULL,
-    .disconnected   = NULL,
+    .connected      = __redis_connected,
+    .disconnected   = __redis_disconnected,
     .process        = __redis_process,
     .process_line   = NULL,
 };

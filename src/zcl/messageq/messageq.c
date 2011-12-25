@@ -15,16 +15,57 @@
  */
 
 #include <zcl/messageq.h>
+#include <zcl/thread.h>
+#include <zcl/stream.h>
+#include <zcl/chunkq.h>
 
 #include "messageq_p.h"
 
-/* ===========================================================================
+/* ============================================================================
+ *  PRIVATE - Message Queue (Thread-Safe)
+ */
+void z_message_queue_open (z_message_queue_t *queue) {
+    z_spin_init(&(queue->lock));
+    queue->head = NULL;
+    queue->tail = NULL;
+}
+
+void z_message_queue_close (z_message_queue_t *queue) {
+    z_spin_destroy(&(queue->lock));
+}
+
+void z_message_queue_push (z_message_queue_t *queue, z_message_t *message) {
+    z_message_t *tail;
+
+    z_spin_lock(&(queue->lock));
+    if ((tail = queue->tail) != NULL) {
+        tail->next = message;
+        queue->tail = message;
+    } else {
+        queue->head = message;
+        queue->tail = message;
+    }
+    z_spin_unlock(&(queue->lock));
+}
+
+z_message_t *z_message_queue_pop (z_message_queue_t *queue) {
+    z_message_t *msg;
+
+    z_spin_lock(&(queue->lock));
+    if ((msg = queue->head) != NULL && (queue->head = msg->next) == NULL)
+        queue->tail = NULL;
+    z_spin_unlock(&(queue->lock));
+
+    return(msg);
+}
+
+/* ============================================================================
  *  MessageQ
  */
 z_messageq_t *z_messageq_alloc (z_messageq_t *messageq,
                                 z_memory_t *memory,
                                 z_messageq_plug_t *plug,
-                                z_message_exec_t exec_func,
+                                z_message_func_t exec_func,
                                 void *user_data)
 {
     if ((messageq = z_object_alloc(memory, messageq, z_messageq_t)) == NULL)
@@ -34,7 +75,7 @@ z_messageq_t *z_messageq_alloc (z_messageq_t *messageq,
     messageq->user_data = user_data;
     messageq->plug = plug;
 
-    if (messageq->plug->init(messageq)) {
+    if (plug->init(messageq)) {
         z_object_free(messageq);
         return(NULL);
     }
@@ -57,52 +98,89 @@ z_message_source_t *z_message_source_alloc (z_messageq_t *messageq) {
         return(NULL);
 
     source->messageq = messageq;
-    z_mutex_init(&(source->lock));
 
     return(source);
 }
 
 void z_message_source_free (z_message_source_t *source) {
-    z_mutex_destroy(&(source->lock));
     z_object_struct_free(source->messageq, z_message_source_t, source);
 }
 
-/* ===========================================================================
+z_messageq_t *z_message_source_queue (z_message_source_t *source) {
+    return(source->messageq);
+}
+
+/* ============================================================================
  *  Message
  */
-z_message_t *z_message_alloc (z_messageq_t *messageq,
-                              z_message_source_t *source,
-                              unsigned int flags)
-{
-    z_message_t *message;
+z_message_t *z_message_alloc (z_message_source_t *source, unsigned int flags) {
+    z_message_t *msg;
 
-    if ((message = z_object_struct_alloc(messageq, z_message_t)) == NULL)
+    if ((msg = z_object_struct_alloc(source->messageq, z_message_t)) == NULL)
         return(NULL);
 
-    message->messageq = messageq;
-    message->source = source;
-    message->flags = flags;
-    message->state = 0;
-    message->type = 0;
+    msg->source   = source;
+    msg->next     = NULL;
 
-    if (!z_chunkq_alloc(&(message->request), z_object_memory(messageq), 512)) {
-        z_object_struct_free(messageq, z_message_t, message);
-        return(NULL);
-    }
+    msg->callback = NULL;
+    msg->data     = NULL;
 
-    if (!z_chunkq_alloc(&(message->response), z_object_memory(messageq), 512)) {
-        z_chunkq_free(&(message->response));
-        z_object_struct_free(messageq, z_message_t, message);
-        return(NULL);
-    }
+    msg->i_func   = NULL;
+    msg->i_data   = NULL;
 
-    return(message);
+    msg->request  = NULL;
+    msg->response = NULL;
+
+    msg->flags    = flags;
+    msg->state    = 0;
+    msg->type     = 0;
+
+    return(msg);
 }
 
 void z_message_free (z_message_t *message) {
-    z_chunkq_free(&(message->request));
-    z_chunkq_free(&(message->response));
-    z_object_struct_free(message->messageq, z_message_t, message);
+    if (message->request != NULL)
+        z_chunkq_clear(message->request);
+
+    if (message->response != NULL)
+        z_chunkq_clear(message->response);
+
+    z_object_struct_free(message->source->messageq, z_message_t, message);
+}
+
+int z_message_send (z_message_t *message,
+                    const z_rdata_t *object,
+                    z_message_func_t callback,
+                    void *user_data)
+{
+    z_messageq_t *messageq = message->source->messageq;
+
+    message->callback = callback;
+    message->data = user_data;
+
+    return(messageq->plug->send(messageq, object, message));
+}
+
+void z_message_yield (z_message_t *message) {
+    z_messageq_t *messageq = message->source->messageq;
+    if (messageq->plug->yield != NULL)
+        messageq->plug->yield(messageq, message);
+}
+
+const z_rdata_t *z_message_object (z_message_t *message) {
+    return(message->object);
+}
+
+z_message_source_t *z_message_source (z_message_t *message) {
+    return(message->source);
+}
+
+z_messageq_t *z_message_queue (z_message_t *message) {
+    return(message->source->messageq);
+}
+
+unsigned int z_message_flags (z_message_t *message) {
+    return(message->flags);
 }
 
 unsigned int z_message_type (z_message_t *message) {
@@ -121,34 +199,9 @@ void z_message_set_state (z_message_t *message, unsigned int state) {
     message->state = state;
 }
 
-unsigned int z_message_flags (z_message_t *message) {
-    return(message->flags);
-}
-
-z_messageq_t *z_message_queue (z_message_t *message) {
-    return(message->messageq);
-}
-
-z_message_source_t *z_message_source (z_message_t *message) {
-    return(message->source);
-}
-
-int z_message_send (z_message_t *message,
-                    const z_rdata_t *object_name,
-                    z_message_func_t callback,
-                    void *udata)
-{
-    z_messageq_t *q = message->messageq;
-
-    if (message->flags & Z_MESSAGE_HAS_ERRORS)
-        return(-1);
-
-    message->flags &= ~Z_MESSAGE_HAS_ERRORS;
-    return(q->plug->send(q, message, object_name, callback, udata));
-}
-
-
-
+/* ============================================================================
+ *  Message request/response stream
+ */
 static unsigned int __message_stream_read (z_stream_t *stream,
                                            void *buffer,
                                            unsigned int n)
@@ -214,16 +267,49 @@ static z_stream_plug_t __message_stream_plug = {
     .memcmp = __message_stream_memcmp,
 };
 
+void *z_message_sub_task_data (z_message_t *message) {
+    return(message->i_data);
+}
+
+void z_message_set_sub_task (z_message_t *message,
+                             z_message_func_t func,
+                             void *data)
+{
+    message->i_func = func;
+    message->i_data = data;
+}
+
+void z_message_unset_sub_task (z_message_t *message) {
+    message->i_func = NULL;
+    message->i_data = NULL;
+}
+
 int z_message_request_stream (z_message_t *message, z_stream_t *stream) {
+    if (message->request == NULL) {
+        z_memory_t *memory;
+
+        memory = z_object_memory(message->source->messageq);
+        if ((message->request = z_chunkq_alloc(NULL, memory, 512)) == NULL)
+            return(1);
+    }
+
     z_stream_open(stream, &__message_stream_plug);
-    stream->plug_data.ptr = &(message->request);
+    stream->plug_data.ptr = message->request;
     stream->data.ptr = message;
     return(0);
 }
 
 int z_message_response_stream (z_message_t *message, z_stream_t *stream) {
+    if (message->response == NULL) {
+        z_memory_t *memory;
+
+        memory = z_object_memory(message->source->messageq);
+        if ((message->response = z_chunkq_alloc(NULL, memory, 512)) == NULL)
+            return(1);
+    }
+
     z_stream_open(stream, &__message_stream_plug);
-    stream->plug_data.ptr = &(message->response);
+    stream->plug_data.ptr = message->response;
     stream->data.ptr = message;
     return(0);
 }

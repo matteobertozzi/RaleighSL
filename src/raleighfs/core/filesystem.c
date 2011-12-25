@@ -16,6 +16,8 @@
 
 #include <raleighfs/filesystem.h>
 
+#include <zcl/thread.h>
+
 #include "private.h"
 
 #define raleighfs_type_id       54
@@ -29,10 +31,13 @@ raleighfs_t *raleighfs_alloc (raleighfs_t *fs, z_memory_t *memory) {
         return(NULL);
     }
 
+    __rwlock_init(&(fs->lock));
+
     return(fs);
 }
 
 void raleighfs_free (raleighfs_t *fs) {
+    __rwlock_uninit(&(fs->lock));
     __plugin_table_free(fs);
     z_object_free(fs);
 }

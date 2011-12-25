@@ -20,10 +20,17 @@
 #include <raleighfs/plugins.h>
 
 #include <zcl/hashtable.h>
+#include <zcl/thread.h>
 #include <zcl/object.h>
 
 #define RALEIGHFS_MASTER_MAGIC          ("R4l3igHfS-v5")
 #define RALEIGHFS_MASTER_QMAGIC         (0xf5ba5028cb6afc76UL)
+
+struct raleighfs_rwlock {
+    z_spinlock_t lock;
+    int access_count;                   /* -1 writer in, > 0 readers in */
+    int wr_waiting;                     /* Writer waiting */
+};
 
 struct raleighfs_key {
     uint64_t body[4];
@@ -51,19 +58,21 @@ struct raleighfs {
         } name;
 
     /* File-system plugins */
-    __RALEIGHFS_DECLARE_PLUG(objcache)              /* In-memory Object cache */
-    __RALEIGHFS_DECLARE_PLUG(semantic)              /* Semantic Layer */
-    __RALEIGHFS_DECLARE_PLUG(format)                /* Disk Format plug */
-    __RALEIGHFS_DECLARE_PLUG(space)                 /* Space Allocator */
-    __RALEIGHFS_DECLARE_PLUG(key)                   /* Key Layer */
+    __RALEIGHFS_DECLARE_PLUG(objcache)             /* In-memory Object cache */
+    __RALEIGHFS_DECLARE_PLUG(semantic)             /* Semantic Layer */
+    __RALEIGHFS_DECLARE_PLUG(format)               /* Disk Format plug */
+    __RALEIGHFS_DECLARE_PLUG(space)                /* Space Allocator */
+    __RALEIGHFS_DECLARE_PLUG(key)                  /* Key Layer */
     /* OID Allocator */
     /* Journal Layer */
 
     #undef __RALEIGHFS_PLUG
 
-    raleighfs_device_t *device;                     /* File-system device */
-    raleighfs_master_t  master;                     /* Master super block */
-    z_hash_table_t      plugins;                    /* Loaded plugs table */
+    raleighfs_device_t *device;                    /* File-system device */
+    raleighfs_master_t  master;                    /* Master super block */
+    z_hash_table_t      plugins;                   /* Loaded plugs table */
+
+    raleighfs_rwlock_t  lock;                      /* Semantic ops-lock */
 };
 
 struct raleighfs_objdata {
@@ -72,6 +81,7 @@ struct raleighfs_objdata {
 
     void *              devbufs;
     void *              membufs;
+    raleighfs_rwlock_t  lock;
     unsigned int        refs;
 };
 

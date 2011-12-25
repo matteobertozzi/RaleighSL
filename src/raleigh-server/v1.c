@@ -79,7 +79,7 @@ struct rpc_command {
 };
 
 #define __rpc_message_alloc(client, type)                                     \
-    z_message_alloc((client)->server->user_data, (client)->user_data, type)
+    z_message_alloc((client)->user_data, type)
 
 static int __rpc_message_send (z_rpc_client_t *client,
                                const z_chunkq_extent_t *tokens,
@@ -1178,6 +1178,15 @@ static int __rpc_server_ping (z_rpc_client_t *client,
     return(z_rpc_write(client, "+PONG\r\n", 7));
 }
 
+static int __rpc_server_info (z_rpc_client_t *client,
+                              unsigned int method_code,
+                              const z_chunkq_extent_t *tokens,
+                              unsigned int ntokens,
+                              unsigned int nline)
+{
+    return(z_rpc_write(client, "+RaleighFS v1 server\r\n", 22));
+}
+
 static int __rpc_server_quit (z_rpc_client_t *client,
                               unsigned int method_code,
                               const z_chunkq_extent_t *tokens,
@@ -1275,6 +1284,7 @@ static const struct rpc_command __semantic_commands[] = {
 /* Server */
 static const struct rpc_command __server_commands[] = {
     { "ping",   4, 0, 1, __rpc_server_ping, 0 },
+    { "info",   4, 0, 1, __rpc_server_info, 0 },
     { "quit",   4, 0, 1, __rpc_server_quit, 0 },
     { NULL,     0, 0, 0, NULL, 0 },
 };

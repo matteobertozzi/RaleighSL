@@ -35,9 +35,7 @@
 #define RALEIGHFS_SYNC                  (((1 << 3) | 6) << 26)
 #define RALEIGHFS_UNLINK                (((1 << 3) | 7) << 26)
 
-raleighfs_errno_t   raleighfs_execute   (raleighfs_t *fs,
-                                         const z_rdata_t *object_name,
-                                         z_message_t *msg);
+void    raleighfs_execute   (raleighfs_t *fs, z_message_t *message);
 
 #endif /* !_RALEIGHFS_EXECUTE_H_ */
 
