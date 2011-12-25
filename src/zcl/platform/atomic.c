@@ -17,7 +17,7 @@
 #include <zcl/atomic.h>
 
 #if !defined(Z_ATOMIC_SUPPORT)
-int z_atomic_cas (z_atomic_int_t *atom, int e, int n) {
+long z_atomic_cas (z_atomic_t *atom, long e, long n) {
     int cmp;
 
     z_spin_lock(&(atom->lock));
@@ -28,8 +28,8 @@ int z_atomic_cas (z_atomic_int_t *atom, int e, int n) {
     return(cmp);
 }
 
-int z_atomic_add (z_atomic_int_t *atom, int value) {
-    int r;
+long z_atomic_add (z_atomic_t *atom, long value) {
+    long r;
 
     z_spin_lock(&(atom->lock));
     atom->value += value;
@@ -39,12 +39,32 @@ int z_atomic_add (z_atomic_int_t *atom, int value) {
     return(r);
 }
 
-int z_atomic_sub (z_atomic_int_t *atom, int value) {
-    int r;
+long z_atomic_sub (z_atomic_t *atom, long value) {
+    long r;
 
     z_spin_lock(&(atom->lock));
     atom->value -= value;
     r = atom->value;
+    z_spin_unlock(&(atom->lock));
+
+    return(r);
+}
+
+long z_atomic_incr (z_atomic_t *atom) {
+    long r = atom->value;
+
+    z_spin_lock(&(atom->lock));
+    atom->value++;
+    z_spin_unlock(&(atom->lock));
+
+    return(r);
+}
+
+long z_atomic_decr (z_atomic_t *atom) {
+    long r = atom->value;
+
+    z_spin_lock(&(atom->lock));
+    atom->value--;
     z_spin_unlock(&(atom->lock));
 
     return(r);

@@ -30,6 +30,14 @@ __Z_BEGIN_DECLS__
 
 #if __APPLE__
     typedef OSSpinLock z_spinlock_t;
+#elif defined(Z_ATOMIC_GCC)
+    typedef union {
+        volatile unsigned int data;
+        struct {
+            volatile unsigned short next_ticket;
+            volatile unsigned short now_serving;
+        } s;
+    } z_spinlock_t;
 #elif defined(Z_PTHREAD_HAS_SPIN)
     typedef pthread_spinlock_t z_spinlock_t;
 #else

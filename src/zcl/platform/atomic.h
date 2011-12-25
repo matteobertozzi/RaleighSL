@@ -30,13 +30,13 @@ __Z_BEGIN_DECLS__
     #include <zcl/thread.h>
 #endif
 
-Z_TYPEDEF_STRUCT(z_atomic_int)
+Z_TYPEDEF_STRUCT(z_atomic)
 
-struct z_atomic_int {
+struct z_atomic {
 #ifndef Z_ATOMIC_SUPPORT
-    z_spinlock_t lock;
+    z_spinlock_t  lock;
 #endif
-    volatile int value;
+    volatile long value;
 };
 
 #if defined(Z_ATOMIC_GCC)
@@ -45,14 +45,18 @@ struct z_atomic_int {
 
     #define z_atomic_add(p, v)      __sync_add_and_fetch(&((p)->value), (v))
     #define z_atomic_sub(p, v)      __sync_sub_and_fetch(&((p)->value), (v))
-#else
-    int z_atomic_cas (z_atomic_int_t *atom, int e, int n);
-    int z_atomic_add (z_atomic_int_t *atom, int value);
-    int z_atomic_sub (z_atomic_int_t *atom, int value);
-#endif
 
-#define z_atomic_incr(p)        z_atomic_add(p, 1)
-#define z_atomic_decr(p)        z_atomic_sub(p, 1)
+    #define z_atomic_incr(p)        __sync_fetch_and_add(&((p)->value), 1)
+    #define z_atomic_decr(p)        __sync_fetch_and_sub(&((p)->value), 1)
+#else
+    long z_atomic_cas  (z_atomic_t *atom, long e, long n);
+
+    long z_atomic_add  (z_atomic_t *atom, long value);
+    long z_atomic_sub  (z_atomic_t *atom, long value);
+
+    long z_atomic_incr (z_atomic_t *atom);
+    long z_atomic_decr (z_atomic_t *atom);
+#endif
 
 __Z_END_DECLS__
 

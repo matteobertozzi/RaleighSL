@@ -16,9 +16,19 @@
 
 #include <zcl/thread.h>
 
+#if defined(Z_ASM_HAS_PAUSE)
+    #define __cpu_relax()     asm volatile("pause\n": : :"memory")
+#else
+    #define __cpu_relax()     while (0)
+#endif
+
 int z_spin_init (z_spinlock_t *lock) {
 #if __APPLE__
     *lock = OS_SPINLOCK_INIT;
+    return(0);
+#elif defined(Z_ATOMIC_GCC)
+    lock->s.now_serving = 0;
+    lock->s.next_ticket = 0;
     return(0);
 #elif defined(Z_PTHREAD_HAS_SPIN)
     return(pthread_spin_init((pthread_spinlock_t *)lock,
@@ -30,6 +40,8 @@ int z_spin_init (z_spinlock_t *lock) {
 int z_spin_destroy (z_spinlock_t *lock) {
 #if __APPLE__
     return(0);
+#elif defined(Z_ATOMIC_GCC)
+    return(0);
 #elif defined(Z_PTHREAD_HAS_SPIN)
     return(pthread_spin_destroy((pthread_spinlock_t *)lock));
 #endif
@@ -40,6 +52,14 @@ int z_spin_lock (z_spinlock_t *lock) {
 #if __APPLE__
     OSSpinLockLock((OSSpinLock *)lock);
     return(0);
+#elif defined(Z_ATOMIC_GCC)
+    unsigned short my_ticket;
+
+    my_ticket = __sync_fetch_and_add(&(lock->s.next_ticket), 1);
+    while (lock->s.now_serving != my_ticket)
+        __cpu_relax();
+
+    return(0);
 #elif defined(Z_PTHREAD_HAS_SPIN)
     return(pthread_spin_lock((pthread_spinlock_t *)lock));
 #endif
@@ -49,6 +69,9 @@ int z_spin_lock (z_spinlock_t *lock) {
 int z_spin_unlock (z_spinlock_t *lock) {
 #if __APPLE__
     OSSpinLockUnlock((OSSpinLock *)lock);
+    return(0);
+#elif defined(Z_ATOMIC_GCC)
+    lock->s.now_serving += 1;
     return(0);
 #elif defined(Z_PTHREAD_HAS_SPIN)
     return(pthread_spin_unlock((pthread_spinlock_t *)lock));
