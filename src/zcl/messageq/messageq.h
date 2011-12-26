@@ -82,6 +82,7 @@ struct z_messageq {
 };
 
 extern z_messageq_plug_t z_messageq_noop;
+extern z_messageq_plug_t z_messageq_local;
 
 /* MessageQ related */
 z_messageq_t *      z_messageq_alloc            (z_messageq_t *messageq,
@@ -107,6 +108,15 @@ int                 z_message_send              (z_message_t *message,
                                                  z_message_func_t callback,
                                                  void *user_data);
 void                z_message_yield             (z_message_t *message);
+void                z_message_yield_sub_task    (z_message_t *message,
+                                                 z_message_func_t func,
+                                                 void *data);
+
+void *              z_message_sub_task_data     (z_message_t *message);
+void                z_message_set_sub_task      (z_message_t *message,
+                                                 z_message_func_t func,
+                                                 void *data);
+void                z_message_unset_sub_task    (z_message_t *message);
 
 const z_rdata_t *   z_message_object            (z_message_t *message);
 z_message_source_t *z_message_source            (z_message_t *message);
@@ -120,12 +130,6 @@ void                z_message_set_type          (z_message_t *message,
 unsigned int        z_message_state             (z_message_t *message);
 void                z_message_set_state         (z_message_t *message,
                                                  unsigned int state);
-
-void *              z_message_sub_task_data     (z_message_t *message);
-void                z_message_set_sub_task      (z_message_t *message,
-                                                 z_message_func_t func,
-                                                 void *data);
-void                z_message_unset_sub_task    (z_message_t *message);
 
 int                 z_message_request_stream    (z_message_t *message,
                                                  z_stream_t *stream);

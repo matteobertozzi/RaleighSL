@@ -145,7 +145,7 @@ static void __task_exec_object (void *user_data, z_message_t *msg) {
     __end_process(&(objdata->lock));
 
     /* Schedule sub-task for close */
-    z_message_set_sub_task(msg, __task_exec_close, objdata);
+    z_message_yield_sub_task(msg, __task_exec_close, objdata);
 }
 
 static void __task_exec_unlink (void *user_data, z_message_t *msg) {
@@ -205,12 +205,10 @@ static void __raleighfs_exec_open (raleighfs_t *fs, z_message_t *msg) {
     /* What's next operation? */
     switch (RALEIGHFS_MSG_TYPE(z_message_type(msg))) {
         case RALEIGHFS_UNLINK:
-            z_message_set_sub_task(msg, __task_exec_unlink, object.internal);
-            z_message_yield(msg);
+            z_message_yield_sub_task(msg, __task_exec_unlink, object.internal);
             break;
         default:
-            z_message_set_sub_task(msg, __task_exec_object, object.internal);
-            z_message_yield(msg);
+            z_message_yield_sub_task(msg, __task_exec_object, object.internal);
             break;
     }    
 }

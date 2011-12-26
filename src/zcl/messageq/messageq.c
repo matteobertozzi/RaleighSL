@@ -37,6 +37,8 @@ void z_message_queue_close (z_message_queue_t *queue) {
 void z_message_queue_push (z_message_queue_t *queue, z_message_t *message) {
     z_message_t *tail;
 
+    message->next = NULL;
+
     z_spin_lock(&(queue->lock));
     if ((tail = queue->tail) != NULL) {
         tail->next = message;
@@ -167,6 +169,32 @@ void z_message_yield (z_message_t *message) {
         messageq->plug->yield(messageq, message);
 }
 
+void z_message_yield_sub_task (z_message_t *message,
+                               z_message_func_t func,
+                               void *data)
+{
+    z_message_set_sub_task(message, func, data);
+    if (func != NULL)
+        z_message_yield(message);
+}
+
+void *z_message_sub_task_data (z_message_t *message) {
+    return(message->i_data);
+}
+
+void z_message_set_sub_task (z_message_t *message,
+                             z_message_func_t func,
+                             void *data)
+{
+    message->i_func = func;
+    message->i_data = data;
+}
+
+void z_message_unset_sub_task (z_message_t *message) {
+    message->i_func = NULL;
+    message->i_data = NULL;
+}
+
 const z_rdata_t *z_message_object (z_message_t *message) {
     return(message->object);
 }
@@ -266,23 +294,6 @@ static z_stream_plug_t __message_stream_plug = {
     .fetch  = __message_stream_fetch,
     .memcmp = __message_stream_memcmp,
 };
-
-void *z_message_sub_task_data (z_message_t *message) {
-    return(message->i_data);
-}
-
-void z_message_set_sub_task (z_message_t *message,
-                             z_message_func_t func,
-                             void *data)
-{
-    message->i_func = func;
-    message->i_data = data;
-}
-
-void z_message_unset_sub_task (z_message_t *message) {
-    message->i_func = NULL;
-    message->i_data = NULL;
-}
 
 int z_message_request_stream (z_message_t *message, z_stream_t *stream) {
     if (message->request == NULL) {
