@@ -14,6 +14,8 @@
  *   limitations under the License.
  */
 
+#include <sys/time.h>
+
 #include <zcl/thread.h>
 
 #if defined(Z_ASM_HAS_PAUSE)
@@ -163,6 +165,23 @@ int z_cond_wait (z_cond_t *cond, z_mutex_t *mutex) {
     return(-1);
 }
 
+int z_cond_timed_wait (z_cond_t *cond, z_mutex_t *mutex, unsigned int time) {
+#if defined(Z_PTHREAD_HAS_COND)
+    struct timespec ts;
+    struct timeval tv;
+    gettimeofday(&tv, 0);
+
+    ts.tv_nsec = (tv.tv_usec + (time % 1000) * 1000) * 1000;
+    ts.tv_sec = tv.tv_sec + (time / 1000) + (ts.tv_nsec / 1000000000);
+    ts.tv_nsec %= 1000000000;
+
+    return(pthread_cond_timedwait((pthread_cond_t *)cond, 
+                                  (pthread_mutex_t *)mutex,
+                                  &ts));
+#endif
+    return(-1);
+}
+
 int z_cond_broadcast (z_cond_t *cond) {
 #if defined(Z_PTHREAD_HAS_COND)
     return(pthread_cond_broadcast((pthread_cond_t *)cond));
@@ -192,5 +211,12 @@ int z_thread_join (z_thread_t *thread) {
     return(pthread_join(*thread, NULL));
 #endif
     return(-1);
+}
+
+z_thread_t z_thread_self (void) {
+#if defined(Z_PTHREAD_HAS_THREAD)
+    return((z_thread_t)pthread_self());
+#endif
+    return(0);
 }
 

@@ -68,33 +68,38 @@ __Z_BEGIN_DECLS__
     #error "No Thread defined!"
 #endif
 
-int     z_spin_init             (z_spinlock_t *lock);
-int     z_spin_destroy          (z_spinlock_t *lock);
-int     z_spin_lock             (z_spinlock_t *lock);
-int     z_spin_unlock           (z_spinlock_t *lock);
+int         z_spin_init             (z_spinlock_t *lock);
+int         z_spin_destroy          (z_spinlock_t *lock);
+int         z_spin_lock             (z_spinlock_t *lock);
+int         z_spin_unlock           (z_spinlock_t *lock);
 
-int     z_rwlock_init           (z_rwlock_t *lock);
-int     z_rwlock_destroy        (z_rwlock_t *lock);
-int     z_rwlock_rdlock         (z_rwlock_t *lock);
-int     z_rwlock_wrlock         (z_rwlock_t *lock);
-int     z_rwlock_unlock         (z_rwlock_t *lock);
+int         z_rwlock_init           (z_rwlock_t *lock);
+int         z_rwlock_destroy        (z_rwlock_t *lock);
+int         z_rwlock_rdlock         (z_rwlock_t *lock);
+int         z_rwlock_wrlock         (z_rwlock_t *lock);
+int         z_rwlock_unlock         (z_rwlock_t *lock);
 
-int     z_mutex_init            (z_mutex_t *lock);
-int     z_mutex_destroy         (z_mutex_t *lock);
-int     z_mutex_lock            (z_mutex_t *lock);
-int     z_mutex_unlock          (z_mutex_t *lock);
+int         z_mutex_init            (z_mutex_t *lock);
+int         z_mutex_destroy         (z_mutex_t *lock);
+int         z_mutex_lock            (z_mutex_t *lock);
+int         z_mutex_unlock          (z_mutex_t *lock);
 
-int     z_cond_init             (z_cond_t *lock);
-int     z_cond_destroy          (z_cond_t *lock);
-int     z_cond_wait             (z_cond_t *lock,
-                                 z_mutex_t *mutex);
-int     z_cond_broadcast        (z_cond_t *lock);
-int     z_cond_signal           (z_cond_t *lock);
+int         z_cond_init             (z_cond_t *cond);
+int         z_cond_destroy          (z_cond_t *cond);
+int         z_cond_wait             (z_cond_t *cond,
+                                     z_mutex_t *mutex);
+int         z_cond_timed_wait       (z_cond_t *cond,
+                                     z_mutex_t *mutex,
+                                     unsigned int time);
+int         z_cond_broadcast        (z_cond_t *cond);
+int         z_cond_signal           (z_cond_t *cond);
 
-int     z_thread_create         (z_thread_t *thread,
-                                 void * (*func) (void *),
-                                 void *context);
-int     z_thread_join           (z_thread_t *thread);
+   
+int         z_thread_create         (z_thread_t *thread,
+                                     void * (*func) (void *),
+                                     void *context);
+int         z_thread_join           (z_thread_t *thread);
+z_thread_t  z_thread_self           (void);
 
 __Z_END_DECLS__
 

@@ -326,10 +326,10 @@ int z_work_queue_loop (z_work_queue_t *queue) {
 }
 
 unsigned int z_work_queue_id (z_work_queue_t *queue) {
-    pthread_t thread;
+    z_thread_t thread;
     unsigned int i;
 
-    thread = pthread_self();
+    thread = z_thread_self();
     for (i = 0; i < queue->ncore; ++i) {
         if (thread == queue->threads[i])
             return(i);
