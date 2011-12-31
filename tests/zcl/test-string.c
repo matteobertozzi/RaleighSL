@@ -3,6 +3,7 @@
 
 #include <zcl/snprintf.h>
 #include <zcl/string.h>
+#include <zcl/memshared.h>
 #include <zcl/memcmp.h>
 #include <zcl/test.h>
 
@@ -115,12 +116,35 @@ static int __test_snprintf (z_test_t *test) {
     return(0);
 }
 
+static int __test_memshared (z_test_t *test) {
+    if (memshared("/home/th30z/src", 15, "/home/th30z/src", 15) != 15)
+        return(1);
+
+    if (memrshared("/home/th30z/src", 15, "/home/th30z/src", 15) != 15)
+        return(2);
+
+    if (memshared("/home/th30z/src", 15, "/home/yanez/src", 15) != 6)
+        return(3);
+
+    if (memrshared("/home/th30z/src", 15, "/home/yanez/src", 15) != 5)
+        return(4);
+
+    if (memshared("/usr/local/home/th30z/src", 25, "/usr/local/home/yanez/src", 25) != 16)
+        return(3);
+
+    if (memrshared("/home/th30z/usr/local/src", 25, "/home/yanez/usr/local/src", 25) != 15)
+        return(4);
+
+    return(0);
+}
+
 static z_test_t __test_string = {
     .setup      = NULL,
     .tear_down  = NULL,
     .funcs      = {
         __test_strtol,
         __test_snprintf,
+        __test_memshared,
         NULL,
     },
 };
