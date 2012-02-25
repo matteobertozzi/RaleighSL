@@ -46,14 +46,7 @@ static unsigned int __key_cache_hash (void *fs, const void *ptr) {
 static int __key_cache_compare (void *fs, const void *a, const void *b)  {
     struct key_cache_item *ia = __KEY_CACHE_ITEM(a);
     struct key_cache_item *ib = __KEY_CACHE_ITEM(b);
-    unsigned int length;
-    int cmp;
-
-    length = z_min(ia->name_length, ib->name_length);
-    if ((cmp = z_memcmp(ia->name, ib->name, length)))
-        return(cmp);
-
-    return(ia->name_length - ib->name_length);
+    return(z_memncmp(ia->name, ia->name_length, ib->name, ib->name_length));
 }
 
 static struct key_cache_item *__key_cache_item_alloc (raleighfs_t *fs,

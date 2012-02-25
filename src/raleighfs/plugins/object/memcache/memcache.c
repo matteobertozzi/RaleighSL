@@ -49,14 +49,7 @@ static int __object_compare (void *user_data,
 {
     memcache_object_t *a = MEMCACHE_OBJECT(obj1);
     memcache_object_t *b = MEMCACHE_OBJECT(obj2);
-    unsigned int min_len;
-    int cmp;
-
-    min_len = z_min(a->key_size, b->key_size);
-    if ((cmp = z_memcmp(a->key, b->key, min_len)))
-        return(cmp);
-
-    return(a->key_size - b->key_size);
+    return(z_memncmp(a->key, a->key_size, b->key, b->key_size));
 }
 
 #if MEMCACHE_USE_HASH_TABLE

@@ -18,14 +18,7 @@ static int __key_stream_compare (void *data, const void *a, const void *b) {
 static int __key_compare (void *user_data, const void *a, const void *b) {
     const sset_object_t *sa = SSET_CONST_OBJECT(a);
     const sset_object_t *sb = SSET_CONST_OBJECT(b);
-    unsigned int min_len;
-    int cmp;
-
-    min_len = z_min(sa->key_size, sb->key_size);
-    if ((cmp = z_memcmp(sa->key, sb->key, min_len)))
-        return(cmp);
-
-    return(sa->key_size - sb->key_size);
+    return(z_memncmp(sa->key, sa->key_size, sb->key, sb->key_size));
 }
 
 static void __free_data (void *user_data, void *ptr) {
