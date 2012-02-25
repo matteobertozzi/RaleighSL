@@ -26,6 +26,11 @@ int     z_memcmp16    (const void *m1, const void *m2, unsigned int n);
 int     z_memcmp32    (const void *m1, const void *m2, unsigned int n);
 int     z_memcmp64    (const void *m1, const void *m2, unsigned int n);
 
+int     z_memncmp     (const void *m1,
+                       unsigned int n1,
+                       const void *m2,
+                       unsigned int n2);
+
 __Z_END_DECLS__
 
 #endif /* !_Z_MEMCMP_H */

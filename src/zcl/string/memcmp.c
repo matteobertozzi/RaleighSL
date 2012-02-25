@@ -178,3 +178,16 @@ int z_memcmp64 (const void *m1, const void *m2, unsigned int n) {
 
     return(0);
 }
+
+int z_memncmp (const void *m1, unsigned int n1, const void *m2, unsigned int n2)
+{
+    unsigned int min_len;
+    int cmp;
+
+    min_len = (n1 < n2) ? n1 : n2;
+    if ((cmp = z_memcmp(m1, m2, min_len)))
+        return(cmp);
+
+    return(n1 - n2);
+}
+
