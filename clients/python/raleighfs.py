@@ -250,7 +250,7 @@ class Deque(_AbstractContainer):
         if len(response) > 1:
             data = response[1]
         else:
-            data = self.recv().split('\r\n')[0]
+            data = self.fs.recv().split('\r\n')[0]
 
         if size != len(data):
             raise Exception('Corrupted data. Expected %d get %d' % (int(size), len(data)))
