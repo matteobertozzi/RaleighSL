@@ -36,14 +36,14 @@ static int __localq_init (z_messageq_t *messageq) {
 static void __localq_uninit (z_messageq_t *messageq) {
 }
 
-static int __localq_send (z_messageq_t *messageq, 
-                          const z_rdata_t *object,
+static int __localq_send (z_messageq_t *messageq,
+                          const z_slice_t *object,
                           z_message_t *message)
 {
     return(0);
 }
 
-static void __localq_yield (z_messageq_t *messageq, 
+static void __localq_yield (z_messageq_t *messageq,
                             z_message_t *message)
 {
 }
