@@ -65,7 +65,7 @@ static void __noopq_uninit (z_messageq_t *messageq) {
 }
 
 static int __noopq_send (z_messageq_t *messageq, 
-                         const z_rdata_t *object,
+                         const z_slice_t *object,
                          z_message_t *message)
 {
 #if __NOOPQ_USE_LOCK
@@ -75,7 +75,7 @@ static int __noopq_send (z_messageq_t *messageq,
 #endif /* __NOOPQ_USE_LOCK */
 
     /* object doesn't need to be copied with noop queue */
-    message->object = (z_rdata_t *)object;
+    message->object = (z_slice_t *)object;
     
     if (!z_message_is_bypass(message)) {
         if (messageq->exec_func != NULL)

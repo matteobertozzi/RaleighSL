@@ -25,6 +25,7 @@
 
 #include <raleighfs/raleighfs.h>
 
+#include <zcl/byteslice.h>
 #include <zcl/messageq.h>
 #include <zcl/iopoll.h>
 #include <zcl/memcpy.h>
@@ -49,10 +50,10 @@ static void __request_exec (void *user_data, z_message_t *msg) {
 }
 
 static int __init_static_objects (raleighfs_t *fs) {
-    z_rdata_t name;
+    z_byte_slice_t name;
 
-    z_rdata_from_blob(&name, ":memcache:", 10);
-    raleighfs_semantic_touch(fs, &raleighfs_object_memcache, &name);
+    z_byte_slice(&name, ":memcache:", 10);
+    raleighfs_semantic_touch(fs, &raleighfs_object_memcache, Z_SLICE(&name));
 
     return(0);
 }
@@ -95,7 +96,7 @@ int main (int argc, char **argv) {
     __init_static_objects(&fs);
 
     z_iopoll_alloc(&iopoll, &memory, NULL, 0, &__is_running);
-    z_messageq_alloc(&messageq, &memory, &z_messageq_noop,
+    z_messageq_alloc(&messageq, &memory, &z_messageq_noop, //local,
                      __request_exec, &fs);
 
     z_rpc_plug(&memory, &iopoll, &raleigh_v1_protocol, NULL,"11215", &messageq);

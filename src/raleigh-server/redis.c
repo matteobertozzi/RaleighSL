@@ -16,6 +16,8 @@
 
 #include <raleighfs/object/memcache.h>
 
+#include <zcl/streamslice.h>
+#include <zcl/byteslice.h>
 #include <zcl/messageq.h>
 #include <zcl/snprintf.h>
 #include <zcl/iopoll.h>
@@ -61,9 +63,9 @@ static int __redis_message_send (z_rpc_client_t *client,
                                  z_message_t *msg,
                                  z_message_func_t callback)
 {
-    z_rdata_t obj_name;
-    z_rdata_from_blob(&obj_name, ":memcache:", 10);
-    return(z_message_send(msg, &obj_name, callback, client));
+    z_byte_slice_t obj_name;
+    z_byte_slice(&obj_name, ":memcache:", 10);
+    return(z_message_send(msg, Z_SLICE(&obj_name), callback, client));
 }
 
 static void __complete_set (void *user_data, z_message_t *msg) {
@@ -89,7 +91,7 @@ static int __process_set (z_rpc_client_t *client,
 {
     const z_chunkq_extent_t *value;
     const z_chunkq_extent_t *key;
-    z_stream_t stream;
+    z_message_stream_t stream;
     z_message_t *msg;
 
     if (ntokens != 3)
@@ -102,22 +104,22 @@ static int __process_set (z_rpc_client_t *client,
     msg = __redis_message_alloc(client, Z_MESSAGE_WRITE_REQUEST);
     z_message_set_type(msg, method_code);
     z_message_request_stream(msg, &stream);
-    z_stream_write_uint32(&stream, key->length);
-    z_stream_write_uint32(&stream, value->length);
-    z_stream_write_uint32(&stream, 0);
-    z_stream_write_uint32(&stream, 0);
-    z_stream_write_uint64(&stream, 0);
-    z_stream_write_chunkq(&stream, key->chunkq, key->offset, key->length);
-    z_stream_write_chunkq(&stream, value->chunkq, value->offset, value->length);
+    z_stream_write_uint32(Z_STREAM(&stream), key->length);
+    z_stream_write_uint32(Z_STREAM(&stream), value->length);
+    z_stream_write_uint32(Z_STREAM(&stream), 0);
+    z_stream_write_uint32(Z_STREAM(&stream), 0);
+    z_stream_write_uint64(Z_STREAM(&stream), 0);
+    z_stream_write_chunkq(Z_STREAM(&stream), key->chunkq, key->offset, key->length);
+    z_stream_write_chunkq(Z_STREAM(&stream), value->chunkq, value->offset, value->length);
     return(__redis_message_send(client, msg, __complete_set));
 }
 
 static void __complete_get (void *user_data, z_message_t *msg) {
     z_rpc_client_t *client = Z_RPC_CLIENT(user_data);
-    z_stream_extent_t value;
-    z_stream_extent_t key;
-    z_stream_t req_stream;
-    z_stream_t res_stream;
+    z_message_stream_t req_stream;
+    z_message_stream_t res_stream;
+    z_stream_slice_t value;
+    z_stream_slice_t key;
     char text_number[16];
     char buffer[512];
     uint64_t unused64;
@@ -130,35 +132,35 @@ static void __complete_get (void *user_data, z_message_t *msg) {
 
     z_message_response_stream(msg, &res_stream);
     z_message_request_stream(msg, &req_stream);
-    z_stream_read_uint32(&req_stream, &unused32);
+    z_stream_read_uint32(Z_STREAM(&req_stream), &unused32);
 
-    z_stream_read_uint32(&req_stream, &klength);
-    z_stream_set_extent(&req_stream, &key, req_stream.offset, klength);
+    z_stream_read_uint32(Z_STREAM(&req_stream), &klength);
+    z_stream_slice(&key, Z_STREAM(&req_stream), req_stream.offset, klength);
 
-    z_stream_read_uint32(&res_stream, &state);
+    z_stream_read_uint32(Z_STREAM(&res_stream), &state);
     if (state == RALEIGHFS_MEMCACHE_NOT_FOUND) {
         n = z_snprintf(buffer, sizeof(buffer), "$-1");
         z_rpc_write(client, buffer, n);
     } else {
-        z_stream_read_uint32(&res_stream, &unused32);
-        z_stream_read_uint32(&res_stream, &unused32);
-        z_stream_read_uint64(&res_stream, &unused64);
+        z_stream_read_uint32(Z_STREAM(&res_stream), &unused32);
+        z_stream_read_uint32(Z_STREAM(&res_stream), &unused32);
+        z_stream_read_uint64(Z_STREAM(&res_stream), &unused64);
 
         if (state == RALEIGHFS_MEMCACHE_NUMBER) {
-            z_stream_read_uint64(&res_stream, &number);
+            z_stream_read_uint64(Z_STREAM(&res_stream), &number);
             n = z_u64tostr(number, text_number, sizeof(text_number), 10);
             vlength = n;
             n = z_snprintf(buffer, sizeof(buffer), "$%u4d\r\n", vlength);
             z_rpc_write(client, buffer, n);
             z_rpc_write(client, text_number, vlength);
         } else {
-            z_stream_read_uint32(&res_stream, &vlength);
-            z_stream_set_extent(&res_stream, &value, res_stream.offset, vlength);
-            z_stream_seek(&res_stream, res_stream.offset + vlength);
+            z_stream_read_uint32(Z_STREAM(&res_stream), &vlength);
+            z_stream_slice(&value, Z_STREAM(&res_stream), res_stream.offset, vlength);
+            z_stream_seek(Z_STREAM(&res_stream), res_stream.offset + vlength);
 
             n = z_snprintf(buffer, sizeof(buffer), "$%u4d\r\n", vlength);
             z_rpc_write(client, buffer, n);
-            z_rpc_write_stream(client, &value);
+            z_rpc_write_slice(client, Z_SLICE(&value));
         }
     }
     z_rpc_write(client, "\r\n", 2);
@@ -173,7 +175,7 @@ static int __process_get (z_rpc_client_t *client,
                           unsigned int nline)
 {
     const z_chunkq_extent_t *key;
-    z_stream_t stream;
+    z_message_stream_t stream;
     z_message_t *msg;
 
     if (ntokens != 2)
@@ -185,9 +187,9 @@ static int __process_get (z_rpc_client_t *client,
     msg = __redis_message_alloc(client, Z_MESSAGE_READ_REQUEST);
     z_message_set_type(msg, method_code);
     z_message_request_stream(msg, &stream);
-    z_stream_write_uint32(&stream, 1);
-    z_stream_write_uint32(&stream, key->length);
-    z_stream_write_chunkq(&stream, key->chunkq, key->offset, key->length);
+    z_stream_write_uint32(Z_STREAM(&stream), 1);
+    z_stream_write_uint32(Z_STREAM(&stream), key->length);
+    z_stream_write_chunkq(Z_STREAM(&stream), key->chunkq, key->offset, key->length);
     return(__redis_message_send(client, msg, __complete_get));
 }
 

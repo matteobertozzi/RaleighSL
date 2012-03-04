@@ -33,7 +33,7 @@ static raleighfs_errno_t __semantic_unload (raleighfs_t *fs) {
 
 static raleighfs_errno_t __semantic_create (raleighfs_t *fs,
                                             raleighfs_object_t *object,
-                                            const z_rdata_t *name)
+                                            const z_slice_t *name)
 {
     return(RALEIGHFS_ERRNO_NONE);
 }
@@ -66,9 +66,9 @@ static raleighfs_errno_t __semantic_unlink (raleighfs_t *fs,
 
 static raleighfs_errno_t __semantic_rename (raleighfs_t *fs,
                                             const raleighfs_key_t *old_key,
-                                            const z_rdata_t *old_name,
+                                            const z_slice_t *old_name,
                                             const raleighfs_key_t *new_key,
-                                            const z_rdata_t *new_name)
+                                            const z_slice_t *new_name)
 {
     return(RALEIGHFS_ERRNO_NONE);
 }

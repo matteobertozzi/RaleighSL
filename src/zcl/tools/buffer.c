@@ -20,6 +20,9 @@
 
 #include <zcl/buffer.h>
 
+/* =============================================================================
+ *  Buffer
+ */
 static int __buffer_grow (z_buffer_t *buffer,
                           unsigned int size)
 {
@@ -273,50 +276,67 @@ int z_buffer_compare (z_buffer_t *buffer,
     return(z_memcmp(buffer->blob, blob, size));
 }
 
-static unsigned int __buffer_read (z_stream_t *stream,
-                                   void *buffer,
-                                   unsigned int n)
+/* =============================================================================
+ *  Buffer Stream
+ */
+static uint64_t __buffer_tell (z_stream_t *stream) {
+    return(((z_buffer_stream_t *)stream)->offset);
+}
+
+static int __buffer_seek (z_stream_t *stream, uint64_t offset) {
+    z_buffer_stream_t *bstream = (z_buffer_stream_t *)stream;
+    if (offset < bstream->buffer->size)
+        bstream->offset = (unsigned int)(offset & 0xffffffff);
+    else
+        bstream->offset = bstream->buffer->size;
+    return(0);
+}
+
+static int __buffer_read (z_stream_t *stream,
+                          void *buffer,
+                          unsigned int n)
 {
-    z_buffer_t *obj = Z_BUFFER(stream->plug_data.ptr);
+    z_buffer_stream_t *bstream = (z_buffer_stream_t *)stream;
+    z_buffer_t *bufobj = bstream->buffer;
     unsigned int size;
 
-    if ((size = (obj->size - stream->offset)) > n)
+    if ((size = (bufobj->size - bstream->offset)) > n)
         size = n;
 
-    z_memcpy(buffer, obj->blob, size);
+    z_memcpy(buffer, bufobj->blob, size);
     return(size);
 }
 
-static unsigned int __buffer_write (z_stream_t *stream,
-                                    const void *buffer,
-                                    unsigned int n)
+static int __buffer_write (z_stream_t *stream,
+                           const void *buffer,
+                           unsigned int n)
 {
-    z_buffer_t *obj = Z_BUFFER(stream->plug_data.ptr);
+    z_buffer_stream_t *bstream = (z_buffer_stream_t *)stream;
+    z_buffer_t *bufobj = bstream->buffer;
     unsigned int size;
 
-    if ((size = (obj->size - stream->offset)) > n)
+    if ((size = (bufobj->size - bstream->offset)) > n)
         size = n;
 
     /* TODO */
-    z_memcpy(obj->blob + stream->offset, buffer, size);
+    z_memcpy(bufobj->blob + bstream->offset, buffer, size);
     return(size);
 
 }
 
-static z_stream_plug_t __buffer_stream_plug = {
-    .close  = NULL,
-    .seek   = NULL,
+static z_stream_vtable_t __buffer_stream_vtable = {
+    .tell   = __buffer_tell,
+    .seek   = __buffer_seek,
     .read   = __buffer_read,
     .write  = __buffer_write,
-    .fetch  = NULL,
-    .memcmp = NULL,
 };
 
-int z_buffer_stream (z_stream_t *stream,
+int z_buffer_stream (z_buffer_stream_t *stream,
                      z_buffer_t *buffer)
 {
-    z_stream_open(stream, &__buffer_stream_plug);
-    stream->plug_data.ptr = buffer;
+    stream->__base_type__.vtable = &__buffer_stream_vtable;
+    stream->buffer = buffer;
+    stream->offset = 0;
     return(0);
 }
 

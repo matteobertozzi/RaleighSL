@@ -1,5 +1,5 @@
 /*
- *   Copyright 2011 Matteo Bertozzi
+ *   Copyright 2012 Matteo Bertozzi
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -14,18 +14,26 @@
  *   limitations under the License.
  */
 
-#ifndef _RALEIGHFS_KEY_H_
-#define _RALEIGHFS_KEY_H_
+#ifndef _Z_CHUNKQ_SLICE_H_
+#define _Z_CHUNKQ_SLICE_H_
 
-#include <raleighfs/types.h>
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
 
-raleighfs_errno_t   raleighfs_key_object        (raleighfs_t *fs,
-                                                 raleighfs_key_t *key,
-                                                 const z_slice_t *name);
+#include <zcl/macros.h>
+#include <zcl/types.h>
 
-int                 raleighfs_key_compare       (raleighfs_t *fs,
-                                                 const raleighfs_key_t *a,
-                                                 const raleighfs_key_t *b);
+#include <zcl/chunkq.h>
+#include <zcl/slice.h>
 
-#endif /* !_RALEIGHFS_KEY_H_ */
+typedef struct {
+    z_slice_t __base_type__;
+    const z_chunkq_extent_t *extent;
+} z_chunkq_slice_t;
 
+void    z_chunkq_slice       (z_chunkq_slice_t *slice,
+                              const z_chunkq_extent_t *chunkq_ext);
+
+__Z_END_DECLS__
+
+#endif /* _Z_CHUNKQ_SLICE_H_ */

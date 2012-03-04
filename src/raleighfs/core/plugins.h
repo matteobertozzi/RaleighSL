@@ -21,7 +21,7 @@
 
 #include <zcl/messageq.h>
 #include <zcl/macros.h>
-#include <zcl/rdata.h>
+#include <zcl/slice.h>
 
 #define RALEIGHFS_PLUGIN_OBJECT         raleighfs_plug_t info;
 
@@ -105,7 +105,7 @@ struct raleighfs_semantic_plug {
 
     raleighfs_errno_t   (*create)       (raleighfs_t *fs,
                                          raleighfs_object_t *object,
-                                         const z_rdata_t *name);
+                                         const z_slice_t *name);
     raleighfs_errno_t   (*open)         (raleighfs_t *fs,
                                          raleighfs_object_t *object);
     raleighfs_errno_t   (*close)        (raleighfs_t *fs,
@@ -117,9 +117,9 @@ struct raleighfs_semantic_plug {
 
     raleighfs_errno_t   (*rename)       (raleighfs_t *fs,
                                          const raleighfs_key_t *old_key,
-                                         const z_rdata_t *old_name,
+                                         const z_slice_t *old_name,
                                          const raleighfs_key_t *new_key,
-                                         const z_rdata_t *new_name);
+                                         const z_slice_t *new_name);
 };
 
 struct raleighfs_object_plug {
@@ -166,7 +166,7 @@ struct raleighfs_key_plug {
 
     raleighfs_errno_t   (*object)       (raleighfs_t *fs,
                                          raleighfs_key_t *key,
-                                         const z_rdata_t *name);
+                                         const z_slice_t *name);
 };
 
 struct raleighfs_device_plug {

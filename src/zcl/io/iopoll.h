@@ -25,7 +25,7 @@ __Z_BEGIN_DECLS__
 #include <zcl/object.h>
 #include <zcl/types.h>
 
-#define Z_IOPOLL_USE_IOTHREAD
+/* #define Z_IOPOLL_USE_IOTHREAD */
 #ifdef Z_IOPOLL_USE_IOTHREAD
     #include <zcl/thread.h>
     #ifndef Z_IOPOLL_NTHREADS

@@ -23,7 +23,7 @@ __Z_BEGIN_DECLS__
 #include <zcl/object.h>
 #include <zcl/stream.h>
 #include <zcl/string.h>
-#include <zcl/rdata.h>
+#include <zcl/slice.h>
 #include <zcl/types.h>
 
 #define Z_CONST_CHUNKQ_EXTENT(x)            Z_CONST_CAST(z_chunkq_extent_t, x)
@@ -35,6 +35,7 @@ __Z_BEGIN_DECLS__
 typedef int (*z_chunkq_compare_t) (const void *a, const void *b, unsigned int n);
 
 Z_TYPEDEF_STRUCT(z_chunkq_extent)
+Z_TYPEDEF_STRUCT(z_chunkq_stream)
 Z_TYPEDEF_STRUCT(z_chunkq_node)
 Z_TYPEDEF_STRUCT(z_chunkq_iter)
 Z_TYPEDEF_STRUCT(z_chunkq)
@@ -43,6 +44,12 @@ struct z_chunkq_extent {
     z_chunkq_t *    chunkq;
     unsigned int    offset;
     unsigned int    length;
+};
+
+struct z_chunkq_stream {
+    z_stream_t __base_type__;
+    z_chunkq_t *chunkq;
+    unsigned int offset;
 };
 
 struct z_chunkq_node {
@@ -87,15 +94,15 @@ unsigned int        z_chunkq_update_fetch       (z_chunkq_t *chunkq,
                                                  unsigned int offset,
                                                  z_iofetch_t fetch_func,
                                                  void *user_data);
-unsigned int        z_chunkq_update_rdata       (z_chunkq_t *chunkq,
+unsigned int        z_chunkq_update_slice       (z_chunkq_t *chunkq,
                                                  unsigned int offset,
-                                                 const z_rdata_t *rdata);
+                                                 const z_slice_t *slice);
 
 unsigned int        z_chunkq_append             (z_chunkq_t *chunkq,
                                                  const void *buffer,
                                                  unsigned int size);
-unsigned int        z_chunkq_append_rdata       (z_chunkq_t *chunkq,
-                                                 const z_rdata_t *rdata);
+unsigned int        z_chunkq_append_slice       (z_chunkq_t *chunkq,
+                                                 const z_slice_t *slice);
 unsigned int        z_chunkq_append_fetch       (z_chunkq_t *chunkq,
                                                  z_iofetch_t fetch_func,
                                                  void *user_data);
@@ -166,7 +173,7 @@ int                 z_chunkq_string             (z_chunkq_t *chunkq,
                                                  unsigned int offset,
                                                  unsigned int length);
 
-int                 z_chunkq_stream             (z_stream_t *stream,
+int                 z_chunkq_stream             (z_chunkq_stream_t *stream,
                                                  z_chunkq_t *chunkq);
 
 int                 z_stream_write_chunkq       (z_stream_t *stream,

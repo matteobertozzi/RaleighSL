@@ -3,8 +3,8 @@
 
 typedef void (*sset_range_t) (raleighfs_t *fs,
                               raleighfs_object_t *object,
-                              const z_stream_extent_t *a,
-                              const z_stream_extent_t *b,
+                              const z_stream_slice_t *a,
+                              const z_stream_slice_t *b,
                               z_stream_t *stream);
 
 typedef void (*sset_index_t) (raleighfs_t *fs,
@@ -15,7 +15,7 @@ typedef void (*sset_index_t) (raleighfs_t *fs,
 
 typedef void (*sset_item_t) (raleighfs_t *fs,
                              raleighfs_object_t *object,
-                             const z_stream_extent_t *item,
+                             const z_stream_slice_t *item,
                              z_stream_t *stream);
 
 #define __SSET(object)              ((sset_t *)((object)->internal->membufs))
@@ -74,8 +74,8 @@ static void __serialize_sset_object (z_stream_t *stream,
 
 static void __sset_get_range (raleighfs_t *fs,
                               raleighfs_object_t *object,
-                              const z_stream_extent_t *a,
-                              const z_stream_extent_t *b,
+                              const z_stream_slice_t *a,
+                              const z_stream_slice_t *b,
                               z_stream_t *stream)
 {
     sset_key_foreach(__SSET(object), a, b,
@@ -94,7 +94,7 @@ static void __sset_get_index (raleighfs_t *fs,
 
 static void __sset_get (raleighfs_t *fs,
                         raleighfs_object_t *object,
-                        const z_stream_extent_t *key,
+                        const z_stream_slice_t *key,
                         z_stream_t *stream)
 {
     sset_object_t *sobject;
@@ -105,8 +105,8 @@ static void __sset_get (raleighfs_t *fs,
 
 static void __sset_rm_range (raleighfs_t *fs,
                              raleighfs_object_t *object,
-                             const z_stream_extent_t *a,
-                             const z_stream_extent_t *b,
+                             const z_stream_slice_t *a,
+                             const z_stream_slice_t *b,
                              z_stream_t *stream)
 {
     sset_remove_range(__SSET(object), a, b);
@@ -123,7 +123,7 @@ static void __sset_rm_index (raleighfs_t *fs,
 
 static void __sset_rm (raleighfs_t *fs,
                        raleighfs_object_t *object,
-                       const z_stream_extent_t *key,
+                       const z_stream_slice_t *key,
                        z_stream_t *stream)
 {
     sset_remove(__SSET(object), key);
@@ -143,15 +143,15 @@ static void __object_range (raleighfs_t *fs,
                             z_stream_t *response,
                             sset_range_t range_func)
 {
-    z_stream_extent_t a, b;
+    z_message_stream_t stream;
+    z_stream_slice_t a, b;
     uint32_t alen, blen;
-    z_stream_t stream;
 
     z_message_request_stream(msg, &stream);
-    z_stream_read_uint32(&stream, &alen);
-    z_stream_read_uint32(&stream, &blen);
-    z_stream_set_extent(&stream, &a, 8, alen);
-    z_stream_set_extent(&stream, &b, 8 + alen, blen);
+    z_stream_read_uint32(Z_STREAM(&stream), &alen);
+    z_stream_read_uint32(Z_STREAM(&stream), &blen);
+    z_stream_slice(&a, Z_STREAM(&stream), 8, alen);
+    z_stream_slice(&b, Z_STREAM(&stream), 8 + alen, blen);
 
     range_func(fs, object, &a, &b, response);
 }
@@ -162,13 +162,13 @@ static void __object_index (raleighfs_t *fs,
                             z_stream_t *response,
                             sset_index_t index_func)
 {
-    z_stream_t stream;
+    z_message_stream_t stream;
     uint64_t length;
     uint64_t start;
 
     z_message_request_stream(msg, &stream);
-    z_stream_read_uint64(&stream, &start);
-    z_stream_read_uint64(&stream, &length);
+    z_stream_read_uint64(Z_STREAM(&stream), &start);
+    z_stream_read_uint64(Z_STREAM(&stream), &length);
 
     index_func(fs, object, start, length, response);
 }
@@ -179,18 +179,18 @@ static void __object_items (raleighfs_t *fs,
                             z_stream_t *response,
                             sset_item_t item_func)
 {
-    z_stream_extent_t key;
-    z_stream_t stream;
+    z_message_stream_t stream;
+    z_stream_slice_t key;
     uint32_t length;
     uint32_t count;
 
     z_message_request_stream(msg, &stream);
-    z_stream_read_uint32(&stream, &count);
+    z_stream_read_uint32(Z_STREAM(&stream), &count);
 
     while (count--) {
-        z_stream_read_uint32(&stream, &length);
-        z_stream_set_extent(&stream, &key, stream.offset, length);
-        z_stream_seek(&stream, key.offset + key.length);
+        z_stream_read_uint32(Z_STREAM(&stream), &length);
+        z_stream_slice(&key, Z_STREAM(&stream), stream.offset, length);
+        z_stream_seek(Z_STREAM(&stream), key.offset + key.length);
         item_func(fs, object, &key, response);
     }
 }
@@ -201,40 +201,40 @@ static raleighfs_errno_t __object_query (raleighfs_t *fs,
                                          z_message_t *msg)
 {
     raleighfs_errno_t errno = RALEIGHFS_ERRNO_NONE;
+    z_message_stream_t stream;
     sset_object_t *sobject;
-    z_stream_t stream;
 
     z_message_response_stream(msg, &stream);
 
     switch (z_message_type(msg)) {
         case RALEIGHFS_SSET_GET:
-            __object_items(fs, object, msg, &stream, __sset_get);
-            z_stream_write_uint32(&stream, 0);
+            __object_items(fs, object, msg, Z_STREAM(&stream), __sset_get);
+            z_stream_write_uint32(Z_STREAM(&stream), 0);
             break;
         case RALEIGHFS_SSET_GET_RANGE:
-            __object_range(fs, object, msg, &stream, __sset_get_range);
-            z_stream_write_uint32(&stream, 0);
+            __object_range(fs, object, msg, Z_STREAM(&stream), __sset_get_range);
+            z_stream_write_uint32(Z_STREAM(&stream), 0);
             break;
         case RALEIGHFS_SSET_GET_INDEX:
-            __object_index(fs, object, msg, &stream, __sset_get_index);
-            z_stream_write_uint32(&stream, 0);
+            __object_index(fs, object, msg, Z_STREAM(&stream), __sset_get_index);
+            z_stream_write_uint32(Z_STREAM(&stream), 0);
             break;
         case RALEIGHFS_SSET_GET_FIRST:
             sobject = sset_get_first(__SSET(object));
-            __serialize_sset_object(&stream, sobject);
-            z_stream_write_uint32(&stream, 0);
+            __serialize_sset_object(Z_STREAM(&stream), sobject);
+            z_stream_write_uint32(Z_STREAM(&stream), 0);
             break;
         case RALEIGHFS_SSET_GET_LAST:
             sobject = sset_get_last(__SSET(object));
-            __serialize_sset_object(&stream, sobject);
-            z_stream_write_uint32(&stream, 0);
+            __serialize_sset_object(Z_STREAM(&stream), sobject);
+            z_stream_write_uint32(Z_STREAM(&stream), 0);
             break;
         case RALEIGHFS_SSET_GET_KEYS:
-            z_stream_write_uint64(&stream, sset_length(__SSET(object)));
+            z_stream_write_uint64(Z_STREAM(&stream), sset_length(__SSET(object)));
             sset_foreach(__SSET(object), __sset_write_keys, &stream);
             break;
         case RALEIGHFS_SSET_LENGTH:
-            z_stream_write_uint64(&stream, sset_length(__SSET(object)));
+            z_stream_write_uint64(Z_STREAM(&stream), sset_length(__SSET(object)));
             break;
         case RALEIGHFS_SSET_STATS:
         default:
@@ -250,18 +250,18 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
                                           raleighfs_object_t *object,
                                           z_message_t *msg)
 {
+    z_message_stream_t stream;
     raleighfs_errno_t errno;
-    z_stream_extent_t data;
-    z_stream_extent_t key;
-    z_stream_t stream;
+    z_stream_slice_t data;
+    z_stream_slice_t key;
     uint32_t klength;
     uint32_t vlength;
 
     z_message_request_stream(msg, &stream);
-    z_stream_read_uint32(&stream, &klength);
-    z_stream_read_uint32(&stream, &vlength);
-    z_stream_set_extent(&stream, &key, 8, klength);
-    z_stream_set_extent(&stream, &data, 8 + klength, vlength);
+    z_stream_read_uint32(Z_STREAM(&stream), &klength);
+    z_stream_read_uint32(Z_STREAM(&stream), &vlength);
+    z_stream_slice(&key, Z_STREAM(&stream), 8, klength);
+    z_stream_slice(&data, Z_STREAM(&stream), 8 + klength, vlength);
 
     switch (z_message_type(msg)) {
         case RALEIGHFS_SSET_INSERT:
@@ -283,18 +283,18 @@ static raleighfs_errno_t __object_update (raleighfs_t *fs,
                                           raleighfs_object_t *object,
                                           z_message_t *msg)
 {
+    z_message_stream_t stream;
     raleighfs_errno_t errno;
-    z_stream_extent_t data;
-    z_stream_extent_t key;
-    z_stream_t stream;
+    z_stream_slice_t data;
+    z_stream_slice_t key;
     uint32_t klength;
     uint32_t vlength;
 
     z_message_request_stream(msg, &stream);
-    z_stream_read_uint32(&stream, &klength);
-    z_stream_read_uint32(&stream, &vlength);
-    z_stream_set_extent(&stream, &key, 8, klength);
-    z_stream_set_extent(&stream, &data, 8 + klength, vlength);
+    z_stream_read_uint32(Z_STREAM(&stream), &klength);
+    z_stream_read_uint32(Z_STREAM(&stream), &vlength);
+    z_stream_slice(&key, Z_STREAM(&stream), 8, klength);
+    z_stream_slice(&data, Z_STREAM(&stream), 8 + klength, vlength);
 
     switch (z_message_type(msg)) {
         case RALEIGHFS_SSET_UPDATE:
@@ -317,44 +317,44 @@ static raleighfs_errno_t __object_remove (raleighfs_t *fs,
                                           z_message_t *msg)
 {
     raleighfs_errno_t errno = RALEIGHFS_ERRNO_NONE;
+    z_message_stream_t stream;
     sset_object_t *sobject;
-    z_stream_t stream;
 
     z_message_response_stream(msg, &stream);
 
     switch (z_message_type(msg)) {
         case RALEIGHFS_SSET_POP:
-            __object_items(fs, object, msg, &stream, __sset_get);
-            __object_items(fs, object, msg, &stream, __sset_rm);
+            __object_items(fs, object, msg, Z_STREAM(&stream), __sset_get);
+            __object_items(fs, object, msg, Z_STREAM(&stream), __sset_rm);
             break;
         case RALEIGHFS_SSET_POP_RANGE:
-            __object_range(fs, object, msg, &stream, __sset_get_range);
-            __object_range(fs, object, msg, &stream, __sset_rm_range);
+            __object_range(fs, object, msg, Z_STREAM(&stream), __sset_get_range);
+            __object_range(fs, object, msg, Z_STREAM(&stream), __sset_rm_range);
             break;
         case RALEIGHFS_SSET_POP_INDEX:
-            __object_index(fs, object, msg, &stream, __sset_get_index);
-            __object_index(fs, object, msg, &stream, __sset_rm_index);
+            __object_index(fs, object, msg, Z_STREAM(&stream), __sset_get_index);
+            __object_index(fs, object, msg, Z_STREAM(&stream), __sset_rm_index);
             break;
         case RALEIGHFS_SSET_POP_FIRST:
             sobject = sset_get_first(__SSET(object));
-            __serialize_sset_object(&stream, sobject);
-            z_stream_write_uint32(&stream, 0);
+            __serialize_sset_object(Z_STREAM(&stream), sobject);
+            z_stream_write_uint32(Z_STREAM(&stream), 0);
             sset_remove_first(__SSET(object));
             break;
         case RALEIGHFS_SSET_POP_LAST:
             sobject = sset_get_last(__SSET(object));
-            __serialize_sset_object(&stream, sobject);
-            z_stream_write_uint32(&stream, 0);
+            __serialize_sset_object(Z_STREAM(&stream), sobject);
+            z_stream_write_uint32(Z_STREAM(&stream), 0);
             sset_remove_last(__SSET(object));
             break;
         case RALEIGHFS_SSET_RM:
-            __object_items(fs, object, msg, &stream, __sset_rm);
+            __object_items(fs, object, msg, Z_STREAM(&stream), __sset_rm);
             break;
         case RALEIGHFS_SSET_RM_RANGE:
-            __object_range(fs, object, msg, &stream, __sset_rm_range);
+            __object_range(fs, object, msg, Z_STREAM(&stream), __sset_rm_range);
             break;
         case RALEIGHFS_SSET_RM_INDEX:
-            __object_index(fs, object, msg, &stream, __sset_rm_index);
+            __object_index(fs, object, msg, Z_STREAM(&stream), __sset_rm_index);
             break;
         case RALEIGHFS_SSET_RM_FIRST:
             sset_remove_first(__SSET(object));

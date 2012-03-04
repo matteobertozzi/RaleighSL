@@ -4,15 +4,12 @@
 
 static int __key_stream_compare (void *data, const void *a, const void *b) {
     const sset_object_t *sa = SSET_CONST_OBJECT(a);
-    z_stream_extent_t *sb = (z_stream_extent_t *)b;
-    unsigned int min_len;
     int cmp;
 
-    min_len = z_min(sa->key_size, sb->length);
-    if ((cmp = z_stream_memcmp(sb->stream, sb->offset, sa->key, min_len)))
+    if ((cmp = z_slice_rawcmp(Z_SLICE(b), 0, sa->key, sa->key_size)))
         return(-cmp);
 
-    return(sa->key_size - sb->length);
+    return(0);
 }
 
 static int __key_compare (void *user_data, const void *a, const void *b) {
@@ -55,8 +52,8 @@ uint64_t sset_length (sset_t *sset) {
 }
 
 int sset_insert (sset_t *sset,
-                 const z_stream_extent_t *key,
-                 const z_stream_extent_t *value)
+                 const z_stream_slice_t *key,
+                 const z_stream_slice_t *value)
 {
     sset_object_t *object;
     z_memory_t *memory;
@@ -78,7 +75,7 @@ int sset_insert (sset_t *sset,
     return(0);
 }
 
-sset_object_t *sset_get (sset_t *sset, const z_stream_extent_t *key) {
+sset_object_t *sset_get (sset_t *sset, const z_stream_slice_t *key) {
     return(SSET_OBJECT(z_tree_lookup_custom(&(sset->tree),
                                             __key_stream_compare, key)));
 }
@@ -109,8 +106,8 @@ void sset_index_foreach (sset_t *sset,
 }
 
 void sset_key_foreach (sset_t *sset,
-                       const z_stream_extent_t *start,
-                       const z_stream_extent_t *end,
+                       const z_stream_slice_t *start,
+                       const z_stream_slice_t *end,
                        z_foreach_t func,
                        void *user_data)
 {
@@ -157,7 +154,7 @@ sset_object_t *sset_get_last (sset_t *sset) {
     return(SSET_OBJECT(z_tree_lookup_max(&(sset->tree))));
 }
 
-int sset_remove (sset_t *sset, const z_stream_extent_t *key) {
+int sset_remove (sset_t *sset, const z_stream_slice_t *key) {
     void *p;
 
     if (!(p = z_tree_lookup_custom(&(sset->tree), __key_stream_compare, key)))
@@ -167,8 +164,8 @@ int sset_remove (sset_t *sset, const z_stream_extent_t *key) {
 }
 
 int sset_remove_range (sset_t *sset,
-                       const z_stream_extent_t *a,
-                       const z_stream_extent_t *b)
+                       const z_stream_slice_t *a,
+                       const z_stream_slice_t *b)
 {
     void *ka;
     void *kb;
@@ -199,7 +196,7 @@ int sset_remove_last (sset_t *sset) {
 
 
 sset_object_t *sset_object_alloc (z_memory_t *memory,
-                                  const z_stream_extent_t *key)
+                                  const z_stream_slice_t *key)
 {
     sset_object_t *obj;
     unsigned int size;
@@ -210,7 +207,7 @@ sset_object_t *sset_object_alloc (z_memory_t *memory,
         obj->data = NULL;
         obj->data_size = 0U;
         obj->key_size = key->length;
-        z_stream_read_extent(key, obj->key);
+        z_slice_copy_all(key, obj->key);
     }
 
     return(obj);
@@ -226,7 +223,7 @@ void sset_object_free (z_memory_t *memory,
 
 int sset_object_set (sset_object_t *object,
                      z_memory_t *memory,
-                     const z_stream_extent_t *value)
+                     const z_stream_slice_t *value)
 {
     void *data;
 
@@ -236,7 +233,7 @@ int sset_object_set (sset_object_t *object,
     if (object->data != NULL)
         z_memory_blob_free(memory, object->data);
 
-    z_stream_read_extent(value, data);
+    z_slice_copy_all(value, data);
     object->data = data;
     object->data_size = value->length;
     object->cas++;

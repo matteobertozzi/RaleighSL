@@ -22,7 +22,7 @@
 #include <zcl/memcpy.h>
 #include <zcl/memcmp.h>
 #include <zcl/strtol.h>
-#include <zcl/rdata.h>
+#include <zcl/slice.h>
 
 typedef struct z_chunkq_search {
     const uint8_t *needle;
@@ -34,11 +34,11 @@ typedef struct z_chunkq_search {
     int state;
 } z_chunkq_search_t;
 
-typedef struct z_chunkq_rdata_info {
-    const z_rdata_t *rdata;
+typedef struct z_chunkq_slice_info {
+    const z_slice_t *slice;
     unsigned int available;
     unsigned int offset;
-} z_chunkq_rdata_info_t;
+} z_chunkq_slice_info_t;
 
 static z_chunkq_node_t *__chunkq_node_alloc (z_chunkq_t *chunkq) {
     z_chunkq_node_t *node;
@@ -310,30 +310,30 @@ unsigned int z_chunkq_fetch (z_chunkq_t *chunkq,
     return(n);
 }
 
-static unsigned int __fetch_rdata (void *data, void *buffer, unsigned int n) {
-    z_chunkq_rdata_info_t *info = (z_chunkq_rdata_info_t *)data;
+static unsigned int __fetch_slice (void *data, void *buffer, unsigned int n) {
+    z_chunkq_slice_info_t *info = (z_chunkq_slice_info_t *)data;
     unsigned int rd;
 
     if (info->available < n)
         n = info->available;
 
-    rd = z_rdata_read(info->rdata, info->offset, buffer, n);
+    rd = z_slice_copy(info->slice, info->offset, buffer, n);
     info->available -= rd;
     info->offset += rd;
 
     return(rd);
 }
 
-unsigned int z_chunkq_append_rdata (z_chunkq_t *chunkq,
-                                     const z_rdata_t *rdata)
+unsigned int z_chunkq_append_slice (z_chunkq_t *chunkq,
+                                     const z_slice_t *slice)
 {
-    z_chunkq_rdata_info_t info;
+    z_chunkq_slice_info_t info;
 
-    info.available = z_rdata_length(rdata);
+    info.available = z_slice_length(slice);
     info.offset = 0U;
-    info.rdata = rdata;
+    info.slice = slice;
 
-    return(z_chunkq_append_fetch(chunkq, __fetch_rdata, &info));
+    return(z_chunkq_append_fetch(chunkq, __fetch_slice, &info));
 }
 
 unsigned int z_chunkq_update_fetch (z_chunkq_t *chunkq,
@@ -372,17 +372,17 @@ unsigned int z_chunkq_update_fetch (z_chunkq_t *chunkq,
     return(0);
 }
 
-unsigned int z_chunkq_update_rdata (z_chunkq_t *chunkq,
+unsigned int z_chunkq_update_slice (z_chunkq_t *chunkq,
                                     unsigned int offset,
-                                    const z_rdata_t *rdata)
+                                    const z_slice_t *slice)
 {
-    z_chunkq_rdata_info_t info;
+    z_chunkq_slice_info_t info;
 
-    info.available = z_rdata_length(rdata);
+    info.available = z_slice_length(slice);
     info.offset = 0U;
-    info.rdata = rdata;
+    info.slice = slice;
 
-    return(z_chunkq_update_fetch(chunkq, offset, __fetch_rdata, &info));
+    return(z_chunkq_update_fetch(chunkq, offset, __fetch_slice, &info));
 }
 
 unsigned int z_chunkq_append (z_chunkq_t *chunkq,
@@ -943,67 +943,74 @@ int z_stream_write_chunkq (z_stream_t *stream,
     return(0);
 }
 
-static unsigned int __chunkq_read (z_stream_t *stream,
-                                   void *buffer,
-                                   unsigned int n)
+/* ============================================================================
+ *  Chunkq Stream
+ */
+static uint64_t __chunkq_tell (z_stream_t *stream) {
+    return(((z_chunkq_stream_t *)stream)->offset);
+}
+
+static int __chunkq_seek (z_stream_t *stream, uint64_t offset) {
+    z_chunkq_stream_t *cstream = (z_chunkq_stream_t *)stream;
+    cstream->offset = (unsigned int)(offset & 0xffffffff);
+    return(0);
+}
+
+static int __chunkq_read (z_stream_t *stream,
+                          void *buffer,
+                          unsigned int n)
 {
-    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
+    z_chunkq_stream_t *cstream = (z_chunkq_stream_t *)stream;
     unsigned int rd;
 
-    rd = z_chunkq_read(chunkq, stream->offset, buffer, n);
-    stream->offset += rd;
+    rd = z_chunkq_read(cstream->chunkq, cstream->offset, buffer, n);
+    cstream->offset += rd;
     return(rd);
 }
 
-static unsigned int __chunkq_write (z_stream_t *stream,
-                                    const void *buffer,
-                                    unsigned int n)
+static int __chunkq_write (z_stream_t *stream,
+                           const void *buffer,
+                           unsigned int n)
 {
-    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
+    z_chunkq_stream_t *cstream = (z_chunkq_stream_t *)stream;
     unsigned int wr;
 
-    wr = z_chunkq_append(chunkq, buffer, n);
-    stream->offset += wr;
+    wr = z_chunkq_append(cstream->chunkq, buffer, n);
+    cstream->offset += wr;
     return(wr);
 }
 
-static unsigned int __chunkq_fetch (z_stream_t *stream,
-                                    unsigned int length,
-                                    z_iopush_t fetch_func,
-                                    void *user_data)
+#if 0
+static int __chunkq_fetch (z_stream_t *stream,
+                           unsigned int length,
+                           z_iopush_t fetch_func,
+                           void *user_data)
 {
-    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
+    z_chunkq_stream_t *cstream = (z_chunkq_stream_t *)stream;
     unsigned int rd;
 
-    rd = z_chunkq_fetch(chunkq, stream->offset, length, fetch_func, user_data);
-    stream->offset += rd;
+    rd = z_chunkq_fetch(cstream->chunkq, cstream->offset, length,
+                        fetch_func, user_data);
+    cstream->offset += rd;
 
     return(rd);
 }
+#endif
 
-static int __chunkq_memcmp (z_stream_t *stream,
-                            const void *mem,
-                            unsigned int mem_size)
-{
-    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
-    return(z_chunkq_memcmp(chunkq, stream->offset, mem, mem_size));
-}
-
-
-static z_stream_plug_t __chunkq_stream_plug = {
-    .close  = NULL,
-    .seek   = NULL,
+static z_stream_vtable_t __chunkq_stream_vtable = {
+    .tell   = __chunkq_tell,
+    .seek   = __chunkq_seek,
     .read   = __chunkq_read,
     .write  = __chunkq_write,
-    .fetch  = __chunkq_fetch,
-    .memcmp = __chunkq_memcmp,
+    /* .fetch  = __chunkq_fetch, */
 };
 
-int z_chunkq_stream (z_stream_t *stream,
+int z_chunkq_stream (z_chunkq_stream_t *stream,
                      z_chunkq_t *chunkq)
 {
-    z_stream_open(stream, &__chunkq_stream_plug);
-    stream->plug_data.ptr = chunkq;
+    stream->__base_type__.vtable = &__chunkq_stream_vtable;
+    stream->chunkq = chunkq;
+    stream->offset = 0;
     return(0);
 }
 

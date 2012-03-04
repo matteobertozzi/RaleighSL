@@ -34,7 +34,7 @@ struct z_message {
     z_message_func_t    callback;        /* User callback function */
     void *              data;            /* User data associated with the msg */
 
-    z_rdata_t *         object;          /* Destination object id */
+    z_slice_t *         object;          /* Destination object id */
 
     z_message_func_t    i_func;          /* Internal function */
     void *              i_data;          /* Internal data */

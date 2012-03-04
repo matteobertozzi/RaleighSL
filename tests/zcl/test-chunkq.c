@@ -176,22 +176,23 @@ static int __test_memcmp (z_test_t *test) {
 
 static int __test_stream (z_test_t *test) {
     struct user_data *data = (struct user_data *)(test->user_data);
-    z_stream_t stream;
+    z_chunkq_stream_t cstream;
+    z_stream_t *stream = (z_stream_t *)&cstream;
     char buffer[128];
     uint16_t u16;
 
-    if (z_chunkq_stream(&stream, &(data->chunkq)))
+    if (z_chunkq_stream(&cstream, &(data->chunkq)))
         return(1);
 
-    z_stream_write_uint16(&stream, 512);
-    z_stream_write(&stream, "Hello", 5);
+    z_stream_write_uint16(stream, 512);
+    z_stream_write(stream, "Hello", 5);
 
-    z_stream_seek(&stream, 0);
-    z_stream_read_uint16(&stream, &u16);
+    z_stream_seek(stream, 0);
+    z_stream_read_uint16(stream, &u16);
     if (u16 != 512)
         return(2);
 
-    z_stream_read(&stream, buffer, 5);
+    z_stream_read(stream, buffer, 5);
     if (z_memcmp(buffer, "Hello", 5))
         return(3);
 

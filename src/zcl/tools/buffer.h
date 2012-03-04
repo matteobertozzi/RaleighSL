@@ -25,8 +25,10 @@ __Z_BEGIN_DECLS__
 #include <zcl/types.h>
 
 #define Z_CONST_BUFFER(x)                       Z_CONST_CAST(z_buffer_t, x)
+#define Z_BUFFER_STREM(x)                       Z_CAST(z_buffer_stream_t, x)
 #define Z_BUFFER(x)                             Z_CAST(z_buffer_t, x)
 
+Z_TYPEDEF_STRUCT(z_buffer_stream)
 Z_TYPEDEF_STRUCT(z_buffer)
 
 struct z_buffer {
@@ -37,6 +39,12 @@ struct z_buffer {
     unsigned char * blob;
     unsigned int    block;
     unsigned int    size;
+};
+
+struct z_buffer_stream {
+    z_stream_t __base_type__;
+    z_buffer_t *buffer;
+    unsigned int offset;
 };
 
 z_buffer_t *      z_buffer_alloc            (z_buffer_t *buffer,
@@ -83,7 +91,7 @@ int               z_buffer_compare          (z_buffer_t *buffer,
                                              const void *blob,
                                              unsigned int size);
 
-int               z_buffer_stream           (z_stream_t *stream,
+int               z_buffer_stream           (z_buffer_stream_t *stream,
                                              z_buffer_t *buffer);
 
 __Z_END_DECLS__

@@ -65,7 +65,7 @@ int                 memcache_insert           (memcache_t *memcache,
 int                 memcache_remove           (memcache_t *memcache,
                                                memcache_object_t *item);
 memcache_object_t * memcache_lookup           (memcache_t *memcache,
-                                               const z_stream_extent_t *key);
+                                               const z_slice_t *key);
 
 
 memcache_object_t * memcache_object_alloc     (z_memory_t *memory,
@@ -74,13 +74,13 @@ void                memcache_object_free      (z_memory_t *memory,
                                                memcache_object_t *object);
 int                 memcache_object_set       (memcache_object_t *object,
                                                z_memory_t *memory,
-                                               const z_stream_extent_t *value);
+                                               const z_slice_t *value);
 int                 memcache_object_prepend   (memcache_object_t *object,
                                                z_memory_t *memory,
-                                               const z_stream_extent_t *value);
+                                               const z_slice_t *value);
 int                 memcache_object_append    (memcache_object_t *object,
                                                z_memory_t *memory,
-                                               const z_stream_extent_t *value);
+                                               const z_slice_t *value);
 
 #endif /* !__MEMCACHE_PRIVATE_H__ */
 

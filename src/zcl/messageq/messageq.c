@@ -151,7 +151,7 @@ void z_message_free (z_message_t *message) {
 }
 
 int z_message_send (z_message_t *message,
-                    const z_rdata_t *object,
+                    const z_slice_t *object,
                     z_message_func_t callback,
                     void *user_data)
 {
@@ -195,7 +195,7 @@ void z_message_unset_sub_task (z_message_t *message) {
     message->i_data = NULL;
 }
 
-const z_rdata_t *z_message_object (z_message_t *message) {
+const z_slice_t *z_message_object (z_message_t *message) {
     return(message->object);
 }
 
@@ -230,72 +230,51 @@ void z_message_set_state (z_message_t *message, unsigned int state) {
 /* ============================================================================
  *  Message request/response stream
  */
-static unsigned int __message_stream_read (z_stream_t *stream,
-                                           void *buffer,
-                                           unsigned int n)
+static uint64_t __message_stream_tell (z_stream_t *stream) {
+    return(((z_message_stream_t *)stream)->offset);
+}
+
+static int __message_stream_seek (z_stream_t *stream, uint64_t offset) {
+    z_message_stream_t *mstream = (z_message_stream_t *)stream;
+    mstream->offset = (unsigned int)(offset & 0xffffffff);
+    return(0);
+}
+static int __message_stream_read (z_stream_t *stream,
+                                  void *buffer,
+                                  unsigned int n)
 {
-    z_message_t *message = Z_MESSAGE(stream->data.ptr);
-    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
+    z_message_stream_t *mstream = (z_message_stream_t *)stream;
     unsigned int rd;
 
-    if ((rd = z_chunkq_read(chunkq, stream->offset, buffer, n)) != n)
-        message->flags |= Z_MESSAGE_HAS_ERRORS;
+    if ((rd = z_chunkq_read(mstream->chunkq, mstream->offset, buffer, n)) != n)
+        mstream->message->flags |= Z_MESSAGE_HAS_ERRORS;
 
-    stream->offset += rd;
+    mstream->offset += rd;
     return(rd);
 }
 
-static unsigned int __message_stream_write (z_stream_t *stream,
-                                            const void *buffer,
-                                            unsigned int n)
+static int __message_stream_write (z_stream_t *stream,
+                                   const void *buffer,
+                                   unsigned int n)
 {
-    z_message_t *message = Z_MESSAGE(stream->data.ptr);
-    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
+    z_message_stream_t *mstream = (z_message_stream_t *)stream;
     unsigned int wr;
 
-    if ((wr = z_chunkq_append(chunkq, buffer, n)) != n)
-        message->flags |= Z_MESSAGE_HAS_ERRORS;
+    if ((wr = z_chunkq_append(mstream->chunkq, buffer, n)) != n)
+        mstream->message->flags |= Z_MESSAGE_HAS_ERRORS;
 
-    stream->offset += wr;
+    mstream->offset += wr;
     return(wr);
 }
 
-static unsigned int __message_stream_fetch (z_stream_t *stream,
-                                            unsigned int length,
-                                            z_iopush_t fetch_func,
-                                            void *user_data)
-{
-    z_message_t *message = Z_MESSAGE(stream->data.ptr);
-    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
-    unsigned int rd;
-
-    rd = z_chunkq_fetch(chunkq, stream->offset, length, fetch_func, user_data);
-    if (rd != length)
-        message->flags |= Z_MESSAGE_HAS_ERRORS;
-
-    stream->offset += rd;
-
-    return(rd);
-}
-
-static int __message_stream_memcmp (z_stream_t *stream,
-                                    const void *mem,
-                                    unsigned int mem_size)
-{
-    z_chunkq_t *chunkq = Z_CHUNKQ(stream->plug_data.ptr);
-    return(z_chunkq_memcmp(chunkq, stream->offset, mem, mem_size));
-}
-
-static z_stream_plug_t __message_stream_plug = {
-    .close  = NULL,
-    .seek   = NULL,
+static z_stream_vtable_t __message_stream_vtable = {
+    .tell   = __message_stream_tell,
+    .seek   = __message_stream_seek,
     .read   = __message_stream_read,
     .write  = __message_stream_write,
-    .fetch  = __message_stream_fetch,
-    .memcmp = __message_stream_memcmp,
 };
 
-int z_message_request_stream (z_message_t *message, z_stream_t *stream) {
+int z_message_request_stream (z_message_t *message, z_message_stream_t *stream) {
     if (message->request == NULL) {
         z_memory_t *memory;
 
@@ -304,13 +283,15 @@ int z_message_request_stream (z_message_t *message, z_stream_t *stream) {
             return(1);
     }
 
-    z_stream_open(stream, &__message_stream_plug);
-    stream->plug_data.ptr = message->request;
-    stream->data.ptr = message;
+    stream->__base_type__.vtable = &__message_stream_vtable;
+    stream->chunkq = message->request;
+    stream->message = message;
+    stream->offset = 0;
     return(0);
 }
 
-int z_message_response_stream (z_message_t *message, z_stream_t *stream) {
+/* THIS IS A MESSAGE STREAM! */
+int z_message_response_stream (z_message_t *message, z_message_stream_t *stream) {
     if (message->response == NULL) {
         z_memory_t *memory;
 
@@ -319,9 +300,10 @@ int z_message_response_stream (z_message_t *message, z_stream_t *stream) {
             return(1);
     }
 
-    z_stream_open(stream, &__message_stream_plug);
-    stream->plug_data.ptr = message->response;
-    stream->data.ptr = message;
+    stream->__base_type__.vtable = &__message_stream_vtable;
+    stream->chunkq = message->response;
+    stream->message = message;
+    stream->offset = 0;
     return(0);
 }
 

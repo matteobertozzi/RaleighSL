@@ -17,6 +17,7 @@
 #include <raleighfs/execute.h>
 #include <raleighfs/object.h>
 
+#include <zcl/streamslice.h>
 #include <zcl/memory.h>
 #include <zcl/stream.h>
 
@@ -66,41 +67,41 @@ static raleighfs_errno_t __object_query (raleighfs_t *fs,
                                          raleighfs_object_t *object,
                                          z_message_t *msg)
 {
+    z_message_stream_t req_stream;
+    z_message_stream_t res_stream;
     memcache_object_t *item;
-    z_stream_t req_stream;
-    z_stream_t res_stream;
-    z_stream_extent_t key;
+    z_stream_slice_t key;
     uint32_t klength;
     uint32_t count;
 
     z_message_response_stream(msg, &res_stream);
     z_message_request_stream(msg, &req_stream);
-    z_stream_read_uint32(&req_stream, &count);
+    z_stream_read_uint32(Z_STREAM(&req_stream), &count);
 
     while (count--) {
-        z_stream_read_uint32(&req_stream, &klength);
-        z_stream_set_extent(&req_stream, &key, req_stream.offset, klength);
-        z_stream_seek(&req_stream, req_stream.offset + klength);
+        z_stream_read_uint32(Z_STREAM(&req_stream), &klength);
+        z_stream_slice(&key, Z_STREAM(&req_stream), req_stream.offset, klength);
+        z_stream_seek(Z_STREAM(&req_stream), req_stream.offset + klength);
 
-        if ((item = memcache_lookup(__MEMCACHE_TABLE(object), &key)) == NULL) {
-            z_stream_write_uint32(&res_stream, RALEIGHFS_MEMCACHE_NOT_FOUND);
+        if ((item = memcache_lookup(__MEMCACHE_TABLE(object), Z_SLICE(&key))) == NULL) {
+            z_stream_write_uint32(Z_STREAM(&res_stream), RALEIGHFS_MEMCACHE_NOT_FOUND);
             continue;
         }
 
         if (item->iflags & MEMCACHE_OBJECT_NUMBER)
-            z_stream_write_uint32(&res_stream, RALEIGHFS_MEMCACHE_NUMBER);
+            z_stream_write_uint32(Z_STREAM(&res_stream), RALEIGHFS_MEMCACHE_NUMBER);
         else
-            z_stream_write_uint32(&res_stream, RALEIGHFS_MEMCACHE_BLOB);
+            z_stream_write_uint32(Z_STREAM(&res_stream), RALEIGHFS_MEMCACHE_BLOB);
 
-        z_stream_write_uint32(&res_stream, item->exptime);
-        z_stream_write_uint32(&res_stream, item->flags);
-        z_stream_write_uint64(&res_stream, item->cas);
+        z_stream_write_uint32(Z_STREAM(&res_stream), item->exptime);
+        z_stream_write_uint32(Z_STREAM(&res_stream), item->flags);
+        z_stream_write_uint64(Z_STREAM(&res_stream), item->cas);
 
         if (item->iflags & MEMCACHE_OBJECT_NUMBER) {
-            z_stream_write_uint64(&res_stream, item->data.number);
+            z_stream_write_uint64(Z_STREAM(&res_stream), item->data.number);
         } else {
-            z_stream_write_uint32(&res_stream, item->value_size);
-            z_stream_write(&res_stream, item->data.blob, item->value_size);
+            z_stream_write_uint32(Z_STREAM(&res_stream), item->value_size);
+            z_stream_write(Z_STREAM(&res_stream), item->data.blob, item->value_size);
         }
     }
 
@@ -111,10 +112,10 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
                                           raleighfs_object_t *object,
                                           z_message_t *msg)
 {
+    z_message_stream_t stream;
     memcache_object_t *item;
-    z_stream_extent_t value;
-    z_stream_extent_t key;
-    z_stream_t stream;
+    z_stream_slice_t value;
+    z_stream_slice_t key;
     uint32_t klength;
     uint32_t vlength;
     uint32_t exptime;
@@ -123,16 +124,16 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
     int msg_type;
 
     z_message_request_stream(msg, &stream);
-    z_stream_read_uint32(&stream, &klength);
-    z_stream_read_uint32(&stream, &vlength);
-    z_stream_read_uint32(&stream, &flags);
-    z_stream_read_uint32(&stream, &exptime);
-    z_stream_read_uint64(&stream, &cas);
-    z_stream_set_extent(&stream, &key, stream.offset, klength);
-    z_stream_set_extent(&stream, &value, stream.offset + klength, vlength);
+    z_stream_read_uint32(Z_STREAM(&stream), &klength);
+    z_stream_read_uint32(Z_STREAM(&stream), &vlength);
+    z_stream_read_uint32(Z_STREAM(&stream), &flags);
+    z_stream_read_uint32(Z_STREAM(&stream), &exptime);
+    z_stream_read_uint64(Z_STREAM(&stream), &cas);
+    z_stream_slice(&key, Z_STREAM(&stream), stream.offset, klength);
+    z_stream_slice(&value, Z_STREAM(&stream), stream.offset + klength, vlength);
 
     /* Do item lookup */
-    item = memcache_lookup(__MEMCACHE_TABLE(object), &key);
+    item = memcache_lookup(__MEMCACHE_TABLE(object), Z_SLICE(&key));
     msg_type = z_message_type(msg);
 
     if (msg_type == RALEIGHFS_MEMCACHE_ADD ||
@@ -157,7 +158,7 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
             }
 
             /* Set the key */
-            z_stream_read_extent(&key, item->key);
+            z_slice_copy_all(&key, item->key);
 
             /* Add to table */
             memcache_insert(__MEMCACHE_TABLE(object), item);
@@ -169,7 +170,7 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
         item->flags = flags;
 
         /* Read Item Data */
-        memcache_object_set(item, __MEMCACHE_TABLE(object)->memory, &value);
+        memcache_object_set(item, __MEMCACHE_TABLE(object)->memory, Z_SLICE(&value));
     } else if (msg_type == RALEIGHFS_MEMCACHE_CAS) {
         /* store this data but only if no one else has updated
          * since I last fetched it.
@@ -184,7 +185,7 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
             return(RALEIGHFS_ERRNO_NONE);
         }
 
-        memcache_object_set(item, __MEMCACHE_TABLE(object)->memory, &value);
+        memcache_object_set(item, __MEMCACHE_TABLE(object)->memory, Z_SLICE(&value));
         item->cas++;
     } else if (msg_type == RALEIGHFS_MEMCACHE_REPLACE) {
         /* store this data, but only if the server *does*
@@ -201,7 +202,7 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
         item->cas++;
 
         /* Read Item Data */
-        memcache_object_set(item, __MEMCACHE_TABLE(object)->memory, &value);
+        memcache_object_set(item, __MEMCACHE_TABLE(object)->memory, Z_SLICE(&value));
     } else if (msg_type == RALEIGHFS_MEMCACHE_APPEND) {
         /* add this data to an existing key after existing data */
         if (item == NULL) {
@@ -210,7 +211,7 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
         }
 
         item->cas++;
-        memcache_object_append(item, __MEMCACHE_TABLE(object)->memory, &value);
+        memcache_object_append(item, __MEMCACHE_TABLE(object)->memory, Z_SLICE(&value));
     } else if (msg_type == RALEIGHFS_MEMCACHE_PREPEND) {
         /* add this data to an existing key before existing data */
         if (item == NULL) {
@@ -219,7 +220,7 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
         }
 
         item->cas++;
-        memcache_object_prepend(item, __MEMCACHE_TABLE(object)->memory, &value);
+        memcache_object_prepend(item, __MEMCACHE_TABLE(object)->memory, Z_SLICE(&value));
     }
 
     z_message_set_state(msg, RALEIGHFS_MEMCACHE_STORED);
@@ -230,18 +231,18 @@ static raleighfs_errno_t __object_update (raleighfs_t *fs,
                                           raleighfs_object_t *object,
                                           z_message_t *msg)
 {
+    z_message_stream_t stream;
     memcache_object_t *item;
-    z_stream_extent_t key;
-    z_stream_t stream;
+    z_stream_slice_t key;
     uint32_t klength;
     uint64_t delta;
 
     z_message_request_stream(msg, &stream);
-    z_stream_read_uint64(&stream, &delta);
-    z_stream_read_uint32(&stream, &klength);
-    z_stream_set_extent(&stream, &key, stream.offset, klength);
+    z_stream_read_uint64(Z_STREAM(&stream), &delta);
+    z_stream_read_uint32(Z_STREAM(&stream), &klength);
+    z_stream_slice(&key, Z_STREAM(&stream), stream.offset, klength);
 
-    if ((item = memcache_lookup(__MEMCACHE_TABLE(object), &key)) == NULL) {
+    if ((item = memcache_lookup(__MEMCACHE_TABLE(object), Z_SLICE(&key))) == NULL) {
         z_message_set_state(msg, RALEIGHFS_MEMCACHE_NOT_FOUND);
         return(RALEIGHFS_ERRNO_NONE);
     }
@@ -268,7 +269,7 @@ static raleighfs_errno_t __object_update (raleighfs_t *fs,
     /* Fill Response */
     z_message_response_stream(msg, &stream);
     z_message_set_state(msg, RALEIGHFS_MEMCACHE_STORED);
-    z_stream_write_uint64(&stream, item->data.number);
+    z_stream_write_uint64(Z_STREAM(&stream), item->data.number);
 
     return(RALEIGHFS_ERRNO_NONE);
 }
@@ -277,9 +278,9 @@ static raleighfs_errno_t __object_remove (raleighfs_t *fs,
                                           raleighfs_object_t *object,
                                           z_message_t *msg)
 {
+    z_message_stream_t stream;
     memcache_object_t *item;
-    z_stream_extent_t key;
-    z_stream_t stream;
+    z_stream_slice_t key;
     uint32_t klength;
 
     if (z_message_type(msg) == RALEIGHFS_MEMCACHE_FLUSH_ALL) {
@@ -288,10 +289,10 @@ static raleighfs_errno_t __object_remove (raleighfs_t *fs,
     }
 
     z_message_request_stream(msg, &stream);
-    z_stream_read_uint32(&stream, &klength);
-    z_stream_set_extent(&stream, &key, stream.offset, klength);
+    z_stream_read_uint32(Z_STREAM(&stream), &klength);
+    z_stream_slice(&key, Z_STREAM(&stream), stream.offset, klength);
 
-    if ((item = memcache_lookup(__MEMCACHE_TABLE(object), &key)) == NULL) {
+    if ((item = memcache_lookup(__MEMCACHE_TABLE(object), Z_SLICE(&key))) == NULL) {
         z_message_set_state(msg, RALEIGHFS_MEMCACHE_NOT_FOUND);
         return(RALEIGHFS_ERRNO_NONE);
     }

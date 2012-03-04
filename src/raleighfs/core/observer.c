@@ -25,26 +25,26 @@
 #endif
 
 void __observer_notify_create (raleighfs_t *fs,
-                               const z_rdata_t *name)
+                               const z_slice_t *name)
 {
     __LOG("__observer_notify_create()\n");
 }
 
 void __observer_notify_open (raleighfs_t *fs,
-                             const z_rdata_t *name)
+                             const z_slice_t *name)
 {
     __LOG("__observer_notify_open()\n");
 }
 
 void __observer_notify_rename (raleighfs_t *fs,
-                               const z_rdata_t *old_name,
-                               const z_rdata_t *new_name)
+                               const z_slice_t *old_name,
+                               const z_slice_t *new_name)
 {
     __LOG("__observer_notify_rename()\n");
 }
 
 void __observer_notify_unlink (raleighfs_t *fs,
-                               const z_rdata_t *name)
+                               const z_slice_t *name)
 {
     __LOG("__observer_notify_unlink()\n");
 }

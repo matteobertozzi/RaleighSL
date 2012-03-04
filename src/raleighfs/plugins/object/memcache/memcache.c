@@ -61,10 +61,10 @@ static unsigned int __hash (void *user_data, const void *buf, unsigned int n) {
 static unsigned int __object_key_hash (void *user_data,
                                        const void *data)
 {
-    const z_stream_extent_t *key = (const z_stream_extent_t *)data;
+    const z_slice_t *key = (const z_slice_t *)data;
     z_hash32_t hash;
     z_hash32_init(&hash, __HASH_FUNC, __HASH_FUNC_SEED);
-    z_stream_fetch(key->stream, key->offset, key->length, __hash, &hash);
+    z_slice_fetch_all(key, __hash, &hash);
     return(z_hash32_digest(&hash));
 }
 #endif /* MEMCACHE_USE_HASH_TABLE */
@@ -74,15 +74,12 @@ static int __object_key_compare (void *user_data,
                                  const void *obj2)
 {
     memcache_object_t *a = MEMCACHE_OBJECT(obj1);
-    z_stream_extent_t *b = (z_stream_extent_t *)obj2;
-    unsigned int min_len;
     int cmp;
 
-    min_len = z_min(a->key_size, b->length);
-    if ((cmp = z_stream_memcmp(b->stream, b->offset, a->key, min_len)))
+    if ((cmp = z_slice_rawcmp(Z_SLICE(obj2), 0, a->key, a->key_size)))
         return(-cmp);
 
-    return(a->key_size - b->length);
+    return(0);
 }
 
 memcache_t *memcache_alloc (z_memory_t *memory) {
@@ -162,7 +159,7 @@ int memcache_remove (memcache_t *memcache, memcache_object_t *item) {
 }
 
 memcache_object_t *memcache_lookup (memcache_t *memcache,
-                                    const z_stream_extent_t *key)
+                                    const z_slice_t *key)
 {
     void *item;
 
@@ -223,14 +220,16 @@ void memcache_object_free (z_memory_t *memory,
 
 int memcache_object_set (memcache_object_t *object,
                          z_memory_t *memory,
-                         const z_stream_extent_t *value)
+                         const z_slice_t *value)
 {
+    unsigned int vlength;
     char vbuffer[16];
     uint8_t *blob;
 
-    if (value->length < 16) {
-        z_stream_read_extent(value, vbuffer);
-        vbuffer[value->length] = '\0';
+    vlength = z_slice_length(value);
+    if (vlength < 16) {
+        z_slice_copy_all(value, vbuffer);
+        vbuffer[vlength] = '\0';
 
         if (object->iflags & MEMCACHE_OBJECT_NUMBER)
             blob = NULL;
@@ -248,41 +247,43 @@ int memcache_object_set (memcache_object_t *object,
 
     /* set data to blob */
     if (object->iflags & MEMCACHE_OBJECT_NUMBER)
-        blob = z_memory_blob_alloc(memory, value->length);
+        blob = z_memory_blob_alloc(memory, vlength);
     else
-        blob = z_memory_blob_realloc(memory, object->data.blob, value->length);
+        blob = z_memory_blob_realloc(memory, object->data.blob, vlength);
 
     if (blob == NULL)
         return(1);
 
     object->data.blob = blob;
-    object->value_size = value->length;
+    object->value_size = vlength;
     object->iflags &= ~MEMCACHE_OBJECT_NUMBER;
 
-    if (value->length < 16)
-        z_memcpy(blob, vbuffer, value->length);
+    if (vlength < 16)
+        z_memcpy(blob, vbuffer, vlength);
     else
-        z_stream_read_extent(value, blob);
+        z_slice_copy_all(value, blob);
 
     return(0);
 }
 
 int memcache_object_prepend (memcache_object_t *object,
                              z_memory_t *memory,
-                             const z_stream_extent_t *value)
+                             const z_slice_t *value)
 {
+    unsigned int vlength;
     char vbuffer[16];
     char number[16];
     unsigned int n;
     uint8_t *blob;
 
+    vlength = z_slice_length(value);
     if (object->iflags & MEMCACHE_OBJECT_NUMBER) {
-        if (value->length < 16) {
+        if (vlength < 16) {
             uint64_t number;
 
-            z_stream_read_extent(value, vbuffer);
+            z_slice_copy_all(value, vbuffer);
             if (z_strtou64(vbuffer, 10, &number)) {
-                unsigned int size = value->length;
+                unsigned int size = vlength;
                 while (size--)
                     object->data.number *= 10;
                 object->data.number += number;
@@ -291,12 +292,12 @@ int memcache_object_prepend (memcache_object_t *object,
         }
 
         n = z_u64tostr(object->data.number, number, sizeof(number), 10);
-        blob = z_memory_blob_alloc(memory, n + value->length);
+        blob = z_memory_blob_alloc(memory, n + vlength);
     } else {
         n = 0;
         blob = z_memory_blob_realloc(memory,
                                      object->data.blob,
-                                     object->value_size + value->length);
+                                     object->value_size + vlength);
     }
 
     if (blob == NULL)
@@ -309,34 +310,36 @@ int memcache_object_prepend (memcache_object_t *object,
     z_memcpy(blob, number, n);
 
     /* Preprend data to blob */
-    z_memmove(blob + value->length, blob, object->value_size);
-    object->value_size += value->length;
+    z_memmove(blob + vlength, blob, object->value_size);
+    object->value_size += vlength;
     object->data.blob = blob;
 
-    if (n > 0 && value->length < 16)
-        z_memcpy(blob, vbuffer, value->length);
+    if (n > 0 && vlength < 16)
+        z_memcpy(blob, vbuffer, vlength);
     else
-        z_stream_read_extent(value, blob);
+        z_slice_copy_all(value, blob);
 
     return(0);
 }
 
 int memcache_object_append (memcache_object_t *object,
                             z_memory_t *memory,
-                            const z_stream_extent_t *value)
+                            const z_slice_t *value)
 {
+    unsigned int vlength;
     char vbuffer[16];
     char number[16];
     unsigned int n;
     uint8_t *blob;
 
+    vlength = z_slice_length(value);
     if (object->iflags & MEMCACHE_OBJECT_NUMBER) {
-        if (value->length < 16) {
+        if (vlength < 16) {
             uint64_t number;
 
-            z_stream_read_extent(value, vbuffer);
+            z_slice_copy_all(value, vbuffer);
             if (z_strtou64(vbuffer, 10, &number)) {
-                unsigned int size = value->length;
+                unsigned int size = vlength;
                 while (size--)
                     object->data.number *= 10;
                 object->data.number += number;
@@ -345,12 +348,12 @@ int memcache_object_append (memcache_object_t *object,
         }
 
         n = z_u64tostr(object->data.number, number, sizeof(number), 10);
-        blob = z_memory_blob_alloc(memory, n + value->length);
+        blob = z_memory_blob_alloc(memory, n + vlength);
     } else {
         n = 0;
         blob = z_memory_blob_realloc(memory,
                                      object->data.blob,
-                                     object->value_size + value->length);
+                                     object->value_size + vlength);
     }
 
     if (blob == NULL)
@@ -365,12 +368,12 @@ int memcache_object_append (memcache_object_t *object,
     /* Append data to blob */
     object->data.blob = blob;
     blob = blob + object->value_size;
-    object->value_size += value->length;
+    object->value_size += vlength;
 
-    if (object->iflags & MEMCACHE_OBJECT_NUMBER && value->length < 16)
-        z_memcpy(blob, vbuffer, value->length);
+    if (object->iflags & MEMCACHE_OBJECT_NUMBER && vlength < 16)
+        z_memcpy(blob, vbuffer, vlength);
     else
-        z_stream_read_extent(value, blob);
+        z_slice_copy_all(value, blob);
 
     return(0);
 }

@@ -51,13 +51,13 @@ static int __key_cache_compare (void *fs, const void *a, const void *b)  {
 
 static struct key_cache_item *__key_cache_item_alloc (raleighfs_t *fs,
                                                       raleighfs_key_t *key,
-                                                      const z_rdata_t *name)
+                                                      const z_slice_t *name)
 {
     struct key_cache_item *item;
     unsigned int name_length;
     unsigned int size;
 
-    name_length = z_rdata_length(name);
+    name_length = z_slice_length(name);
     size = sizeof(struct key_cache_item) + name_length - 1;
     if ((item = z_object_block_alloc(fs, struct key_cache_item, size)) == NULL)
         return(NULL);
@@ -65,7 +65,7 @@ static struct key_cache_item *__key_cache_item_alloc (raleighfs_t *fs,
     /* Copy data to item cache */
     z_memcpy(item->body, key->body, 32);
     item->name_length = name_length;
-    z_rdata_read(name, 0, item->name, name_length);
+    z_slice_copy(name, 0, item->name, name_length);
 
     return(item);
 }
@@ -85,18 +85,18 @@ static unsigned int __name_hash_part (void *user_data,
 static unsigned int __name_hash (void *fs, const void *ptr) {
     z_hash32_t hash;
     z_hash32_init(&hash, __KEY_HASH32_FUNC, __KEY_HASH32_SEED);
-    z_rdata_fetch_all(Z_RDATA(ptr), __name_hash_part, &hash);
+    z_slice_fetch_all(Z_SLICE(ptr), __name_hash_part, &hash);
     return(z_hash32_digest(&hash));
 }
 
 static int __name_compare (void *fs, const void *a, const void *b) {
     struct key_cache_item *i = __KEY_CACHE_ITEM(a);
-    z_rdata_t *name = Z_RDATA(b);
+    z_slice_t *name = Z_SLICE(b);
     unsigned int length;
     int cmp;
 
-    length = z_rdata_length(name);
-    if ((cmp = z_rdata_rawcmp(name, 0, i->name, z_min(length, i->name_length))))
+    length = z_slice_length(name);
+    if ((cmp = z_slice_rawcmp(name, 0, i->name, z_min(length, i->name_length))))
         return(-cmp);
 
     return(i->name_length - length);
@@ -136,12 +136,12 @@ static unsigned int __hash_name_part (void *user_data,
 
 static void __key_hash (raleighfs_t *fs,
                         raleighfs_key_t *key,
-                        const z_rdata_t *name)
+                        const z_slice_t *name)
 {
     z_hash_t hash;
 
     z_hash_alloc(&hash, z_object_memory(fs), &z_hash160_plug_ripemd);
-    z_rdata_fetch_all(name,  __hash_name_part, &hash);
+    z_slice_fetch_all(name,  __hash_name_part, &hash);
     z_memzero(key->body, 32);
     z_hash_digest(&hash, key->body);
     z_hash_free(&hash);
@@ -149,7 +149,7 @@ static void __key_hash (raleighfs_t *fs,
 
 static raleighfs_errno_t __key_object (raleighfs_t *fs,
                                        raleighfs_key_t *key,
-                                       const z_rdata_t *name)
+                                       const z_slice_t *name)
 {
     struct key_cache_item *item;
 

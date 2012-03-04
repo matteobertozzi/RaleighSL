@@ -21,6 +21,7 @@
 
 #include <zcl/stream.h>
 #include <zcl/deque.h>
+#include <zcl/slice.h>
 
 #define DEQUE_OBJECT(x)                     Z_CAST(deque_object_t, x)
 #define DEQUE(x)                            Z_CAST(deque_t, x)
@@ -43,9 +44,9 @@ void                deque_free              (z_memory_t *memory,
 void                deque_clear             (deque_t *deque);
 
 raleighfs_errno_t   deque_push_back         (deque_t *deque,
-                                             const z_stream_extent_t *value);
+                                             const z_slice_t *value);
 raleighfs_errno_t   deque_push_front        (deque_t *deque,
-                                             const z_stream_extent_t *value);
+                                             const z_slice_t *value);
 
 deque_object_t *    deque_pop_front         (deque_t *deque);
 deque_object_t *    deque_pop_back          (deque_t *deque);
@@ -57,7 +58,7 @@ int                 deque_remove_front      (deque_t *deque);
 int                 deque_remove_back       (deque_t *deque);
 
 deque_object_t *    deque_object_alloc      (z_memory_t *memory,
-                                             const z_stream_extent_t *value);
+                                             const z_slice_t *value);
 void                deque_object_free       (z_memory_t *memory,
                                              deque_object_t *object);
 

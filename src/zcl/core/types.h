@@ -45,6 +45,16 @@ __Z_BEGIN_DECLS__
 #define z_space_map_type_id                (z_tree_type_id | 0x1)
 #define z_extent_tree_type_id              (z_tree_type_id | 0x2)
 
+
+#define Z_VTABLE(type, obj)                (((type *)(obj))->vtable)
+#define Z_VTABLE_METHOD(type, obj, method) (Z_VTABLE(type, obj)->method)
+
+#define Z_VTABLE_CALL(type, obj, method, ...)                           \
+    Z_VTABLE(type, obj)->method((type *)(obj), ##__VA_ARGS__)
+
+#define Z_VTABLE_HAS_METHOD(type, obj, method)                          \
+    (Z_VTABLE(type, obj)->method != NULL)
+
 Z_TYPEDEF_UNION(z_data)
 #define Z_DATA(x)                          Z_CAST(z_data_t, x)
 #define Z_DATA_PTR(x)                      (Z_DATA(x)->ptr)

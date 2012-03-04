@@ -200,14 +200,14 @@ void                __object_set_key    (raleighfs_t *fs,
  *  Observers related
  */
 void    __observer_notify_create        (raleighfs_t *fs,
-                                         const z_rdata_t *name);
+                                         const z_slice_t *name);
 void    __observer_notify_open          (raleighfs_t *fs,
-                                         const z_rdata_t *name);
+                                         const z_slice_t *name);
 void    __observer_notify_rename        (raleighfs_t *fs,
-                                         const z_rdata_t *old_name,
-                                         const z_rdata_t *new_name);
+                                         const z_slice_t *old_name,
+                                         const z_slice_t *new_name);
 void    __observer_notify_unlink        (raleighfs_t *fs,
-                                         const z_rdata_t *name);
+                                         const z_slice_t *name);
 
 void    __observer_notify_insert        (raleighfs_t *fs,
                                          raleighfs_object_t *object,

@@ -20,6 +20,7 @@
 #include <raleighfs/execute.h>
 #include <raleighfs/object.h>
 
+#include <zcl/streamslice.h>
 #include <zcl/thread.h>
 #include <zcl/debug.h>
 
@@ -214,15 +215,15 @@ static void __raleighfs_exec_open (raleighfs_t *fs, z_message_t *msg) {
 }
 
 static raleighfs_errno_t __exec_semantic_create (raleighfs_t *fs,
-                                                 const z_rdata_t *name,
+                                                 const z_slice_t *name,
                                                  z_message_t *msg)
 {
     raleighfs_object_plug_t *plug;
-    z_stream_t stream;
+    z_message_stream_t stream;
     uint8_t uuid[16];
 
     z_message_request_stream(msg, &stream);
-    z_stream_read(&stream, uuid, 16);
+    z_stream_read(Z_STREAM(&stream), uuid, 16);
 
     if ((plug = __object_plugin_lookup(fs, uuid)) == NULL)
         return(RALEIGHFS_ERRNO_PLUGIN_NOT_LOADED);
@@ -231,20 +232,18 @@ static raleighfs_errno_t __exec_semantic_create (raleighfs_t *fs,
 }
 
 static raleighfs_errno_t __exec_semantic_rename (raleighfs_t *fs,
-                                                 const z_rdata_t *name,
+                                                 const z_slice_t *name,
                                                  z_message_t *msg)
 {
-    z_stream_extent_t extent;
-    z_rdata_t new_name;
-    z_stream_t stream;
+    z_message_stream_t stream;
+    z_stream_slice_t new_name;
     uint32_t length;
 
     z_message_request_stream(msg, &stream);
-    z_stream_read_uint32(&stream, &length);
-    z_stream_set_extent(&stream, &extent, 4, length);
+    z_stream_read_uint32(Z_STREAM(&stream), &length);
+    z_stream_slice(&new_name, Z_STREAM(&stream), 4, length);
 
-    z_rdata_from_stream(&new_name, &extent);
-    return(raleighfs_semantic_rename(fs, name, &new_name));
+    return(raleighfs_semantic_rename(fs, name, Z_SLICE(&new_name)));
 }
 
 static void __raleighfs_exec_semantic (raleighfs_t *fs, z_message_t *msg) {

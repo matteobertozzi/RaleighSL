@@ -88,11 +88,11 @@ static raleighfs_errno_t __object_query (raleighfs_t *fs,
                                          z_message_t *msg)
 {
     counter_t *counter = __COUNTER(object);
-    z_stream_t stream;
+    z_message_stream_t stream;
 
     z_message_response_stream(msg, &stream);
-    z_stream_write_uint64(&stream, counter->value);
-    z_stream_write_uint64(&stream, counter->cas);
+    z_stream_write_uint64(Z_STREAM(&stream), counter->value);
+    z_stream_write_uint64(Z_STREAM(&stream), counter->cas);
 
     return(RALEIGHFS_ERRNO_NONE);
 }
@@ -102,12 +102,12 @@ static raleighfs_errno_t __object_update (raleighfs_t *fs,
                                           z_message_t *msg)
 {
     counter_t *counter = __COUNTER(object);
-    z_stream_t stream;
+    z_message_stream_t stream;
     uint64_t value;
     uint64_t cas;
 
     z_message_request_stream(msg, &stream);
-    z_stream_read_uint64(&stream, &value);
+    z_stream_read_uint64(Z_STREAM(&stream), &value);
 
     switch (z_message_type(msg)) {
         case RALEIGHFS_COUNTER_SET:
@@ -115,7 +115,7 @@ static raleighfs_errno_t __object_update (raleighfs_t *fs,
             counter->cas++;
             break;
         case RALEIGHFS_COUNTER_CAS:
-            z_stream_read_uint64(&stream, &cas);
+            z_stream_read_uint64(Z_STREAM(&stream), &cas);
             if (counter->cas == cas) {
                 counter->value = value;
                 counter->cas++;
@@ -133,8 +133,8 @@ static raleighfs_errno_t __object_update (raleighfs_t *fs,
 
     /* Fill response */
     z_message_response_stream(msg, &stream);
-    z_stream_write_uint64(&stream, counter->value);
-    z_stream_write_uint64(&stream, counter->cas);
+    z_stream_write_uint64(Z_STREAM(&stream), counter->value);
+    z_stream_write_uint64(Z_STREAM(&stream), counter->cas);
 
     return(RALEIGHFS_ERRNO_NONE);
 }

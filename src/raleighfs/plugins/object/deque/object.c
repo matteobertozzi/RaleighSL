@@ -14,6 +14,8 @@
  *   limitations under the License.
  */
 
+#include <zcl/streamslice.h>
+
 #include "deque_p.h"
 #include "deque.h"
 
@@ -74,22 +76,22 @@ static raleighfs_errno_t __object_query (raleighfs_t *fs,
                                          raleighfs_object_t *object,
                                          z_message_t *msg)
 {
+    z_message_stream_t stream;
     deque_object_t *dobj;
-    z_stream_t stream;
 
     z_message_response_stream(msg, &stream);
 
     switch (z_message_type(msg)) {
         case RALEIGHFS_DEQUE_GET_BACK:
             dobj = deque_get_back(__DEQUE(object));
-            __serialize_deque_object(&stream, dobj);
+            __serialize_deque_object(Z_STREAM(&stream), dobj);
             break;
         case RALEIGHFS_DEQUE_GET_FRONT:
             dobj = deque_get_front(__DEQUE(object));
-            __serialize_deque_object(&stream, dobj);
+            __serialize_deque_object(Z_STREAM(&stream), dobj);
             break;
         case RALEIGHFS_DEQUE_LENGTH:
-            z_stream_write_uint64(&stream, __DEQUE(object)->length);
+            z_stream_write_uint64(Z_STREAM(&stream), __DEQUE(object)->length);
             break;
         case RALEIGHFS_DEQUE_STATS:
             break;
@@ -103,21 +105,21 @@ static raleighfs_errno_t __object_insert (raleighfs_t *fs,
                                           raleighfs_object_t *object,
                                           z_message_t *msg)
 {
-    z_stream_extent_t value;
+    z_message_stream_t stream;
     raleighfs_errno_t errno;
-    z_stream_t stream;
+    z_stream_slice_t value;
     uint32_t vlength;
 
     z_message_request_stream(msg, &stream);
-    z_stream_read_uint32(&stream, &vlength);
-    z_stream_set_extent(&stream, &value, 4, vlength);
+    z_stream_read_uint32(Z_STREAM(&stream), &vlength);
+    z_stream_slice(&value, Z_STREAM(&stream), 4, vlength);
 
     switch (z_message_type(msg)) {
         case RALEIGHFS_DEQUE_PUSH_BACK:
-            errno = deque_push_back(__DEQUE(object), &value);
+            errno = deque_push_back(__DEQUE(object), Z_SLICE(&value));
             break;
         case RALEIGHFS_DEQUE_PUSH_FRONT:
-            errno = deque_push_front(__DEQUE(object), &value);
+            errno = deque_push_front(__DEQUE(object), Z_SLICE(&value));
             break;
         default:
             errno = RALEIGHFS_ERRNO_NOT_IMPLEMENTED;
@@ -132,8 +134,8 @@ static raleighfs_errno_t __object_remove (raleighfs_t *fs,
                                           raleighfs_object_t *object,
                                           z_message_t *msg)
 {
+    z_message_stream_t stream;
     deque_object_t *dobj;
-    z_stream_t stream;
 
     z_message_response_stream(msg, &stream);
 
@@ -146,12 +148,12 @@ static raleighfs_errno_t __object_remove (raleighfs_t *fs,
             break;
         case RALEIGHFS_DEQUE_POP_FRONT:
             dobj = deque_pop_front(__DEQUE(object));
-            __serialize_deque_object(&stream, dobj);
+            __serialize_deque_object(Z_STREAM(&stream), dobj);
             if (dobj != NULL) deque_object_free(z_object_memory(fs), dobj);
             break;
         case RALEIGHFS_DEQUE_POP_BACK:
             dobj = deque_pop_back(__DEQUE(object));
-            __serialize_deque_object(&stream, dobj);
+            __serialize_deque_object(Z_STREAM(&stream), dobj);
             if (dobj != NULL) deque_object_free(z_object_memory(fs), dobj);
             break;
         case RALEIGHFS_DEQUE_CLEAR:

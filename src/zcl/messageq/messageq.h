@@ -22,15 +22,18 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/object.h>
 #include <zcl/stream.h>
+#include <zcl/chunkq.h>
 #include <zcl/types.h>
-#include <zcl/rdata.h>
+#include <zcl/slice.h>
 
 Z_TYPEDEF_STRUCT(z_message_source)
+Z_TYPEDEF_STRUCT(z_message_stream)
 Z_TYPEDEF_STRUCT(z_messageq_plug)
 Z_TYPEDEF_STRUCT(z_messageq)
 Z_TYPEDEF_STRUCT(z_message)
 
 #define Z_MESSAGE_SOURCE(x)                     Z_CAST(z_message_source_t, x)
+#define Z_MESSAGE_STREAM(x)                     Z_CAST(z_message_stream_t, x)
 #define Z_MESSAGEQ(x)                           Z_CAST(z_messageq_t, x)
 #define Z_MESSAGE(x)                            Z_CAST(z_message_t, x)
 
@@ -64,10 +67,17 @@ struct z_messageq_plug {
     int     (*init)     (z_messageq_t *messageq);
     void    (*uninit)   (z_messageq_t *messageq);
     int     (*send)     (z_messageq_t *messageq, 
-                         const z_rdata_t *object,
+                         const z_slice_t *object,
                          z_message_t *message);
     void    (*yield)    (z_messageq_t *messageq, 
                          z_message_t *message);
+};
+
+struct z_message_stream {
+    z_stream_t __base_type__;
+    z_message_t *message;
+    z_chunkq_t *chunkq;
+    unsigned int offset;
 };
 
 struct z_messageq {
@@ -104,7 +114,7 @@ z_message_t *       z_message_alloc             (z_message_source_t *source,
 void                z_message_free              (z_message_t *message);
 
 int                 z_message_send              (z_message_t *message,
-                                                 const z_rdata_t *object_name,
+                                                 const z_slice_t *object_name,
                                                  z_message_func_t callback,
                                                  void *user_data);
 void                z_message_yield             (z_message_t *message);
@@ -118,7 +128,7 @@ void                z_message_set_sub_task      (z_message_t *message,
                                                  void *data);
 void                z_message_unset_sub_task    (z_message_t *message);
 
-const z_rdata_t *   z_message_object            (z_message_t *message);
+const z_slice_t *   z_message_object            (z_message_t *message);
 z_message_source_t *z_message_source            (z_message_t *message);
 z_messageq_t *      z_message_queue             (z_message_t *message);
 unsigned int        z_message_flags             (z_message_t *message);
@@ -132,9 +142,9 @@ void                z_message_set_state         (z_message_t *message,
                                                  unsigned int state);
 
 int                 z_message_request_stream    (z_message_t *message,
-                                                 z_stream_t *stream);
+                                                 z_message_stream_t *stream);
 int                 z_message_response_stream   (z_message_t *message,
-                                                 z_stream_t *stream);
+                                                 z_message_stream_t *stream);
 
 __Z_END_DECLS__
 

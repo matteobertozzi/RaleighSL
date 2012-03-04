@@ -290,25 +290,8 @@ int z_rpc_writev (z_rpc_client_t *client,
     return(0);
 }
 
-int z_rpc_write_chunk (z_rpc_client_t *client,
-                       const z_chunkq_extent_t *extent)
-{
-    z_rdata_t rdata;
-    z_rdata_from_chunkq(&rdata, extent);
-    z_chunkq_append_rdata(&(client->wrbuffer), &rdata);
-
-    z_iopoll_entity_set_writeable(client->server->iopoll,
-                                  Z_IOPOLL_ENTITY(client), 1);
-    return(0);
-}
-
-int z_rpc_write_stream (z_rpc_client_t *client,
-                        const z_stream_extent_t *extent)
-{
-    z_rdata_t rdata;
-    z_rdata_from_stream(&rdata, extent);
-    z_chunkq_append_rdata(&(client->wrbuffer), &rdata);
-
+int z_rpc_write_slice (z_rpc_client_t *client, const z_slice_t *slice) {
+    z_chunkq_append_slice(&(client->wrbuffer), slice);
     z_iopoll_entity_set_writeable(client->server->iopoll,
                                   Z_IOPOLL_ENTITY(client), 1);
     return(0);

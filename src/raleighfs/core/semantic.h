@@ -21,14 +21,14 @@
 
 raleighfs_errno_t   raleighfs_semantic_touch    (raleighfs_t *fs,
                                                  raleighfs_object_plug_t *plug,
-                                                 const z_rdata_t *blob);
+                                                 const z_slice_t *blob);
 raleighfs_errno_t   raleighfs_semantic_create   (raleighfs_t *fs,
                                                  raleighfs_object_t *object,
                                                  raleighfs_object_plug_t *plug,
-                                                 const z_rdata_t *name);
+                                                 const z_slice_t *name);
 raleighfs_errno_t   raleighfs_semantic_open     (raleighfs_t *fs,
                                                  raleighfs_object_t *object,
-                                                 const z_rdata_t *name);
+                                                 const z_slice_t *name);
 raleighfs_errno_t   raleighfs_semantic_close    (raleighfs_t *fs,
                                                  raleighfs_object_t *object);
 raleighfs_errno_t   raleighfs_semantic_sync     (raleighfs_t *fs,
@@ -37,11 +37,11 @@ raleighfs_errno_t   raleighfs_semantic_unlink   (raleighfs_t *fs,
                                                  raleighfs_object_t *object);
 
 raleighfs_errno_t   raleighfs_semantic_exists   (raleighfs_t *fs,
-                                                 const z_rdata_t *name);
+                                                 const z_slice_t *name);
 
 raleighfs_errno_t   raleighfs_semantic_rename   (raleighfs_t *fs,
-                                                 const z_rdata_t *old_name,
-                                                 const z_rdata_t *new_name);
+                                                 const z_slice_t *old_name,
+                                                 const z_slice_t *new_name);
 
 #endif /* !_RALEIGHFS_SEMANTIC_H_ */
 

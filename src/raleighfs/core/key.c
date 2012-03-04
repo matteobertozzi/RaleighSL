@@ -22,7 +22,7 @@
 
 raleighfs_errno_t raleighfs_key_object (raleighfs_t *fs,
                                         raleighfs_key_t *key,
-                                        const z_rdata_t *name)
+                                        const z_slice_t *name)
 {
     return(__key_call_required(fs, object, key, name));
 }

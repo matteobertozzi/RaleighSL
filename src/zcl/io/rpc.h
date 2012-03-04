@@ -22,6 +22,7 @@ __Z_BEGIN_DECLS__
 
 #include <sys/uio.h>
 
+#include <zcl/streamslice.h>
 #include <zcl/iopoll.h>
 #include <zcl/chunkq.h>
 #include <zcl/stream.h>
@@ -78,10 +79,8 @@ int             z_rpc_write           (z_rpc_client_t *client,
 int             z_rpc_writev          (z_rpc_client_t *client,
                                        const struct iovec *iov,
                                        unsigned int iovecnt);
-int             z_rpc_write_chunk     (z_rpc_client_t *client,
-                                       const z_chunkq_extent_t *extent);
-int             z_rpc_write_stream    (z_rpc_client_t *client,
-                                       const z_stream_extent_t *extent);
+int             z_rpc_write_slice     (z_rpc_client_t *client,
+                                       const z_slice_t *slice);
 int             z_rpc_write_newline   (z_rpc_client_t *client);
 
 int             z_rpc_tokenize        (z_rpc_client_t *client,

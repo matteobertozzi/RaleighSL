@@ -52,7 +52,7 @@ void deque_clear (deque_t *deque) {
 }
 
 raleighfs_errno_t deque_push_back (deque_t *deque,
-                                   const z_stream_extent_t *value)
+                                   const z_slice_t *value)
 {
     deque_object_t *dobject;
     z_memory_t *memory;
@@ -67,12 +67,12 @@ raleighfs_errno_t deque_push_back (deque_t *deque,
     }
 
     deque->length++;
-    deque->size += value->length;
+    deque->size += z_slice_length(value);
     return(RALEIGHFS_ERRNO_NONE);
 }
 
 raleighfs_errno_t deque_push_front (deque_t *deque,
-                                    const z_stream_extent_t *value)
+                                    const z_slice_t *value)
 {
     deque_object_t *dobject;
     z_memory_t *memory;
@@ -87,7 +87,7 @@ raleighfs_errno_t deque_push_front (deque_t *deque,
     }
 
     deque->length++;
-    deque->size += value->length;
+    deque->size += z_slice_length(value);
     return(RALEIGHFS_ERRNO_NONE);
 }
 
@@ -141,15 +141,16 @@ int deque_remove_back (deque_t *deque) {
 
 
 deque_object_t *deque_object_alloc (z_memory_t *memory,
-                                    const z_stream_extent_t *value)
+                                    const z_slice_t *value)
 {
+    unsigned int vlength = z_slice_length(value);
     deque_object_t *obj;
     unsigned int size;
 
-    size = sizeof(deque_object_t) + (value->length - 1);
+    size = sizeof(deque_object_t) + (vlength - 1);
     if ((obj = z_memory_block_alloc(memory, deque_object_t, size)) != NULL) {
-        obj->length = value->length;
-        z_stream_read_extent(value, obj->data);
+        obj->length = vlength;
+        z_slice_copy_all(value, obj->data);
     }
 
     return(obj);
