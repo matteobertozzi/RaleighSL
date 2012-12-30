@@ -1,5 +1,5 @@
 /*
- *   Copyright 2011-2012 Matteo Bertozzi
+ *   Copyright 2011-2013 Matteo Bertozzi
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ struct z_free_list {
     z_free_list_node_t *head;
 };
 
+#define   z_free_list_init(self)  (self)->head = NULL
 void      z_free_list_add         (z_free_list_t *self,
                                    void *memory);
 void      z_free_list_add_sized   (z_free_list_t *self,

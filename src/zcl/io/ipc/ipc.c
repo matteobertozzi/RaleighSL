@@ -1,5 +1,5 @@
 /*
- *   Copyright 2011-2012 Matteo Bertozzi
+ *   Copyright 2011-2013 Matteo Bertozzi
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
+
 #include <unistd.h>
 
 #include <zcl/ipc.h>
@@ -20,7 +21,7 @@
 
 static const z_vtable_iopoll_entity_t __ipc_server_vtable;
 static const z_vtable_iopoll_entity_t __ipc_client_vtable;
-
+#include <stdio.h>
 /* ============================================================================
  *  RPC client iopoll entity
  */

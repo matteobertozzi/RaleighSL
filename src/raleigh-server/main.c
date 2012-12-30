@@ -1,5 +1,5 @@
 /*
- *   Copyright 2011-2012 Matteo Bertozzi
+ *   Copyright 2011-2013 Matteo Bertozzi
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -48,9 +48,11 @@ int main (int argc, char **argv) {
 
   /* Setup RPC plugins */
   z_ipc_echo_plug(&memory, &iopoll, NULL, "11214", NULL);
+  z_ipc_redis_plug(&memory, &iopoll, NULL, "11216", NULL);
+  z_ipc_raleighfs_plug(&memory, &iopoll, NULL, "11215", NULL);
 
   /* Start spinning... */
-  z_iopoll_poll(&iopoll, &__is_running, -1);
+  z_iopoll_poll(&iopoll, &__is_running, 1000);
 
   /* ...and we're done */
   z_iopoll_close(&iopoll);

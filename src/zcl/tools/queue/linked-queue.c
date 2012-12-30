@@ -1,5 +1,5 @@
 /*
- *   Copyright 2011-2012 Matteo Bertozzi
+ *   Copyright 2011-2013 Matteo Bertozzi
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -164,7 +164,7 @@ z_linked_queue_t *z_linked_queue_alloc (z_linked_queue_t *self,
                                         z_mem_free_t data_free,
                                         void *user_data)
 {
-    return(z_object_alloc(self, &__linked_queue_interfaces, memory, 
+    return(z_object_alloc(self, &__linked_queue_interfaces, memory,
                           data_free, user_data));
 }
 

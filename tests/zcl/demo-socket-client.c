@@ -6,7 +6,9 @@ int main (int argc, char **argv) {
     int sock;
     int i;
 
-    sock = z_socket_unix_connect("benedikte");
+    if ((sock = z_socket_unix_connect("localhost")) < 0)
+        return(1);
+
     z_socket_tcp_set_nodelay(sock);
     for (i = 0; i < 100000; ++i) {
         n = write(sock, "Test 0\n", 7);

@@ -34,7 +34,7 @@ static int __client_read (z_ipc_client_t *client) {
         }
     }
 
-    z_iopoll_set_writable(client->server->iopoll, Z_IOPOLL_ENTITY(client), 1);
+    z_ipc_client_set_writable(client, 1);
     return(0);
 }
 
@@ -51,7 +51,7 @@ static int __client_write (z_ipc_client_t *client) {
         }
     }
 
-    z_iopoll_set_writable(client->server->iopoll, Z_IOPOLL_ENTITY(client), 0);
+    z_ipc_client_set_writable(client, 0);
     return(0);
 }
 

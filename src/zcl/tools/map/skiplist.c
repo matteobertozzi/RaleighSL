@@ -1,5 +1,5 @@
 /*
- *   Copyright 2011-2012 Matteo Bertozzi
+ *   Copyright 2011-2013 Matteo Bertozzi
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -555,7 +555,7 @@ z_skip_list_t *z_skip_list_alloc (z_skip_list_t *self,
                                   void *user_data,
                                   unsigned int seed)
 {
-    return(z_object_alloc(self, &__skip_list_interfaces, memory, 
+    return(z_object_alloc(self, &__skip_list_interfaces, memory,
                           key_compare, data_free, user_data, seed));
 }
 

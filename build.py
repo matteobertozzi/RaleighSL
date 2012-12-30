@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-#   Copyright 2011 Matteo Bertozzi
+#   Copyright 2011-2013 Matteo Bertozzi
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -392,7 +392,7 @@ class BuildConfig(Build):
         try:
             self.compileFile(filename, dump_error=dump_error)
             self.linkFile(filename, dump_error=dump_error)
-        except Exception, e:
+        except Exception:
             msg_write(' [!!]', filename)
             raise Exception('Config Test %s failed' % filename)
 
@@ -585,7 +585,7 @@ if __name__ == '__main__':
 
     NO_OUTPUT = options.no_output
 
-    DEFAULT_CFLAGS = ['-Wall', '-Wmissing-field-initializers', '-msse4.2']
+    DEFAULT_CFLAGS = ['-Wall', '-Wmissing-field-initializers', '-msse4.2'] #, '-mcx16']
     DEFAULT_RELEASE_CFLAGS = ['-O2']
     DEFAULT_DEBUG_CFLAGS = ['-g']
     DEFAULT_DEFINES = ['-D_GNU_SOURCE', '-D__USE_FILE_OFFSET64']
@@ -656,7 +656,8 @@ if __name__ == '__main__':
 
             build = BuildMiniTools('zcl-test', ['tests/zcl'], options=build_opts)
             tools = build.build()
-            #build.runTools('LibZCL Test', tools, verbose=options.verbose)
+            tools = [t for t in tools if os.path.basename(t).startswith('test-')]
+            build.runTools('LibZCL Test', tools, verbose=options.verbose)
 
     def buildFs():
         build_opts = default_lib_opts.clone()
@@ -700,6 +701,7 @@ if __name__ == '__main__':
 
             build = BuildMiniTools('raleighfs-test', ['tests/raleighfs'], options=build_opts)
             tools = build.build()
+            tools = [t for t in tools if os.path.basename(t).startswith('test-')]
             build.runTools('RaleighFS Test', tools, verbose=options.verbose)
 
     def buildServer():

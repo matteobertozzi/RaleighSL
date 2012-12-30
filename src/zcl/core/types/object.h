@@ -1,5 +1,5 @@
 /*
- *   Copyright 2011-2012 Matteo Bertozzi
+ *   Copyright 2011-2013 Matteo Bertozzi
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -53,6 +53,9 @@ struct z_object {
 
 #define z_object_block_alloc(obj, type, size)                           \
   z_memory_alloc(z_object_memory(obj), type, size)
+
+#define z_object_block_realloc(obj, type, ptr, size)                    \
+  z_memory_realloc(z_object_memory(obj), type, ptr, size)
 
 #define z_object_block_free(obj, ptr)                                   \
   z_memory_free(z_object_memory(obj), ptr)

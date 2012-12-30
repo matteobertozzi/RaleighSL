@@ -1,5 +1,5 @@
 /*
- *   Copyright 2011-2012 Matteo Bertozzi
+ *   Copyright 2011-2013 Matteo Bertozzi
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -45,40 +45,4 @@ int z_memsearch_u8 (const uint8_t *src,
     } while (src_len > 0);
 
     return(1);
-}
-
-int z_memsearch_step_u8 (const uint8_t *src,
-                         size_t src_len,
-                         const uint8_t *needle,
-                         size_t needle_len,
-                         z_extent_t *extent)
-{
-    size_t length;
-
-    /* Find the next chunk */
-    if (extent->length > 0) {
-        needle += extent->length;
-        needle_len -= extent->length;
-
-        length = z_min(src_len, needle_len);
-        if (!memcmp(src, needle, length)) {
-            extent->length += length;
-            return(!!(needle_len - length));
-        }
-
-        extent->length = 0;
-        needle -= extent->length;
-        needle_len += extent->length;
-    }
-
-    /* Find the first chunk */
-    length = extent->offset;
-    if (z_memsearch_u8(src, src_len, needle, needle_len, extent)) {
-        extent->offset = length + src_len;
-        extent->length = 0;
-    } else {
-        extent->offset += length;
-    }
-
-    return(!!(extent->length - needle_len));
 }

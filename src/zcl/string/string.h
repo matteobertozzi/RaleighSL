@@ -1,5 +1,5 @@
 /*
- *   Copyright 2011-2012 Matteo Bertozzi
+ *   Copyright 2011-2013 Matteo Bertozzi
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -38,21 +38,11 @@ __Z_BEGIN_DECLS__
     z_memsearch_u8(Z_CONST_UINT8(src), src_len,                             \
                    Z_CONST_UINT8(needle), needle_len, extent)
 
-#define z_memsearch_step(src, src_len, needle, needle_len, extent)          \
-    z_memsearch_step_u8(Z_CONST_UINT8(src), src_len,                        \
-                        Z_CONST_UINT8(needle), needle_len, extent)
-
 int z_memsearch_u8 (const uint8_t *src,
                     size_t src_len,
                     const uint8_t *needle,
                     size_t needle_len,
                     z_extent_t *extent);
-
-int z_memsearch_step_u8 (const uint8_t *src,
-                         size_t src_len,
-                         const uint8_t *needle,
-                         size_t needle_len,
-                         z_extent_t *extent);
 
 #define z_strcmp          strcmp
 #define z_strlen          strlen

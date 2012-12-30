@@ -1,5 +1,5 @@
 /*
- *   Copyright 2011-2012 Matteo Bertozzi
+ *   Copyright 2011-2013 Matteo Bertozzi
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -201,6 +201,60 @@ static void __iobuf_dtor (void *self) {
 }
 
 /* ===========================================================================
+ *  INTERFACE Reader methods
+ */
+static int __iobuf_reader_open (void *self, const void *object) {
+    z_iobuf_reader_t *reader = Z_IOBUF_READER(self);
+    const z_iobuf_t *iobuf = Z_CONST_IOBUF(object);
+    Z_READER_INIT(reader, iobuf);
+    reader->node = iobuf->head;
+    reader->offset = 0;
+    return(0);
+}
+
+static void __iobuf_reader_close (void *self) {
+}
+
+static size_t __iobuf_reader_next (void *self, uint8_t **data) {
+    const z_iobuf_t *iobuf = Z_READER_READABLE(z_iobuf_t, self);
+    z_iobuf_reader_t *reader = Z_IOBUF_READER(self);
+    z_iobuf_node_t *node = reader->node;
+    size_t n;
+
+    if (node == NULL)
+        return(0);
+
+    if (node->next == NULL) {
+        n = __iobuf_total_size(iobuf) & (__iobuf_block(iobuf) - 1);
+    } else {
+        n = __iobuf_block(iobuf);
+    }
+
+    if (reader->offset < n) {
+        *data = node->data + reader->offset;
+        n -= reader->offset;
+        reader->offset += n;
+        return(n);
+    }
+
+    if ((reader->node = node->next) == NULL)
+        return(0);
+
+    reader->offset = n;
+    *data = node->data;
+    return(n);
+}
+
+static void __iobuf_reader_backup (void *self, size_t count) {
+    z_iobuf_reader_t *reader = Z_IOBUF_READER(self);
+    reader->offset -= count;
+}
+
+static size_t __iobuf_reader_available (void *self) {
+    return(Z_READER_READABLE(z_iobuf_t, self)->length);
+}
+
+/* ===========================================================================
  *  I/O Buf vtables
  */
 static const z_vtable_type_t __iobuf_type = {
@@ -210,8 +264,17 @@ static const z_vtable_type_t __iobuf_type = {
     .dtor = __iobuf_dtor,
 };
 
+static const z_vtable_reader_t __iobuf_reader = {
+    .open       = __iobuf_reader_open,
+    .close      = __iobuf_reader_close,
+    .next       = __iobuf_reader_next,
+    .backup     = __iobuf_reader_backup,
+    .available  = __iobuf_reader_available,
+};
+
 static const z_iobuf_interfaces_t __iobuf_interfaces = {
     .type       = &__iobuf_type,
+    .reader     = &__iobuf_reader,
 };
 
 /* ===========================================================================
