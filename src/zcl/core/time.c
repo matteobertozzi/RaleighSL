@@ -21,6 +21,7 @@
 
 #define __NSEC_PER_SEC         ((uint64_t)1000000000U)
 #define __NSEC_PER_USEC        ((uint64_t)1000U)
+#define __MSEC_PER_USEC        ((uint64_t)1000U)
 #define __USEC_PER_SEC         ((uint64_t)1000000U)
 #define __MSEC_PER_SEC         ((uint64_t)1000U)
 
@@ -66,6 +67,10 @@ void z_timer_stop (z_timer_t *timer) {
 
 uint64_t z_timer_micros (const z_timer_t *timer) {
     return(timer->end - timer->start);
+}
+
+uint64_t z_timer_millis (const z_timer_t *timer) {
+    return((timer->end - timer->start) / __MSEC_PER_USEC);
 }
 
 float z_timer_secs (const z_timer_t *timer) {

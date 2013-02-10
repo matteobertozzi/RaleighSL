@@ -26,6 +26,12 @@ __Z_BEGIN_DECLS__
 unsigned int  z_uint32_bytes      (uint32_t value);
 unsigned int  z_uint64_bytes      (uint64_t value);
 
+/* Encode/Decode varint */
+int           z_encode_vint       (unsigned char *buf, uint64_t value);
+int           z_decode_vint       (const unsigned char *buf,
+                                   unsigned int buflen,
+                                   uint64_t *value);
+
 /* Encode/Decode int */
 void          z_encode_uint       (unsigned char *buf,
                                    unsigned int length,

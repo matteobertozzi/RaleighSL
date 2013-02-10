@@ -83,7 +83,7 @@ int main (int argc, char **argv) {
   z_system_memory_init(&memory);
 
   /* Initialize I/O Poll */
-  if (z_iopoll_open(&iopoll, NULL)) {
+  if (z_iopoll_open(&iopoll, &memory, NULL)) {
       fprintf(stderr, "z_iopoll_open(): failed\n");
       return(1);
   }

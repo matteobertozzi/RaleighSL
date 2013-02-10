@@ -14,101 +14,23 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from contextlib import contextmanager
-from time import time
-
-import socket
-
+from netclient import NetIOClientWrapper
 import coding
 
-class INetClient(object):
-    def connect(self, host, port):
-        raise NotImplementedError
-
-    def disconnect(self):
-        raise NotImplementedError
-
-    @contextmanager
-    def connection(self, host, port):
-        self.connect(host, port)
-        try:
-            yield
-        finally:
-            self.disconnect()
-
-class NetClient(INetClient):
-    def __init__(self):
-        self._sock = None
-
-    def connect(self, host, port):
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
-        self._sock.connect((host, port))
-
-    def disconnect(self):
-        self._sock.close()
-        self._sock = None
-
+class IpcRpcClient(NetIOClientWrapper):
     def send(self, data):
-        #return self._sock.send(data)
-        return self._sock.sendall(data)
-
-    def recv(self, length=8192):
-        return self._sock.recv(length)
-
-    def recvFully(self, length):
-        data = []
-        while length > 0:
-            chunk = self._sock.recv(length)
-            length -= len(chunk)
-            data.append(chunk)
-        return ''.join(data)
-
-class RaleighFS(INetClient):
-    def __init__(self):
-        self._client = NetClient()
-        self._ibuf = bytearray()
-        self._txbytes = 0
-        self._rxbytes = 0
-        self._online = 0
-
-    def connect(self, host, port):
-        self._client.connect(host, port)
-        self._online = time()
-
-    def disconnect(self):
-        t = time() - self._online
-        self._client.disconnect()
-
-        print 'tx %s %s/sec' % (humanSize(self._txbytes), humanSize(self._txbytes / t))
-        print 'rx %s %s/sec' % (humanSize(self._rxbytes), humanSize(self._rxbytes / t))
-
-    def send(self, msgid, data):
-        assert len(data), 'Message data must be at least 1 byte!'
-        buf = str(coding.z_encode_field(msgid, len(data))) + data
-        self._client.send(buf)
-        self._txbytes += len(buf)
-        return len(buf)
+        buf = str(coding.z_encode_vint(len(data))) + data
+        return self._client.send(buf)
 
     def recv(self):
-        data = self._client.recv()
-        self._ibuf.extend(bytearray(data))
-        self._rxbytes += len(data)
-        ibuf = self._ibuf
-
+        ibuf = self._client.fetch()
         while len(ibuf) > 0:
-            elen, field_id, length = coding.z_decode_field(ibuf)
+            #elen, field_id, length = coding.z_decode_field(ibuf)
+            elen, length = coding.z_decode_vint(ibuf)
             if elen < 0: break
-            yield field_id, ibuf[elen:elen+length]
-            self._ibuf = ibuf[elen+length:]
-            ibuf = self._ibuf
+            data = self._client.pop(elen + length)
+            yield data[elen:]
+            ibuf = self._client.fetch()
 
-def humanSize(size):
-    hs = ('KiB', 'MiB', 'GiB', 'TiB', 'PiB')
-    count = len(hs)
-    while count > 0:
-        ref = float(1 << (count * 10))
-        count -= 1
-        if size >= ref:
-            return '%.2f%s' % (size / ref, hs[count])
-    return '%dbytes' % size
+class RaleighFS(IpcRpcClient):
+    pass

@@ -38,8 +38,16 @@ struct raleighfs_client {
     uint16_t field_id;
 };
 
+struct stats_client {
+    __Z_IPC_CLIENT__
+    z_ipc_msgbuf_t imsgbuf;
+    z_iobuf_t obuffer;
+};
+
+
 extern const z_ipc_protocol_t echo_protocol;
 extern const z_ipc_protocol_t redis_protocol;
+extern const z_ipc_protocol_t stats_protocol;
 extern const z_ipc_protocol_t raleighfs_protocol;
 
 #define z_ipc_echo_plug(memory, iopoll, address, service, udata)              \
@@ -52,6 +60,10 @@ extern const z_ipc_protocol_t raleighfs_protocol;
 
 #define z_ipc_raleighfs_plug(memory, iopoll, address, service, udata)         \
     z_ipc_plug(memory, iopoll, &raleighfs_protocol, struct raleighfs_client,  \
+        address, service, udata)
+
+#define z_ipc_stats_plug(memory, iopoll, address, service, udata)             \
+    z_ipc_plug(memory, iopoll, &stats_protocol, struct stats_client,          \
         address, service, udata)
 
 #endif /* !_RALEIGH_SERVER_H_ */

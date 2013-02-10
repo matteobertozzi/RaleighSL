@@ -37,7 +37,7 @@ __Z_BEGIN_DECLS__
 Z_TYPEDEF_STRUCT(z_slice_interfaces)
 Z_TYPEDEF_STRUCT(z_slice_reader)
 Z_TYPEDEF_STRUCT(z_slice_node)
-Z_TYPEDEF_STRUCT(z_slice)
+//Z_TYPEDEF_STRUCT(z_slice)
 
 struct z_slice_interfaces {
     Z_IMPLEMENT_TYPE

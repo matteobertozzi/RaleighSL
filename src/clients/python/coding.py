@@ -113,6 +113,30 @@ def z_decode_field(buf):
 
     return elength, field_id, length
 
+def z_encode_vint(value):
+  data = bytearray()
+  bits = value & 0x7f
+  value >>= 7
+  while value != 0:
+    data.append(0x80 | bits)
+    bits = value & 0x7f
+    value >>= 7
+  data.append(bits)
+  return data
+
+def z_decode_vint(buf):
+  result = 0
+  index = 0
+  for shift in xrange(0, 64, 7):
+    b = buf[index]
+    index += 1
+    if (b & 128) != 0:
+      result |= (b & 0x7f) << shift
+    else:
+      result |= (b << shift)
+      return index, result
+  return -1, None
+
 if __name__ == '__main__':
   for i in xrange(100):
     buf = z_encode_field(i, 1 + i * 2)
@@ -120,3 +144,4 @@ if __name__ == '__main__':
     assert len(buf) == elen, (len(buf), elen)
     assert field_id == i, (field_id, i)
     assert length == (1 + i * 2), (length, (1 + i * 2))
+

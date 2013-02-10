@@ -18,7 +18,9 @@ import sys
 
 from time import time, sleep
 
-from raleighfs import NetClient, RaleighFS, humanSize
+from raleighfs import RaleighFS
+from netclient import humanSize
+from iopoll import IOPoll
 import coding
 
 def dump_stat(total_bytes, time):
@@ -54,19 +56,34 @@ def test_cross_tag(client):
   buf += str(coding.z_encode_field(27, 28)) + 'y' * (28)
   client.send(''.join(buf))
 
+def encodeVarint(value):
+  data = bytearray()
+  bits = value & 0x7f
+  value >>= 7
+  while value != 0:
+    data.append(0x80 | bits)
+    bits = value & 0x7f
+    value >>= 7
+  data.append(bits)
+  return data
+
 if __name__ == '__main__':
-  if 1:
+  iopoll = IOPoll()
+  iopoll.start()
+  try:
     client = RaleighFS()
     with client.connection('127.0.0.1', 11215):
-      for i in xrange(3000):
-        client.send(i, 'x' * (i + 1))
-        for field_id, data in client.recv():
-          #print field_id, data
-          pass
-      #sleep(5)
-  else:
-    client = NetClient()
-    with client.connection('127.0.0.1', 11215):
-      #test_cross_tag(client)
-      test(client)
-      sleep(5)
+      iopoll.add(client)
+      for i in xrange(16):
+        client.send('x' * (i + 1))
+        count = 0
+        while count < 1:
+          for data in client.recv():
+            print 'data=', len(data), data
+            count += 1
+      for i in xrange(10):
+        sleep(5)
+  except KeyboardInterrupt:
+    pass
+  finally:
+    iopoll.stop()

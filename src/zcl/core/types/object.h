@@ -66,6 +66,15 @@ struct z_object {
 #define z_object_struct_free(obj, type, ptr)                            \
     z_memory_struct_free(z_object_memory(obj), type, ptr)
 
+#define z_object_array_alloc(obj, type, n)                                    \
+    z_memory_array_alloc(z_object_memory(obj), type, (n) * sizeof(type))
+
+#define z_object_array_zalloc(obj, type, n)                                   \
+    z_memory_array_zalloc(z_object_memory(obj), type, (n) * sizeof(type))
+
+#define z_object_array_free(obj, ptr)                                         \
+    z_memory_array_free(z_object_memory(obj), ptr)
+
 void *__z_object_alloc  (z_object_t *object,
                          const z_vtable_type_t *type,
                          z_memory_t *memory, ...);

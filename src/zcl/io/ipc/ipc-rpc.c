@@ -155,39 +155,52 @@ int z_ipc_msgbuf_add (z_ipc_msgbuf_t *msgbuf, int fd) {
 
 z_ipc_msg_t *z_ipc_msgbuf_get (z_ipc_msgbuf_t *msgbuf, z_ipc_msg_t *msg) {
     z_ipc_msgbuf_node_t *node;
+    unsigned int shift = 0;
+    unsigned int count = 1;
+    uint64_t size = 0;
+    uint32_t offset;
+
+    node = msgbuf->head;
+    offset = msgbuf->offset;
+    while (node != NULL) {
+        size_t node_size = __msgbuf_node_used(node);
+        while (offset < node_size) {
+            uint64_t b = node->data[offset++];
+            if (b & 128) {
+                size |= (b & 0x7f) << shift;
+            } else {
+                size |= (b << shift);
+                // TODO: Cache it!
+                return(z_ipc_msgbuf_get_at(msgbuf, msg, count, size));
+            }
+            shift += 7;
+            count++;
+        }
+        node = node->next;
+        offset = 0;
+    }
+
+    return(NULL);
+}
+
+z_ipc_msg_t *z_ipc_msgbuf_get_at (z_ipc_msgbuf_t *msgbuf,
+                                  z_ipc_msg_t *msg,
+                                  uint32_t offset,
+                                  uint64_t length)
+{
+    z_ipc_msgbuf_node_t *node;
     unsigned int node_size;
-    uint64_t buf_required;
-    uint64_t flen;
-    uint16_t fid;
-    int elen;
 
     /* Nothing in here, sorry */
-    if ((node = msgbuf->head) == NULL)
+    if ((offset + length) > msgbuf->length)
         return(NULL);
 
+    node = msgbuf->head;
     if ((node_size = (__msgbuf_node_used(node) - msgbuf->offset)) == 0)
         return(NULL);
 
-    Z_BUG_ON(msgbuf->length == 0, "Node with data on a empty buffer!");
-
-    /* Decode the msg header */
-    elen = z_decode_field(node->data + msgbuf->offset, node_size, &fid, &flen);
-    if (elen < 0 && node->next != NULL && node_size < 16) {
-        unsigned char buffer[16];
-        unsigned int next_size;
-        z_memcpy(buffer, node->data + msgbuf->offset, node_size);
-        next_size = z_min(16, msgbuf->length) - node_size;
-        z_memcpy(buffer + node_size, node->next->data, next_size);
-        elen = z_decode_field(buffer, node_size + next_size, &fid, &flen);
-    }
-
-    /* No enough data to decode the field */
-    buf_required = (elen + flen);
-    if (elen < 0 || buf_required > msgbuf->length)
-        return(NULL);
-
     /* Skip tag nodes */
-    while (elen >= node_size) {
+    while (offset >= node_size) {
         z_ipc_msgbuf_node_t *head = node;
 
         /* first node can be skipped, no data here */
@@ -196,33 +209,30 @@ z_ipc_msg_t *z_ipc_msgbuf_get (z_ipc_msgbuf_t *msgbuf, z_ipc_msg_t *msg) {
         msgbuf->head = node;
         msgbuf->offset = 0;
 
-        elen -= node_size;
-        node_size = __msgbuf_node_used(node);
+        offset -= node_size;
+        node_size = (node != NULL) ? __msgbuf_node_used(node) : 1;
     }
 
     /* Update msgbuf size */
-    node_size -= elen;
-    msgbuf->length -= buf_required;
-    msgbuf->offset += elen;
+    node_size -= offset;
+    msgbuf->length -= (offset + length);
+    msgbuf->offset += offset;
+
+    if (length == 0) {
+        fprintf(stderr, "WARN: Message with no content\n");
+        return(NULL);
+    }
 
     /* Initialize the message references */
-    if ((msg = z_ipc_msg_alloc(msg, msgbuf->memory)) == NULL)
+    if ((msg = z_ipc_msg_alloc(msg, msgbuf, msgbuf->offset, length)) == NULL)
         return(NULL);
 
-    msg->msgbuf = msgbuf;
-    msg->head = node;
-    msg->offset = msgbuf->offset;
-    msg->length = flen;
-    msg->blocks = 0;
-    msg->id = fid;
-
     /* Keep a references to the chunks that compose the message */
-    while (1) {
-        z_atomic_inc(&(node->refs));
-        msg->blocks++;
+    do {
+        z_ipc_msg_add_node(msg, node);
 
-        if (flen <= node_size) {
-            msgbuf->offset += flen;
+        if (length <= node_size) {
+            msgbuf->offset += length;
             break;
         }
 
@@ -232,9 +242,9 @@ z_ipc_msg_t *z_ipc_msgbuf_get (z_ipc_msgbuf_t *msgbuf, z_ipc_msg_t *msg) {
         msgbuf->head = node;
         msgbuf->offset = 0;
 
-        flen -= node_size;
+        length -= node_size;
         node_size = __msgbuf_node_used(node);
-    }
+    } while (1);
 
     /* Cleanup if the node is not useful */
     if ((msgbuf->offset + node->available) == __MSGBUF_SIZE) {
@@ -258,7 +268,12 @@ z_ipc_msg_t *z_ipc_msgbuf_get (z_ipc_msgbuf_t *msgbuf, z_ipc_msg_t *msg) {
  *  INTERFACE Type methods
  */
 static int __ipc_msg_ctor (void *self, z_memory_t *memory, va_list args) {
-    /* TODO: use flag16 to store id? */
+    z_ipc_msg_t *msg = Z_IPC_MSG(self);
+    msg->msgbuf = va_arg(args, z_ipc_msgbuf_t *);
+    msg->head = msg->msgbuf->head;
+    msg->offset = va_arg(args, uint32_t);
+    msg->length = va_arg(args, uint64_t);
+    msg->blocks = 0;
     return(0);
 }
 
@@ -321,7 +336,7 @@ static void __ipc_msg_reader_backup (void *self, size_t count) {
  *  Slice vtables
  */
 static const z_vtable_type_t __ipc_msg_type = {
-    .name = "Slice",
+    .name = "IPC-Message",
     .size = sizeof(z_ipc_msg_t),
     .ctor = __ipc_msg_ctor,
     .dtor = __ipc_msg_dtor,
@@ -343,8 +358,18 @@ static const z_ipc_msg_interfaces_t __ipc_msg_interfaces = {
 /* ===========================================================================
  *  PUBLIC Slice constructor/destructor
  */
-z_ipc_msg_t *z_ipc_msg_alloc (z_ipc_msg_t *self, z_memory_t *memory) {
-    return(z_object_alloc(self, &__ipc_msg_interfaces, memory));
+z_ipc_msg_t *z_ipc_msg_alloc (z_ipc_msg_t *self,
+                              z_ipc_msgbuf_t *msgbuf,
+                              uint32_t offset,
+                              uint64_t length)
+{
+    return(z_object_alloc(self, &__ipc_msg_interfaces, msgbuf->memory,
+                          msgbuf, offset, length));
+}
+
+void z_ipc_msg_add_node (z_ipc_msg_t *self, z_ipc_msgbuf_node_t *node) {
+    z_atomic_inc(&(node->refs));
+    self->blocks++;
 }
 
 void z_ipc_msg_free (z_ipc_msg_t *self) {

@@ -28,14 +28,10 @@
 #include <stdio.h>
 
 static int __epoll_open (z_iopoll_t *iopoll) {
-    int efd;
-
-    if ((efd = epoll_create(512)) < 0) {
+    if ((iopoll->data.fd = epoll_create(512)) < 0) {
         perror("epoll_create()");
         return(-1);
     }
-
-    iopoll->data.fd = efd;
     return(0);
 }
 
@@ -79,35 +75,6 @@ static int __epoll_remove (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
     return(0);
 }
 
-static void __epoll_process (z_iopoll_t *iopoll,
-                             z_iopoll_entity_t *entity,
-                             uint32_t events)
-{
-    if (Z_UNLIKELY(z_has(events, EPOLLRDHUP, EPOLLHUP, EPOLLERR))) {
-        z_iopoll_remove(iopoll, entity);
-        entity->vtable->close(iopoll, entity);
-        return;
-    }
-
-    if (events & EPOLLIN) {
-        iopoll->stats.read_events++;
-        if (entity->vtable->read(iopoll, entity) < 0) {
-            z_iopoll_remove(iopoll, entity);
-            entity->vtable->close(iopoll, entity);
-            return;
-        }
-    }
-
-    if (events & EPOLLOUT) {
-        iopoll->stats.write_events++;
-        if (entity->vtable->write(iopoll, entity) < 0) {
-            z_iopoll_remove(iopoll, entity);
-            entity->vtable->close(iopoll, entity);
-            return;
-        }
-    }
-}
-
 static void __epoll_poll (z_iopoll_t *iopoll) {
     struct epoll_event events[512];
     struct epoll_event *e;
@@ -118,21 +85,19 @@ static void __epoll_poll (z_iopoll_t *iopoll) {
         z_timer_start(&timer);
         n = epoll_wait(iopoll->data.fd, events, 512, iopoll->timeout);
         z_timer_stop(&timer);
-
-        iopoll->stats.max_events = z_max(iopoll->stats.max_events, n);
-        iopoll->stats.avg_iowait = z_avg(iopoll->stats.avg_iowait, z_timer_micros(&timer));
+        z_iopoll_stats_add_events(iopoll, n, z_timer_micros(&timer));
 
         if (Z_UNLIKELY(n < 0)) {
             perror("epoll_wait()");
             continue;
         }
 
-        z_timer_start(&timer);
         for (e = events; n--; ++e) {
-            __epoll_process(iopoll, Z_IOPOLL_ENTITY(e->data.ptr), e->events);
+            uint32_t eflags = (!!(e->events & EPOLLIN)) << Z_IOPOLL_READ |
+                (!!(e->events & EPOLLOUT)) << Z_IOPOLL_WRITE |
+                z_has(e->events, EPOLLRDHUP, EPOLLHUP, EPOLLERR) << Z_IOPOLL_HANG;
+            z_iopoll_process(iopoll, Z_IOPOLL_ENTITY(e->data.ptr), eflags);
         }
-        z_timer_stop(&timer);
-        iopoll->stats.avg_ioprocess = z_avg(iopoll->stats.avg_ioprocess, z_timer_micros(&timer));
     }
 }
 

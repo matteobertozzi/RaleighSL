@@ -100,7 +100,6 @@ struct z_ipc_msg {
     unsigned int blocks;
     unsigned int offset;
     uint64_t length;
-    uint16_t id;
 };
 
 #define z_ipc_plug(memory, iopoll, proto, csize, addr, service, udata)       \
@@ -133,7 +132,11 @@ int             z_ipc_accept_unix   (z_ipc_server_t *server);
 #endif /* Z_SOCKET_HAS_UNIX */
 
 z_ipc_msg_t *   z_ipc_msg_alloc         (z_ipc_msg_t *self,
-                                         z_memory_t *memory);
+                                         z_ipc_msgbuf_t *node,
+                                         uint32_t offset,
+                                         uint64_t length);
+void            z_ipc_msg_add_node      (z_ipc_msg_t *self,
+                                         z_ipc_msgbuf_node_t *node);
 void            z_ipc_msg_free          (z_ipc_msg_t *self);
 
 void            z_ipc_msgbuf_open       (z_ipc_msgbuf_t *msgbuf,
@@ -143,6 +146,10 @@ void            z_ipc_msgbuf_clear      (z_ipc_msgbuf_t *msgbuf);
 int             z_ipc_msgbuf_add        (z_ipc_msgbuf_t *msgbuf, int fd);
 z_ipc_msg_t*    z_ipc_msgbuf_get        (z_ipc_msgbuf_t *msgbuf,
                                          z_ipc_msg_t *msg);
+z_ipc_msg_t *   z_ipc_msgbuf_get_at     (z_ipc_msgbuf_t *msgbuf,
+                                         z_ipc_msg_t *msg,
+                                         uint32_t offset,
+                                         uint64_t length);
 void            z_ipc_msgbuf_release    (z_ipc_msgbuf_t *msgbuf,
                                          z_ipc_msg_t *msg);
 

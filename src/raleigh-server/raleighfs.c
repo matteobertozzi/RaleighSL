@@ -53,35 +53,33 @@ static int __client_read (z_ipc_client_t *ipc_client) {
 
     //printf("RaleighFS client read (msgbuf->length=%lu msgbuf->offset=%u)\n",
     //        client->msgbuf.length, client->msgbuf.offset);
-    while (z_ipc_msgbuf_add(&(client->msgbuf), Z_IOPOLL_ENTITY_FD(client)) > 0);
-    while (z_ipc_msgbuf_get(&(client->msgbuf), &msg) != NULL) {
-        unsigned char buf[16];
-        //int i, elen;
-        int elen;
+    while (z_ipc_msgbuf_add(&(client->msgbuf), Z_IOPOLL_ENTITY_FD(client)) > 0) {
+        while (z_ipc_msgbuf_get(&(client->msgbuf), &msg) != NULL) {
+            unsigned char buf[16];
+            //int i, elen;
+            int elen;
+            printf("msg_get offset=%3u length=%3lu ",
+                   msg.offset, msg.length);
+            //for (i = 0; i < msg.length; ++i) printf("=");
+            printf("\n");
 
-        printf("msg_get offset=%3u (field=%3u length=%3lu) ",
-               msg.offset, msg.id, msg.length);
-        //for (i = 0; i < msg.length; ++i) printf("=");
-        printf("\n");
+            /* send response */
+            elen = z_encode_vint(buf, 10);
+            z_memcpy(buf + elen, "+ok012345!", 10);
+            __iobuf_write_buf(client, buf, elen + 10);
+            z_ipc_client_set_writable(client, 1);
 
-        /* send response */
-        elen = z_encode_field(buf, msg.id, 4);
-        z_memcpy(buf + elen, "+ok!", 4);
-        __iobuf_write_buf(client, buf, elen + 4);
-        z_ipc_client_set_writable(client, 1);
-
-        z_ipc_msg_free(&msg);
+            z_ipc_msg_free(&msg);
 
 #if 0
-        if (msg.id > 0 && (msg.id - 1) != client->field_id) {
-            printf("*********************************************************\n");
-            printf(" BROKEN id=%u prev=%u\n", msg.id, client->field_id);
-            printf("*********************************************************\n");
-            return(-1);
-        }
+            if (msg.id > 0 && (msg.id - 1) != client->field_id) {
+                printf("*********************************************************\n");
+                printf(" BROKEN id=%u prev=%u\n", msg.id, client->field_id);
+                printf("*********************************************************\n");
+                return(-1);
+            }
 #endif
-
-        client->field_id = msg.id;
+        }
     }
     return(0);
 }

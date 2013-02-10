@@ -41,7 +41,7 @@ int main (int argc, char **argv) {
   printf("ipc client: %lu\n", sizeof(z_ipc_client_t));
 
   /* Initialize I/O Poll */
-  if (z_iopoll_open(&iopoll, NULL)) {
+  if (z_iopoll_open(&iopoll, &memory, NULL)) {
       fprintf(stderr, "z_iopoll_open(): failed\n");
       return(1);
   }
@@ -50,9 +50,10 @@ int main (int argc, char **argv) {
   z_ipc_echo_plug(&memory, &iopoll, NULL, "11214", NULL);
   z_ipc_redis_plug(&memory, &iopoll, NULL, "11216", NULL);
   z_ipc_raleighfs_plug(&memory, &iopoll, NULL, "11215", NULL);
+  z_ipc_stats_plug(&memory, &iopoll, NULL, "11217", NULL);
 
   /* Start spinning... */
-  z_iopoll_poll(&iopoll, &__is_running, 1000);
+  z_iopoll_poll(&iopoll, &__is_running, -1);
 
   /* ...and we're done */
   z_iopoll_close(&iopoll);

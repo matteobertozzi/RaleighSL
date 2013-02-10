@@ -1,3 +1,4 @@
+#include <zcl/humans.h>
 #include <zcl/slice.h>
 #include <zcl/iobuf.h>
 #include <zcl/ipc.h>
@@ -39,15 +40,38 @@ static int __process_stat (struct redis_client *client,
                            z_slice_t *slice)
 {
     z_iopoll_stats_t *stats = &(z_ipc_client_iopoll(client)->stats);
+    char buf0[16], buf1[16], buf2[16];
+    char buf3[16], buf4[16], buf5[16];
+    char buf6[16], buf7[16], buf8[16];
     char sbuf[512];
     unsigned int n;
+
+    z_iopoll_stats_dump(z_ipc_client_iopoll(client));
     n = snprintf(sbuf, sizeof(sbuf),
-        "STATS\nWrites: %lu\nReads: %lu\nProcess: %.6fsec\nWait: %.6fsec\nEvents: %u\n",
-                stats->write_events,
-                stats->read_events,
-                stats->avg_ioprocess / 1000000.0f,
-                stats->avg_iowait / 1000000.0f,
-                stats->max_events);
+        "max events:     %u\n"
+        "poll swtich:    %lu\n"
+        "read events:    %lu\n"
+        "write events:   %lu\n"
+        "avg IO wait:    %s (%s-%s MIN %lu MAX %lu)\n"
+        "avg IO read:    %s (%s-%s MIN %lu MAX %lu)\n"
+        "avg IO write:   %s (%s-%s MIN %lu MAX %lu)\n",
+        stats->max_events,
+        stats->iowait.nevents,
+        stats->ioread.nevents,
+        stats->iowrite.nevents,
+        z_human_time(buf0, sizeof(buf0), z_histogram_average(&(stats->iowait))),
+        z_human_time(buf1, sizeof(buf1), z_histogram_percentile(&(stats->iowait), 0)),
+        z_human_time(buf2, sizeof(buf2), z_histogram_percentile(&(stats->iowait), 99.9999)),
+        stats->iowait.min, stats->iowait.max,
+        z_human_time(buf3, sizeof(buf3), z_histogram_average(&(stats->ioread))),
+        z_human_time(buf4, sizeof(buf4), z_histogram_percentile(&(stats->ioread), 0)),
+        z_human_time(buf5, sizeof(buf5), z_histogram_percentile(&(stats->ioread), 99.9999)),
+        stats->ioread.min, stats->ioread.max,
+        z_human_time(buf6, sizeof(buf6), z_histogram_average(&(stats->iowrite))),
+        z_human_time(buf7, sizeof(buf7), z_histogram_percentile(&(stats->iowrite), 0)),
+        z_human_time(buf8, sizeof(buf8), z_histogram_percentile(&(stats->iowrite), 99.9999)),
+        stats->iowrite.min, stats->iowrite.max);
+
     return(__iobuf_write_buf(client, sbuf, n));
 }
 

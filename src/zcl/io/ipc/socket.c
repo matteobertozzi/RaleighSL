@@ -470,15 +470,11 @@ int z_socket_unix_recv (int sock,
  *  Socket Related
  */
 int z_socket_set_sendbuf (int sock, unsigned int bufsize) {
-    if (setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize)) < 0)
-        return(1);
-    return(0);
+    return(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize)) < 0);
 }
 
 int z_socket_set_recvbuf (int sock, unsigned int bufsize) {
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &bufsize, sizeof(bufsize)) < 0)
-        return(1);
-    return(0);
+    return(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &bufsize, sizeof(bufsize)) < 0);
 }
 
 /* ===========================================================================

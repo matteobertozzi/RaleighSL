@@ -25,6 +25,11 @@ __Z_BEGIN_DECLS__
 
 Z_TYPEDEF_STRUCT(z_timer)
 
+#define Z_TIME_USEC(x)            ((x) * 1)
+#define Z_TIME_MSEC(x)            ((x) * 1000U)
+#define Z_TIME_SEC(x)             ((x) * 1000000)
+
+
 struct z_timer {
     uint64_t start;
     uint64_t end;
@@ -47,6 +52,7 @@ uint64_t    z_time_nanos        (void);
 void        z_timer_start       (z_timer_t *timer);
 void        z_timer_stop        (z_timer_t *timer);
 uint64_t    z_timer_micros      (const z_timer_t *timer);
+uint64_t    z_timer_millis      (const z_timer_t *timer);
 float       z_timer_secs        (const z_timer_t *timer);
 
 __Z_END_DECLS__

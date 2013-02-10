@@ -41,6 +41,58 @@ unsigned int z_uint64_bytes (uint64_t value) {
 }
 
 /* ============================================================================
+ *  Encode/Decode variable-length
+ */
+unsigned int z_vint_bytes (uint64_t value) {
+    if (value < (1ull << 35)) {
+        if (value < (1ull <<  7)) return(1);
+        if (value < (1ull << 14)) return(2);
+        if (value < (1ull << 21)) return(3);
+        if (value < (1ull << 28)) return(4);
+        return(5);
+    } else {
+        if (value < (1ull << 42)) return(6);
+        if (value < (1ull << 49)) return(7);
+        if (value < (1ull << 56)) return(8);
+        if (value < (1ull << 63)) return(9);
+        return(10);
+    }
+}
+
+int z_encode_vint (unsigned char *buf, uint64_t value) {
+    int size = 1;
+    while (value >= 128) {
+        *buf++ = (value & 0x7f) | 128;
+        value >>= 7;
+        size++;
+    }
+    *buf = value & 0x7f;
+    return(size);
+}
+
+int z_decode_vint (const unsigned char *buf,
+                   unsigned int buflen,
+                   uint64_t *value)
+{
+    unsigned int shift = 0;
+    uint64_t result = 0;
+    int count = 0;
+
+    while (shift <= 63 && count++ < buflen) {
+        uint64_t b = *buf++;
+        if (b & 128) {
+            result |= (b & 0x7f) << shift;
+        } else {
+            result |= (b << shift);
+            return(count);
+        }
+        shift += 7;
+    }
+
+    return(-1);
+}
+
+/* ============================================================================
  *  Encode/Decode unsigned integer
  */
 void z_encode_uint (unsigned char *buf, unsigned int length, uint64_t value) {

@@ -36,12 +36,7 @@ __Z_BEGIN_DECLS__
 #define Z_CONST_CAST(type, x)           ((const type *)(x))
 
 #define z_align_down(x, align)          ((x) & (-(align)))
-#define z_align_up(x, align)            ((((x) + ((align) - 1)) & (-(align))))
-
-#define z_rotl32(x, r)                  (((x) << (r)) | ((x) >> (32 - (r))))
-#define z_rotl64(x, r)                  (((x) << (r)) | ((x) >> (64 - (r))))
-#define z_rotr32(x, r)                  (((x) >> (r)) | ((x) << (32 - (r))))
-#define z_rotr64(x, r)                  (((x) >> (r)) | ((x) << (64 - (r))))
+#define z_align_up(x, align)            (((x) + ((align) - 1)) & (-(align)))
 
 #define Z_ARGN_(_,_11,_10,_9,_8,_7,_6,_5,_4,_3,_2,_1,n,...)  n
 #define Z_ARGN(...)             Z_ARGN_(0,__VA_ARGS__,11,10,9,8,7,6,5,4,3,2,1,0)
