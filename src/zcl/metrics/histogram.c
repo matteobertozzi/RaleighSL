@@ -26,6 +26,7 @@
  *  PRIVATE Histogram methods
  */
 static int __histogram_get_bucket (z_histogram_t *histo, uint64_t value) {
+#if 0
     int high = __histogram_buckets(histo) - 1;
     int low = 0;
 
@@ -39,6 +40,15 @@ static int __histogram_get_bucket (z_histogram_t *histo, uint64_t value) {
     }
 
     return(high);
+#else
+    int buckets = __histogram_buckets(histo) - 1;
+    int i;
+    for (i = 0; i < buckets; ++i) {
+        if (value <= histo->bounds[i])
+            return(i);
+    }
+    return(i);
+#endif
 }
 
 /* ===========================================================================

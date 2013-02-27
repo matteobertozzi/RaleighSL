@@ -39,14 +39,13 @@ static int __process_stat (struct redis_client *client,
                            z_iobuf_reader_t *reader,
                            z_slice_t *slice)
 {
-    z_iopoll_stats_t *stats = &(z_ipc_client_iopoll(client)->stats);
+    z_iopoll_stats_t *stats = &(z_ipc_client_iopoll(client)->engines[0].stats);
     char buf0[16], buf1[16], buf2[16];
     char buf3[16], buf4[16], buf5[16];
     char buf6[16], buf7[16], buf8[16];
     char sbuf[512];
     unsigned int n;
 
-    z_iopoll_stats_dump(z_ipc_client_iopoll(client));
     n = snprintf(sbuf, sizeof(sbuf),
         "max events:     %u\n"
         "poll swtich:    %lu\n"

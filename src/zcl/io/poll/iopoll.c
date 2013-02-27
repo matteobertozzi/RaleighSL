@@ -49,23 +49,23 @@ static void z_iopoll_stats_free (z_iopoll_stats_t *stats) {
 /* ===========================================================================
  *  PUBLIC I/O Poll Stats Methods
  */
-void z_iopoll_stats_add_events (z_iopoll_t *iopoll, int nevents, uint64_t wait_time) {
-    z_iopoll_stats_t *stats = &(iopoll->stats);
+void z_iopoll_stats_add_events (z_iopoll_engine_t *engine, int nevents, uint64_t wait_time) {
+    z_iopoll_stats_t *stats = &(engine->stats);
     z_histogram_add(&(stats->iowait), wait_time);
     if (nevents > stats->max_events)
         stats->max_events = nevents;
 }
 
-void z_iopoll_stats_add_read_event (z_iopoll_t *iopoll, uint64_t time) {
-    z_histogram_add(&(iopoll->stats.ioread), time);
+void z_iopoll_stats_add_read_event (z_iopoll_engine_t *engine, uint64_t time) {
+    z_histogram_add(&(engine->stats.ioread), time);
 }
 
-void z_iopoll_stats_add_write_event (z_iopoll_t *iopoll, uint64_t time) {
-    z_histogram_add(&(iopoll->stats.iowrite), time);
+void z_iopoll_stats_add_write_event (z_iopoll_engine_t *engine, uint64_t time) {
+    z_histogram_add(&(engine->stats.iowrite), time);
 }
 
-void z_iopoll_stats_dump (z_iopoll_t *iopoll) {
-    z_iopoll_stats_t *stats = &(iopoll->stats);
+void z_iopoll_stats_dump (z_iopoll_engine_t *engine) {
+    z_iopoll_stats_t *stats = &(engine->stats);
     char buf0[16], buf1[16], buf2[16];
 
     printf("IOPoll Stats\n");
@@ -106,13 +106,69 @@ void z_iopoll_stats_dump (z_iopoll_t *iopoll) {
 }
 
 /* ===========================================================================
+ *  PRIVATE I/O Poll Engine Methods
+ */
+#define __iopoll_entity_engine(iopoll, entity)                              \
+    &((iopoll)->engines[(entity)->flags >> 28])
+
+#define __iopoll_entity_set_engine_id(iopoll, entity, engine)               \
+    ((entity)->flags = ((entity)->flags & 0xfffffff) | (engine << 28))
+
+#define __iopoll_engine_insert(iopoll, engine, entity)                      \
+    (iopoll)->vtable->insert(iopoll, engine, entity)
+
+#define __iopoll_engine_remove(iopoll, engine, entity)                      \
+    (iopoll)->vtable->remove(iopoll, engine, entity)
+
+#define __iopoll_engine_poll(iopoll, engine)                                \
+    (iopoll)->vtable->poll(iopoll, engine)
+
+#if (Z_IOPOLL_ENGINES > 1)
+static z_iopoll_engine_t *__iopoll_get_engine (z_iopoll_t *iopoll) {
+    z_iopoll_engine_t *engine;
+    unsigned int count;
+    z_thread_t tid;
+
+    z_thread_self(&tid);
+    count = Z_IOPOLL_ENGINES;
+    engine = iopoll->engines;
+    while (count--) {
+        if (engine->thread == tid)
+            return(engine);
+        engine++;
+    }
+
+    return(NULL);
+}
+
+static void *__iopoll_engine_do_poll (void *args) {
+    __iopoll_engine_poll(Z_IOPOLL(args), __iopoll_get_engine(Z_IOPOLL(args)));
+    return(NULL);
+}
+#endif /* Z_IOPOLL_ENGINES > 1 */
+
+static int __iopoll_engine_open (z_iopoll_t *iopoll,
+                                 z_iopoll_engine_t *engine,
+                                 z_memory_t *memory)
+{
+    z_iopoll_stats_alloc(&(engine->stats), memory);
+    return(iopoll->vtable->open(iopoll, engine));
+}
+
+static void __iopoll_engine_close (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
+    iopoll->vtable->close(iopoll, engine);
+    z_iopoll_stats_free(&(engine->stats));
+}
+
+/* ===========================================================================
  *  PUBLIC I/O Poll Methods
  */
 int z_iopoll_open (z_iopoll_t *iopoll,
                    z_memory_t *memory,
                    const z_vtable_iopoll_t *vtable)
 {
-    z_memzero(iopoll, sizeof(z_iopoll_t));
+    unsigned int i;
+
     if (vtable == NULL) {
 #if defined(Z_IOPOLL_HAS_EPOLL)
         iopoll->vtable = &z_iopoll_epoll;
@@ -122,63 +178,105 @@ int z_iopoll_open (z_iopoll_t *iopoll,
     } else {
         iopoll->vtable = vtable;
     }
-    z_iopoll_stats_alloc(&(iopoll->stats), memory);
-    return(iopoll->vtable->open(iopoll));
+
+    for (i = 0; i < Z_IOPOLL_ENGINES; ++i) {
+        if (__iopoll_engine_open(iopoll, &(iopoll->engines[i]), memory)) {
+            while (i-- > 0) {
+                __iopoll_engine_close(iopoll, &(iopoll->engines[i]));
+            }
+            return(1);
+        }
+    }
+
+#if (Z_IOPOLL_ENGINES > 1)
+    iopoll->balancer = 0;
+#endif /* Z_IOPOLL_ENGINES > 1 */
+
+    return(0);
 }
 
 void z_iopoll_close (z_iopoll_t *iopoll) {
-    iopoll->vtable->close(iopoll);
-    z_iopoll_stats_free(&(iopoll->stats));
+    unsigned int i;
+    for (i = 0; i < Z_IOPOLL_ENGINES; ++i) {
+        __iopoll_engine_close(iopoll, &(iopoll->engines[i]));
+    }
 }
 
 int z_iopoll_add (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
-    return(iopoll->vtable->insert(iopoll, entity));
+#if (Z_IOPOLL_ENGINES > 1)
+    unsigned int eidx = iopoll->balancer++ & (Z_IOPOLL_ENGINES - 1);
+#else
+    unsigned int eidx = 0;
+#endif
+    __iopoll_entity_set_engine_id(iopoll, entity, eidx);
+    return(__iopoll_engine_insert(iopoll, &(iopoll->engines[eidx]), entity));
 }
 
 int z_iopoll_remove (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
-    return(iopoll->vtable->remove(iopoll, entity));
+    z_iopoll_engine_t *engine = __iopoll_entity_engine(iopoll, entity);
+    return(__iopoll_engine_remove(iopoll, engine, entity));
 }
 
-void z_iopoll_poll (z_iopoll_t *iopoll, const int *is_looping, int timeout) {
+int z_iopoll_poll (z_iopoll_t *iopoll, const int *is_looping, int timeout) {
     iopoll->is_looping = is_looping;
     iopoll->timeout = timeout;
-    iopoll->vtable->poll(iopoll);
+
+#if (Z_IOPOLL_ENGINES > 1)
+    unsigned int i;
+
+    for (i = 0; i < Z_IOPOLL_ENGINES; ++i) {
+        z_iopoll_engine_t *engine = &(iopoll->engines[i]);
+        if (z_thread_alloc(&(engine->thread), __iopoll_engine_do_poll, iopoll)) {
+            iopoll->is_looping = NULL;
+            return(1);
+        }
+    }
+
+    for (i = 0; i < Z_IOPOLL_ENGINES; ++i) {
+        z_thread_join(&(iopoll->engines[i].thread));
+    }
+#else
+    __iopoll_engine_poll(iopoll, &(iopoll->engines[0]));
+#endif /* Z_IOPOLL_ENGINES > 1 */
+
+    return(0);
 }
 
 void z_iopoll_process (z_iopoll_t *iopoll,
+                       z_iopoll_engine_t *engine,
                        z_iopoll_entity_t *entity,
                        uint32_t events)
 {
     const z_vtable_iopoll_entity_t *vtable = entity->vtable;
 
     if (Z_UNLIKELY(events & Z_IOPOLL_HANGUP)) {
-        z_iopoll_remove(iopoll, entity);
-        vtable->close(iopoll, entity);
+        __iopoll_engine_remove(iopoll, engine, entity);
+        vtable->close(entity);
         return;
     }
 
     if (events & Z_IOPOLL_READABLE) {
         z_timer_t timer;
         z_timer_start(&timer);
-        if (vtable->read(iopoll, entity) < 0) {
-            z_iopoll_remove(iopoll, entity);
-            vtable->close(iopoll, entity);
+        if (vtable->read(entity) < 0) {
+            __iopoll_engine_remove(iopoll, engine, entity);
+            vtable->close(entity);
             return;
         }
         z_timer_stop(&timer);
-        z_iopoll_stats_add_read_event(iopoll, z_timer_micros(&timer));
+        z_iopoll_stats_add_read_event(engine, z_timer_micros(&timer));
     }
 
     if (events & Z_IOPOLL_WRITABLE) {
         z_timer_t timer;
         z_timer_start(&timer);
-        if (vtable->write(iopoll, entity) < 0) {
-            z_iopoll_remove(iopoll, entity);
-            vtable->close(iopoll, entity);
+        if (vtable->write(entity) < 0) {
+            __iopoll_engine_remove(iopoll, engine, entity);
+            vtable->close(entity);
             return;
         }
         z_timer_stop(&timer);
-        z_iopoll_stats_add_write_event(iopoll, z_timer_micros(&timer));
+        z_iopoll_stats_add_write_event(engine, z_timer_micros(&timer));
     }
 }
 
@@ -196,7 +294,8 @@ void z_iopoll_set_writable (z_iopoll_t *iopoll,
                             int writable)
 {
     if (writable != !!(entity->flags & Z_IOPOLL_WRITABLE)) {
+        z_iopoll_engine_t *engine = __iopoll_entity_engine(iopoll, entity);
         entity->flags ^= Z_IOPOLL_WRITABLE;
-        z_iopoll_add(iopoll, entity);
+        __iopoll_engine_insert(iopoll, engine, entity);
     }
 }

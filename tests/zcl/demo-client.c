@@ -9,6 +9,7 @@
 
 struct z_test_client {
     __Z_IOPOLL_ENTITY__
+    z_iopoll_t *iopoll;
     unsigned int read;
     unsigned int write;
     uint64_t time;
@@ -23,7 +24,7 @@ struct z_test_client {
 #define BLOB512     BLOB256 BLOB256
 #define BLOB1024    BLOB512 BLOB512
 
-int __test_client_read (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
+int __test_client_read (z_iopoll_entity_t *entity) {
   struct z_test_client *client = (struct z_test_client *)entity;
   char buffer[8192];
   uint64_t dt;
@@ -41,22 +42,22 @@ int __test_client_read (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
               (client->write / sec) / 1024.0f / 1024.0f);
   }
 
-  z_iopoll_set_writable(iopoll, entity, 1);
+  z_iopoll_set_writable(client->iopoll, entity, 1);
   return(0);
 }
 
-int __test_client_write (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
+int __test_client_write (z_iopoll_entity_t *entity) {
   struct z_test_client *client = (struct z_test_client *)entity;
   ssize_t wr;
 
   if ((wr = write(entity->fd, BLOB1024, 1024)) > 0)
     client->write += wr;
 
-  z_iopoll_set_writable(iopoll, entity, 0);
+  z_iopoll_set_writable(client->iopoll, entity, 0);
   return(0);
 }
 
-void __test_client_close (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
+void __test_client_close (z_iopoll_entity_t *entity) {
 }
 
 static const z_vtable_iopoll_entity_t __client_vtable = {
@@ -69,6 +70,7 @@ static int __is_running = 1;
 static void __signal_handler (int signum) {
     __is_running = 0;
 }
+
 #define NCLIENT    1
 int main (int argc, char **argv) {
   struct z_test_client client[NCLIENT];
@@ -94,6 +96,7 @@ int main (int argc, char **argv) {
       z_fd_set_blocking(fd, 0);
       z_iopoll_entity_init(Z_IOPOLL_ENTITY(&(client[i])), &__client_vtable, fd);
       z_iopoll_set_writable(&iopoll, Z_IOPOLL_ENTITY(&(client[i])), 1);
+      client[i].iopoll = &iopoll;
       client[i].read = 0;
       client[i].write = 0;
       client[i].dt = client[i].time = z_time_millis();

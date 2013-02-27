@@ -23,10 +23,11 @@
  */
 #define __slice_node_blocks_scan(node, block, __ucode__)                    \
     do {                                                                    \
-        unsigned int __p_index;                                             \
-        for (__p_index = 0; __p_index < Z_SLICE_NBLOCKS; ++__p_index) {     \
-            block = &((node)->blocks[__p_index]);                           \
+        unsigned int __p_index = Z_SLICE_NBLOCKS;                           \
+        block = (node)->blocks;                                             \
+        while (__p_index--) {                                               \
             do __ucode__ while (0);                                         \
+            block++;                                                        \
         }                                                                   \
     } while (0)
 

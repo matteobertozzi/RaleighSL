@@ -56,12 +56,18 @@ static int __memsearch_step (const uint8_t *src,
 }
 
 static int __istok (uint8_t c, const uint8_t *tokens, unsigned int ntokens) {
-    const uint8_t *tok = tokens;
-    while (ntokens--) {
-        if (c == *tok++)
-            return(1);
+    int r = 0;
+    switch (ntokens) {
+        case 4: r |= (c == tokens[3]);
+        case 3: r |= (c == tokens[2]);
+        case 2: r |= (c == tokens[1]);
+        case 1: r |= (c == tokens[0]);
+                break;
+        default:
+            while (ntokens--)
+                r |= (c == *tokens++);
     }
-    return(0);
+    return(r);
 }
 
 static int __memtok_step (const uint8_t *src,

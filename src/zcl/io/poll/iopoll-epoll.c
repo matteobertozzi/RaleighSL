@@ -27,19 +27,22 @@
 #include <fcntl.h>
 #include <stdio.h>
 
-static int __epoll_open (z_iopoll_t *iopoll) {
-    if ((iopoll->data.fd = epoll_create(512)) < 0) {
+static int __epoll_open (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
+    if ((engine->data.fd = epoll_create(512)) < 0) {
         perror("epoll_create()");
         return(-1);
     }
     return(0);
 }
 
-static void __epoll_close (z_iopoll_t *iopoll) {
-    close(iopoll->data.fd);
+static void __epoll_close (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
+    close(engine->data.fd);
 }
 
-static int __epoll_insert (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
+static int __epoll_insert (z_iopoll_t *iopoll,
+                           z_iopoll_engine_t *engine,
+                           z_iopoll_entity_t *entity)
+{
     struct epoll_event event;
     int op;
 
@@ -52,7 +55,7 @@ static int __epoll_insert (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
     event.data.ptr = entity;
 
     op = (entity->flags & Z_IOPOLL_WATCHED) ? EPOLL_CTL_MOD : EPOLL_CTL_ADD;
-    if (epoll_ctl(iopoll->data.fd, op, entity->fd, &event) < 0) {
+    if (epoll_ctl(engine->data.fd, op, entity->fd, &event) < 0) {
         perror("epoll_ctl(EPOLL_CTL_ADD/MOD)");
         return(-1);
     }
@@ -61,12 +64,15 @@ static int __epoll_insert (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
     return(0);
 }
 
-static int __epoll_remove (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
+static int __epoll_remove (z_iopoll_t *iopoll,
+                           z_iopoll_engine_t *engine,
+                           z_iopoll_entity_t *entity)
+{
     struct epoll_event event;
 
     event.events = 0;
     event.data.ptr = entity;
-    if (epoll_ctl(iopoll->data.fd, EPOLL_CTL_DEL, entity->fd, &event) < 0) {
+    if (epoll_ctl(engine->data.fd, EPOLL_CTL_DEL, entity->fd, &event) < 0) {
         perror("epoll_ctl(EPOLL_CTL_DEL)");
         return(-1);
     }
@@ -75,7 +81,7 @@ static int __epoll_remove (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
     return(0);
 }
 
-static void __epoll_poll (z_iopoll_t *iopoll) {
+static void __epoll_poll (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
     struct epoll_event events[512];
     struct epoll_event *e;
     z_timer_t timer;
@@ -83,9 +89,9 @@ static void __epoll_poll (z_iopoll_t *iopoll) {
 
     while (z_iopoll_is_looping(iopoll)) {
         z_timer_start(&timer);
-        n = epoll_wait(iopoll->data.fd, events, 512, iopoll->timeout);
+        n = epoll_wait(engine->data.fd, events, 512, iopoll->timeout);
         z_timer_stop(&timer);
-        z_iopoll_stats_add_events(iopoll, n, z_timer_micros(&timer));
+        z_iopoll_stats_add_events(engine, n, z_timer_micros(&timer));
 
         if (Z_UNLIKELY(n < 0)) {
             perror("epoll_wait()");
@@ -96,7 +102,7 @@ static void __epoll_poll (z_iopoll_t *iopoll) {
             uint32_t eflags = (!!(e->events & EPOLLIN)) << Z_IOPOLL_READ |
                 (!!(e->events & EPOLLOUT)) << Z_IOPOLL_WRITE |
                 z_has(e->events, EPOLLRDHUP, EPOLLHUP, EPOLLERR) << Z_IOPOLL_HANG;
-            z_iopoll_process(iopoll, Z_IOPOLL_ENTITY(e->data.ptr), eflags);
+            z_iopoll_process(iopoll, engine, Z_IOPOLL_ENTITY(e->data.ptr), eflags);
         }
     }
 }

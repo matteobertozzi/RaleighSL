@@ -49,11 +49,11 @@ uint64_t    z_time_millis       (void);
 uint64_t    z_time_micros       (void);
 uint64_t    z_time_nanos        (void);
 
-void        z_timer_start       (z_timer_t *timer);
-void        z_timer_stop        (z_timer_t *timer);
-uint64_t    z_timer_micros      (const z_timer_t *timer);
-uint64_t    z_timer_millis      (const z_timer_t *timer);
-float       z_timer_secs        (const z_timer_t *timer);
+#define z_timer_start(t)        (t)->start = z_time_micros()
+#define z_timer_stop(t)         (t)->end = z_time_micros()
+#define z_timer_micros(t)       ((t)->end - (t)->start)
+#define z_timer_millis(t)       (z_timer_micros(t) / 1000)
+#define z_timer_secs(t)         (z_timer_micros(t) / 1000000.0)
 
 __Z_END_DECLS__
 

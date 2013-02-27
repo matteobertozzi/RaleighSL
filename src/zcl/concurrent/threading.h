@@ -49,7 +49,7 @@ Z_TYPEDEF_STRUCT(z_thread_pool)
 #elif defined(Z_SYS_HAS_OS_SPIN_LOCK)
     #define z_spinlock_t              OSSpinLock
     #define z_spin_alloc(lock)        (*(lock) = OS_SPINLOCK_INIT)
-    #define z_spin_free(lock)         (0)
+    #define z_spin_free(lock)
     #define z_spin_lock(lock)         OSSpinLockLock(lock)
     #define z_spin_unlock(lock)       OSSpinLockUnlock(lock)
 #else
@@ -68,7 +68,7 @@ Z_TYPEDEF_STRUCT(z_thread_pool)
     int     z_wait_cond_signal      (z_wait_cond_t *wcond);
     int     z_wait_cond_broadcast   (z_wait_cond_t *wcond);
 #else
-    #error "No wait condition"
+    #error "No wait condition support"
 #endif
 
 #if defined(Z_SYS_HAS_PTHREAD)
@@ -78,6 +78,10 @@ Z_TYPEDEF_STRUCT(z_thread_pool)
         pthread_create(thread, NULL, func, args)
 
     #define z_thread_join(thread)     pthread_join(*thread, NULL)
+
+    #define z_thread_self(thread)     *thread = pthread_self()
+#else
+    #error "No thread support"
 #endif
 
 struct z_thread_pool {

@@ -56,24 +56,3 @@ uint64_t z_time_nanos (void) {
     return(now.tv_sec * __NSEC_PER_SEC + (now.tv_usec * __NSEC_PER_USEC));
 #endif
 }
-
-void z_timer_start (z_timer_t *timer) {
-    timer->start = z_time_micros();
-}
-
-void z_timer_stop (z_timer_t *timer) {
-    timer->end = z_time_micros();
-}
-
-uint64_t z_timer_micros (const z_timer_t *timer) {
-    return(timer->end - timer->start);
-}
-
-uint64_t z_timer_millis (const z_timer_t *timer) {
-    return((timer->end - timer->start) / __MSEC_PER_USEC);
-}
-
-float z_timer_secs (const z_timer_t *timer) {
-    return((float)(timer->end - timer->start) / __USEC_PER_SEC);
-}
-

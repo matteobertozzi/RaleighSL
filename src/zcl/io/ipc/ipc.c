@@ -48,7 +48,7 @@ static z_ipc_client_t *__ipc_client_alloc (z_ipc_server_t *server, int csock) {
     return(client);
 }
 
-static void __ipc_client_free (z_iopoll_t *iopoll, z_ipc_client_t *client) {
+static void __ipc_client_free (z_ipc_client_t *client) {
     const z_ipc_server_t *server = client->server;
 
     /* Ask the protocol to do its own stuff before closing down */
@@ -62,16 +62,16 @@ static void __ipc_client_free (z_iopoll_t *iopoll, z_ipc_client_t *client) {
     z_memory_free(server->memory, client);
 }
 
-static void __ipc_client_close (z_iopoll_t *iopoll, z_iopoll_entity_t *client) {
-    __ipc_client_free(iopoll, Z_IPC_CLIENT(client));
+static void __ipc_client_close (z_iopoll_entity_t *client) {
+    __ipc_client_free(Z_IPC_CLIENT(client));
 }
 
-static int __ipc_client_read (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
+static int __ipc_client_read (z_iopoll_entity_t *entity) {
     const z_ipc_protocol_t *proto = Z_IPC_CLIENT(entity)->server->protocol;
     return((proto->read != NULL) ? proto->read(Z_IPC_CLIENT(entity)) : 0);
 }
 
-static int __ipc_client_write (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
+static int __ipc_client_write (z_iopoll_entity_t *entity) {
     const z_ipc_protocol_t *proto = Z_IPC_CLIENT(entity)->server->protocol;
     return((proto->write != NULL) ? proto->write(Z_IPC_CLIENT(entity)) : 0);
 }
@@ -114,16 +114,16 @@ static z_ipc_server_t *__ipc_server_alloc (z_memory_t *memory,
     return(server);
 }
 
-static void __ipc_server_free (z_iopoll_t *iopoll, z_ipc_server_t *server) {
+static void __ipc_server_free (z_ipc_server_t *server) {
     close(Z_IOPOLL_ENTITY_FD(server));
     z_memory_struct_free(server->memory, z_ipc_server_t, server);
 }
 
-static void __ipc_server_close (z_iopoll_t *iopoll, z_iopoll_entity_t *server) {
-    __ipc_server_free(iopoll, Z_IPC_SERVER(server));
+static void __ipc_server_close (z_iopoll_entity_t *server) {
+    __ipc_server_free(Z_IPC_SERVER(server));
 }
 
-static int __ipc_server_accept (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
+static int __ipc_server_accept (z_iopoll_entity_t *entity) {
     z_ipc_server_t *server = Z_IPC_SERVER(entity);
     z_ipc_client_t *client;
     int csock;
@@ -137,7 +137,7 @@ static int __ipc_server_accept (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
     }
 
     if (z_iopoll_add(server->iopoll, Z_IOPOLL_ENTITY(client))) {
-        Z_IOPOLL_ENTITY(client)->vtable->close(iopoll, Z_IOPOLL_ENTITY(client));
+        Z_IOPOLL_ENTITY(client)->vtable->close(Z_IOPOLL_ENTITY(client));
         return(-4);
     }
 
@@ -180,7 +180,7 @@ int __z_ipc_plug (z_memory_t *memory,
     server->csize = csize;
 
     if (z_iopoll_add(iopoll, Z_IOPOLL_ENTITY(server))) {
-        __ipc_server_free(iopoll, server);
+        __ipc_server_free(server);
         return(-2);
     }
 

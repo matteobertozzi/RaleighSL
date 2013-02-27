@@ -585,7 +585,7 @@ if __name__ == '__main__':
 
     NO_OUTPUT = options.no_output
 
-    DEFAULT_CFLAGS = ['-Wall', '-Wmissing-field-initializers', '-fsanitize=integer', '-msse4.2'] #, '-mcx16']
+    DEFAULT_CFLAGS = ['-Wall', '-Wmissing-field-initializers', '-msse4.2'] #, '-mcx16']
     DEFAULT_RELEASE_CFLAGS = []
     DEFAULT_DEBUG_CFLAGS = ['-g']
     DEFAULT_DEFINES = ['-D_GNU_SOURCE', '-D__USE_FILE_OFFSET64']
