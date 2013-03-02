@@ -14,6 +14,7 @@
  *   limitations under the License.
  */
 
+#include <zcl/coding.h>
 #include <zcl/reader.h>
 #include <zcl/extent.h>
 #include <zcl/string.h>
@@ -160,4 +161,124 @@ size_t z_v_reader_tokenize (const z_vtable_reader_t *vtable, void *self,
     }
 
     return(nread);
+}
+
+void z_v_reader_skip (const z_vtable_reader_t *vtable, void *self, size_t length) {
+    uint8_t *data;
+    size_t n;
+    while ((n = vtable->next(self, &data)) < length)
+        length -= n;
+    vtable->backup(self, n - length);
+}
+
+uint8_t *z_v_reader_fetch (const z_vtable_reader_t *vtable, void *self,
+                           uint8_t *buffer, size_t length)
+{
+    uint8_t *pbuffer;
+    uint8_t *data;
+    size_t n;
+
+    if ((n = vtable->next(self, &data)) >= length) {
+        vtable->backup(self, n - length);
+        return(data);
+    }
+
+    z_memcpy(buffer, data, n);
+    pbuffer = buffer + n;
+    length -= n;
+    while (length > 0) {
+        if ((n = vtable->next(self, &data)) >= length) {
+            vtable->backup(self, n - length);
+            break;
+        }
+
+        z_memcpy(pbuffer, data, n);
+        data += n;
+        length -= n;
+    }
+
+    return(length > 0 ? NULL : buffer);
+}
+
+int z_v_reader_decode_field (const z_vtable_reader_t *vtable, void *self,
+                             uint16_t *field_id, uint64_t *length)
+{
+    uint8_t *data;
+    int elength;
+    size_t n;
+
+    n = vtable->next(self, &data);
+    if ((elength = z_decode_field(data, n, field_id, length)) > 0) {
+        vtable->backup(self, n - elength);
+    } else {
+        uint8_t buffer[16];
+
+        /* Not in the first chunk */
+        elength = -elength;
+        vtable->backup(self, n);
+        z_v_reader_fetch(vtable, self, buffer, elength);
+        elength = z_decode_field(buffer, elength, field_id, length);
+    }
+
+    return(elength);
+}
+
+
+void z_v_reader_decode_uint16 (const z_vtable_reader_t *vtable, void *self,
+                               unsigned int length, uint16_t *value)
+{
+    uint8_t *data;
+    size_t n;
+
+    if ((n = vtable->next(self, &data)) >= length) {
+        z_decode_uint16(data, length, value);
+        vtable->backup(self, n - length);
+    } else {
+        uint8_t buffer[8];
+
+        /* Not in the first chunk */
+        vtable->backup(self, n);
+        z_v_reader_fetch(vtable, self, buffer, length);
+        z_decode_uint16(buffer, length, value);
+    }
+}
+
+
+void z_v_reader_decode_uint32 (const z_vtable_reader_t *vtable, void *self,
+                               unsigned int length, uint32_t *value)
+{
+    uint8_t *data;
+    size_t n;
+
+    if ((n = vtable->next(self, &data)) >= length) {
+        z_decode_uint32(data, length, value);
+        vtable->backup(self, n - length);
+    } else {
+        uint8_t buffer[8];
+
+        /* Not in the first chunk */
+        vtable->backup(self, n);
+        z_v_reader_fetch(vtable, self, buffer, length);
+        z_decode_uint32(buffer, length, value);
+    }
+}
+
+
+void z_v_reader_decode_uint64 (const z_vtable_reader_t *vtable, void *self,
+                               unsigned int length, uint64_t *value)
+{
+    uint8_t *data;
+    size_t n;
+
+    if ((n = vtable->next(self, &data)) >= length) {
+        z_decode_uint64(data, length, value);
+        vtable->backup(self, n - length);
+    } else {
+        uint8_t buffer[8];
+
+        /* Not in the first chunk */
+        vtable->backup(self, n);
+        z_v_reader_fetch(vtable, self, buffer, length);
+        z_decode_uint64(buffer, length, value);
+    }
 }

@@ -29,6 +29,32 @@ static int __iobuf_write_buf (struct raleighfs_client *client,
     return((const void *)p - blob);
 }
 
+static void __msg_parse (struct raleighfs_client *client, const z_ipc_msg_t *msg) {
+    z_ipc_msg_reader_t reader;
+    unsigned char buf[32];
+    uint16_t field_id;
+    uint64_t length;
+
+    z_reader_open(&reader, msg);
+
+    z_reader_decode_field(&reader, &field_id, &length);
+
+    z_reader_close(&reader);
+
+    //int i, elen;
+    int elen;
+    printf("msg_get offset=%3u length=%3lu ",
+           msg->offset, msg->length);
+    //for (i = 0; i < msg.length; ++i) printf("=");
+    printf("\n");
+
+    /* send response */
+    elen = z_encode_vint(buf, 10);
+    z_memcpy(buf + elen, "+ok012345!", 10);
+    __iobuf_write_buf(client, buf, elen + 10);
+    z_ipc_client_set_writable(client, 1);
+}
+
 static int __client_connected (z_ipc_client_t *ipc_client) {
     struct raleighfs_client *client = (struct raleighfs_client *)ipc_client;
     z_ipc_msgbuf_open(&(client->msgbuf), z_ipc_client_memory(client));
@@ -51,36 +77,13 @@ static int __client_read (z_ipc_client_t *ipc_client) {
     struct raleighfs_client *client = (struct raleighfs_client *)ipc_client;
     z_ipc_msg_t msg;
 
-    //printf("RaleighFS client read (msgbuf->length=%lu msgbuf->offset=%u)\n",
-    //        client->msgbuf.length, client->msgbuf.offset);
     while (z_ipc_msgbuf_add(&(client->msgbuf), Z_IOPOLL_ENTITY_FD(client)) > 0) {
         while (z_ipc_msgbuf_get(&(client->msgbuf), &msg) != NULL) {
-            unsigned char buf[16];
-            //int i, elen;
-            int elen;
-            printf("msg_get offset=%3u length=%3lu ",
-                   msg.offset, msg.length);
-            //for (i = 0; i < msg.length; ++i) printf("=");
-            printf("\n");
-
-            /* send response */
-            elen = z_encode_vint(buf, 10);
-            z_memcpy(buf + elen, "+ok012345!", 10);
-            __iobuf_write_buf(client, buf, elen + 10);
-            z_ipc_client_set_writable(client, 1);
-
+            __msg_parse(client, &msg);
             z_ipc_msg_free(&msg);
-
-#if 0
-            if (msg.id > 0 && (msg.id - 1) != client->field_id) {
-                printf("*********************************************************\n");
-                printf(" BROKEN id=%u prev=%u\n", msg.id, client->field_id);
-                printf("*********************************************************\n");
-                return(-1);
-            }
-#endif
         }
     }
+
     return(0);
 }
 

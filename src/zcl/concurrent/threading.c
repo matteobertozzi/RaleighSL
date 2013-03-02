@@ -14,6 +14,8 @@
  *   limitations under the License.
  */
 
+#include <unistd.h>
+
 #include <zcl/threading.h>
 
 #if defined(Z_SYS_HAS_PTHREAD_WAIT_COND)
@@ -58,3 +60,15 @@ int z_wait_cond_broadcast (z_wait_cond_t *self) {
 #else
     #error "No wait condition"
 #endif
+
+int z_thread_bind_to_core (z_thread_t *thread, unsigned int core) {
+   int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+   if (core >= num_cores)
+      return(1);
+
+   cpu_set_t cpuset;
+   CPU_ZERO(&cpuset);
+   CPU_SET(core, &cpuset);
+
+   return pthread_setaffinity_np(*thread, sizeof(cpu_set_t), &cpuset);
+}

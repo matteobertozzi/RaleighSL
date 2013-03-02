@@ -91,6 +91,7 @@ int z_decode_field (const unsigned char *buf,
                     uint16_t *field_id,
                     uint64_t *length)
 {
+#if 0
     unsigned int elength = 1;
     unsigned int flen;
 
@@ -118,4 +119,37 @@ int z_decode_field (const unsigned char *buf,
     }
 
     return(elength);
+#else
+    unsigned int elength = 1;
+    unsigned int flen0;
+    unsigned int flen1;
+
+    flen0 = 1 + z_fetch_3bit(buf[0], 4);
+    flen1 = z_fetch_4bit(buf[0], 0);
+
+    if (buf[0] & (1 << 7)) {
+        /* External Length */
+        elength += flen0;
+        if (Z_UNLIKELY(buflen < elength))
+            return(-(elength + (flen1 >= 2 ? 0 : (flen1 + 1))));
+        z_decode_uint64(buf + 1, flen0, length);
+    } else {
+        /* Internal Length (uint8-uint64) */
+        *length = flen0;
+    }
+
+    if (flen1 >= 2) {
+        /* Field-Id is in the head */
+        *field_id = flen1 - 2;
+    } else {
+        /* Field-Id is stored outside */
+        flen1 += 1;
+        if (Z_UNLIKELY(buflen < (elength + flen1)))
+            return(-(elength + flen1));
+        z_decode_uint16(buf + elength, flen1, field_id);
+        elength += flen1;
+    }
+
+    return(elength);
+#endif
 }

@@ -106,6 +106,8 @@ int                 z_thread_pool_add_notify    (z_thread_pool_t *pool,
                                                  z_task_func_t notify,
                                                  void *notify_data);
 
+int z_thread_bind_to_core (z_thread_t *thread, unsigned int core);
+
 __Z_END_DECLS__
 
 #endif /* !_Z_THREADING_H_ */

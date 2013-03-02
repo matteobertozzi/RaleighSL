@@ -72,6 +72,29 @@ struct z_vtable_reader {
 #define z_reader_tokenize(self, needle, needle_len, slice)                \
     z_v_reader_tokenize(Z_READER_VTABLE(self), self, needle, needle_len, slice)
 
+#define z_reader_fetch(self, buffer, length)                              \
+    z_v_reader_fetch(Z_READER_VTABLE(self), self, buffer, length)
+
+#define z_reader_decode_field(self, field_id, length)                       \
+    z_v_reader_decode_field(Z_READER_VTABLE(self), self, field_id, length)
+
+#define z_reader_skip(self, n)                                              \
+    z_v_reader_skip(Z_READER_VTABLE(self), self, n)
+
+#define z_reader_decode_uint16(self, length, value)                         \
+    z_v_reader_decode_uint16(Z_READER_VTABLE(self), self, length, value)
+
+#define z_reader_decode_uint32(self, length, value)                         \
+    z_v_reader_decode_uint32(Z_READER_VTABLE(self), self, length, value)
+
+#define z_reader_decode_uint64(self, length, value)                         \
+    z_v_reader_decode_uint64(Z_READER_VTABLE(self), self, length, value)
+
+void z_v_reader_skip (const z_vtable_reader_t *vtable, void *self, size_t n);
+
+uint8_t *z_v_reader_fetch (const z_vtable_reader_t *vtable, void *self,
+                           uint8_t *buffer, size_t length);
+
 int z_v_reader_search (const z_vtable_reader_t *vtable, void *self,
                        const void *needle, size_t needle_len,
                        z_extent_t *extent);
@@ -79,6 +102,16 @@ int z_v_reader_search (const z_vtable_reader_t *vtable, void *self,
 size_t z_v_reader_tokenize (const z_vtable_reader_t *vtable, void *self,
                             const void *needle, size_t needle_len,
                             z_slice_t *slice);
+
+int z_v_reader_decode_field (const z_vtable_reader_t *vtable, void *self,
+                             uint16_t *field_id, uint64_t *length);
+
+void z_v_reader_decode_uint16 (const z_vtable_reader_t *vtable, void *self,
+                               unsigned int length, uint16_t *value);
+void z_v_reader_decode_uint32 (const z_vtable_reader_t *vtable, void *self,
+                               unsigned int length, uint32_t *value);
+void z_v_reader_decode_uint64 (const z_vtable_reader_t *vtable, void *self,
+                               unsigned int length, uint64_t *value);
 
 __Z_END_DECLS__
 

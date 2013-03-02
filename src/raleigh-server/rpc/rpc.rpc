@@ -1,0 +1,4 @@
+struct reqhead {
+    0: uint64 req_id;
+    1: uint64 req_type;
+}

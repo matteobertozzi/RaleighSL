@@ -2,11 +2,15 @@
 #include <zcl/string.h>
 #include <zcl/debug.h>
 #include <zcl/iobuf.h>
+#include <zcl/time.h>
 #include <zcl/ipc.h>
 
+#include <sys/resource.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <stdio.h>
 
+#include "rpc/generated/stats.h"
 #include "server.h"
 
 static int __iobuf_write_buf (struct stats_client *client,
@@ -44,48 +48,62 @@ static void __client_disconnected (z_ipc_client_t *ipc_client) {
     z_iobuf_free(&(client->obuffer));
 }
 
+static int __write_framed_buffer (struct stats_client *client,
+                                  const unsigned char *buffer,
+                                  unsigned int length)
+{
+    unsigned char fbuf[16];
+    int elen;
+
+    elen = z_encode_vint(fbuf, length);
+    __iobuf_write_buf(client, fbuf, elen);
+    __iobuf_write_buf(client, buffer, length);
+
+    return(0);
+}
+
 static int __client_read (z_ipc_client_t *ipc_client) {
     struct stats_client *client = (struct stats_client *)ipc_client;
     z_ipc_msg_t msg;
+
     while (z_ipc_msgbuf_add(&(client->imsgbuf), Z_IOPOLL_ENTITY_FD(client)) > 0) {
         while (z_ipc_msgbuf_get(&(client->imsgbuf), &msg) != NULL) {
-            // IOPOLL
-            // SYSTEM
-
-            // Stack CPU: ru_utime, ru_stime
-            // Stack I/O: ru_inblock, ru_oublock
-            // Stack IPC: ru_msgsnd, ru_msgrcv
-            // Stack Switch: ru_nvcsw, ru_nivcsw
-#if 0
-            getrusage(RUSAGE_SELF, &usage);
-           struct rusage {
-               struct timeval ru_utime; /* user CPU time used */
-               struct timeval ru_stime; /* system CPU time used */
-               long   ru_maxrss;        /* maximum resident set size */
-               long   ru_ixrss;         /* integral shared memory size */
-               long   ru_idrss;         /* integral unshared data size */
-               long   ru_isrss;         /* integral unshared stack size */
-               long   ru_minflt;        /* page reclaims (soft page faults) */
-               long   ru_majflt;        /* page faults (hard page faults) */
-               long   ru_nswap;         /* swaps */
-               long   ru_inblock;       /* block input operations */
-               long   ru_oublock;       /* block output operations */
-               long   ru_msgsnd;        /* IPC messages sent */
-               long   ru_msgrcv;        /* IPC messages received */
-               long   ru_nsignals;      /* signals received */
-               long   ru_nvcsw;         /* voluntary context switches */
-               long   ru_nivcsw;        /* involuntary context switches */
-           };
-#endif
-
-            /* send response */
-            unsigned char buf[16];
-            int elen = z_encode_vint(buf, 10);
-            z_memcpy(buf + elen, "+ok012345!", 10);
-            __iobuf_write_buf(client, buf, elen + 10);
-            z_ipc_client_set_writable(client, 1);
+            unsigned char ebuffer[512];
+            unsigned char *buf = ebuffer;
+            struct rusage usage;
 
             z_ipc_msg_free(&msg);
+
+            // SYSTEM
+            getrusage(RUSAGE_SELF, &usage);
+
+            // Stack CPU: ru_utime, ru_stime
+            buf = rpc_rusage_write_utime(buf, z_timeval_to_micros(&(usage.ru_utime)));
+            buf = rpc_rusage_write_stime(buf, z_timeval_to_micros(&(usage.ru_stime)));
+
+            // Memory
+            buf = rpc_rusage_write_maxrss(buf, usage.ru_maxrss << 10);
+
+            // Stack I/O: ru_inblock, ru_oublock
+            buf = rpc_rusage_write_minflt(buf, usage.ru_minflt);
+            buf = rpc_rusage_write_majflt(buf, usage.ru_majflt);
+            buf = rpc_rusage_write_inblock(buf, usage.ru_inblock);
+            buf = rpc_rusage_write_oublock(buf, usage.ru_oublock);
+
+            // Stack Switch: ru_nvcsw, ru_nivcsw
+            buf = rpc_rusage_write_nvcsw(buf, usage.ru_nvcsw);
+            buf = rpc_rusage_write_nivcsw(buf, usage.ru_nivcsw);
+
+
+            // IOPOLL
+            z_iopoll_stats_t *stats = &(z_ipc_client_iopoll(client)->engines[0].stats);
+            buf = rpc_rusage_write_iowait(buf, stats->iowait.sum);
+            buf = rpc_rusage_write_ioread(buf, stats->ioread.sum);
+            buf = rpc_rusage_write_iowrite(buf, stats->iowrite.sum);
+
+            /* send response */
+            __write_framed_buffer(client, ebuffer, buf - ebuffer);
+            z_ipc_client_set_writable(client, 1);
         }
     }
     return(0);

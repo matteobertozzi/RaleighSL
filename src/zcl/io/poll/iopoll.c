@@ -230,6 +230,8 @@ int z_iopoll_poll (z_iopoll_t *iopoll, const int *is_looping, int timeout) {
             iopoll->is_looping = NULL;
             return(1);
         }
+
+        z_thread_bind_to_core(&(engine->thread), i);
     }
 
     for (i = 0; i < Z_IOPOLL_ENGINES; ++i) {

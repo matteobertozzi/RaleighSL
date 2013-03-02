@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link href="resources/css/bootstrap.css" rel="stylesheet">
+  <link href="resources/css/nv.d3.css" rel="stylesheet">
+  <script src="resources/lib/d3.v2.js"></script>
+  <script src="resources/nv.d3.js"></script>
+  <script src="resources/lib/fisheye.js"></script>
+  <script src="resources/jquery-1.9.1.min.js"></script>
+  <script src="resources/nvd3-charts.js"></script>
+  <style>
+    html { overflow-y: scroll; }
+    #cpu svg {height: 250px;}
+    #mem svg {height: 250px;}
+    #ctxswitch svg {height: 250px;}
+    #iopoll svg {height: 250px;}
+  </style>
+  <script type="text/javascript">
+  function _fetchAndUpdateData(canvasId, url) {
+    $.getJSON(url, function(data) {
+       updateChart(canvasId, data);
+    });
+  }
+
+  function updateData() {
+    _fetchAndUpdateData("cpu", "cpu.js");
+    _fetchAndUpdateData("mem", "mem.js");
+    _fetchAndUpdateData("ctxswitch", "ctxswitch.js");
+    _fetchAndUpdateData("iopoll", "iopoll.js");
+  }
+
+  setInterval(updateData, 1500);
+  </script>
+</head>
+<body>
+  <div id="cpu"><svg><svg></div>
+  <div id="mem"><svg><svg></div>
+  <div id="ctxswitch"><svg><svg></div>
+  <div id="iopoll"><svg><svg></div>
+  <script type="text/javascript">
+  StackedAreaChart('cpu');
+  StackedAreaChart('mem');
+  StackedAreaChart('ctxswitch');
+  StackedAreaChart('iopoll');
+  </script>
+</body>
+</html>

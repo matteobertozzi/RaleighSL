@@ -17,7 +17,7 @@
 from netclient import NetIOClientWrapper
 import coding
 
-class IpcRpcClient(NetIOClientWrapper):
+class IpcFramedClient(NetIOClientWrapper):
     def send(self, data):
         buf = str(coding.z_encode_vint(len(data))) + data
         return self._client.send(buf)
@@ -32,5 +32,64 @@ class IpcRpcClient(NetIOClientWrapper):
             yield data[elen:]
             ibuf = self._client.fetch()
 
-class RaleighFS(IpcRpcClient):
+class IpcRpcClient(IpcFramedClient):
     pass
+
+class RaleighFS(IpcFramedClient):
+    pass
+
+class StatsClient(IpcRpcClient):
+    def rusage(self):
+        self.send('x')
+
+    def recv_struct(self):
+        for data in self.recv():
+            yield RUsageStruct.parse(data)
+
+class FieldStruct(object):
+    _UNKNOWN_FIELD = (None, None, None)
+    _FIELDS = {}
+
+    def __init__(self):
+        self._values = {}
+
+    def keys(self):
+        return self._values.iterkeys()
+
+    def __repr__(self):
+        return str(self._values)
+
+    def __getattr__(self, name):
+        value = self._values.get(name)
+        if value is None:
+            raise AttributeError(name)
+        return value
+
+    @classmethod
+    def parse(cls, data):
+        self = cls()
+        while len(data) > 0:
+            elength, field, length = coding.z_decode_field(data)
+            data = data[elength:]
+            field_name, field_type, _ = self._FIELDS.get(field, self._UNKNOWN_FIELD)
+            if field_name is not None and field_type is not None:
+                func = getattr(coding, 'z_decode_' + field_type)
+                self._values[field_name] = func(data, length)
+            data = data[length:]
+        return self
+
+class RUsageStruct(FieldStruct):
+    _FIELDS = {
+         1: ('utime',        'uint',  None),
+         2: ('stime',        'uint',  None),
+         3: ('maxrss',       'uint',  None),
+         4: ('minflt',       'uint',  None),
+         5: ('majflt',       'uint',  None),
+         6: ('inblock',      'uint',  None),
+         7: ('oublock',      'uint',  None),
+         8: ('nvcsw',        'uint',  None),
+         9: ('nivcsw',       'uint',  None),
+        10: ('iowait',       'uint',  None),
+        11: ('ioread',       'uint',  None),
+        12: ('iowrite',      'uint',  None),
+    }

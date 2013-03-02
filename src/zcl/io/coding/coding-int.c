@@ -116,8 +116,9 @@ void z_decode_uint16 (const unsigned char *buffer,
     switch (length) {
         case 2: result += buffer[1] <<  8;
         case 1: result += buffer[0];
-        case 0: *value = result;
     }
+
+    *value = result;
 }
 
 void z_decode_uint32 (const unsigned char *buffer,
@@ -131,8 +132,9 @@ void z_decode_uint32 (const unsigned char *buffer,
         case 3: result += buffer[2] << 16;
         case 2: result += buffer[1] <<  8;
         case 1: result += buffer[0];
-        case 0: *value = result;
     }
+
+    *value = result;
 }
 
 void z_decode_uint64 (const unsigned char *buffer,
@@ -150,6 +152,7 @@ void z_decode_uint64 (const unsigned char *buffer,
         case 3: result += buffer[2] << 16;
         case 2: result += buffer[1] <<  8;
         case 1: result += buffer[0];
-        case 0: *value = result;
     }
+
+    *value = result;
 }

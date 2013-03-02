@@ -29,6 +29,7 @@ Z_TYPEDEF_STRUCT(z_timer)
 #define Z_TIME_MSEC(x)            ((x) * 1000U)
 #define Z_TIME_SEC(x)             ((x) * 1000000)
 
+#define z_timeval_to_micros(x)    ((x)->tv_sec * 1000000U + (x)->tv_usec)
 
 struct z_timer {
     uint64_t start;
