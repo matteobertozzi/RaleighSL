@@ -90,7 +90,7 @@ struct z_vtable_reader {
 #define z_reader_decode_uint64(self, length, value)                         \
     z_v_reader_decode_uint64(Z_READER_VTABLE(self), self, length, value)
 
-void z_v_reader_skip (const z_vtable_reader_t *vtable, void *self, size_t n);
+int z_v_reader_skip (const z_vtable_reader_t *vtable, void *self, size_t n);
 
 uint8_t *z_v_reader_fetch (const z_vtable_reader_t *vtable, void *self,
                            uint8_t *buffer, size_t length);
@@ -106,11 +106,11 @@ size_t z_v_reader_tokenize (const z_vtable_reader_t *vtable, void *self,
 int z_v_reader_decode_field (const z_vtable_reader_t *vtable, void *self,
                              uint16_t *field_id, uint64_t *length);
 
-void z_v_reader_decode_uint16 (const z_vtable_reader_t *vtable, void *self,
+int  z_v_reader_decode_uint16 (const z_vtable_reader_t *vtable, void *self,
                                unsigned int length, uint16_t *value);
-void z_v_reader_decode_uint32 (const z_vtable_reader_t *vtable, void *self,
+int  z_v_reader_decode_uint32 (const z_vtable_reader_t *vtable, void *self,
                                unsigned int length, uint32_t *value);
-void z_v_reader_decode_uint64 (const z_vtable_reader_t *vtable, void *self,
+int  z_v_reader_decode_uint64 (const z_vtable_reader_t *vtable, void *self,
                                unsigned int length, uint64_t *value);
 
 __Z_END_DECLS__

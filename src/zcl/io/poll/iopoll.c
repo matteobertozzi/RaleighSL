@@ -218,27 +218,31 @@ int z_iopoll_remove (z_iopoll_t *iopoll, z_iopoll_entity_t *entity) {
 }
 
 int z_iopoll_poll (z_iopoll_t *iopoll, const int *is_looping, int timeout) {
+#if (Z_IOPOLL_ENGINES > 1)
+    unsigned int i;
+#endif /* Z_IOPOLL_ENGINES > 1 */
+
     iopoll->is_looping = is_looping;
     iopoll->timeout = timeout;
 
 #if (Z_IOPOLL_ENGINES > 1)
-    unsigned int i;
-
-    for (i = 0; i < Z_IOPOLL_ENGINES; ++i) {
+    for (i = 1; i < Z_IOPOLL_ENGINES; ++i) {
         z_iopoll_engine_t *engine = &(iopoll->engines[i]);
         if (z_thread_alloc(&(engine->thread), __iopoll_engine_do_poll, iopoll)) {
             iopoll->is_looping = NULL;
             return(1);
         }
 
-        z_thread_bind_to_core(&(engine->thread), i);
+        z_thread_bind_to_core(&(engine->thread), i - 1);
     }
+#endif /* Z_IOPOLL_ENGINES > 1 */
 
-    for (i = 0; i < Z_IOPOLL_ENGINES; ++i) {
+    /* engine[0] is running on the main thread */
+    __iopoll_engine_poll(iopoll, &(iopoll->engines[0]));
+#if (Z_IOPOLL_ENGINES > 1)
+    for (i = 1; i < Z_IOPOLL_ENGINES; ++i) {
         z_thread_join(&(iopoll->engines[i].thread));
     }
-#else
-    __iopoll_engine_poll(iopoll, &(iopoll->engines[0]));
 #endif /* Z_IOPOLL_ENGINES > 1 */
 
     return(0);

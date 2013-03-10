@@ -11,6 +11,7 @@
 #include <stdio.h>
 
 #include "rpc/generated/stats.h"
+#include "rpc/generated/rpc.h"
 #include "server.h"
 
 static int __iobuf_write_buf (struct stats_client *client,
@@ -62,50 +63,64 @@ static int __write_framed_buffer (struct stats_client *client,
     return(0);
 }
 
+static void __client_send_stats (struct stats_client *client) {
+    unsigned char ebuffer[512];
+    unsigned char *buf = ebuffer;
+    struct rusage usage;
+
+    // SYSTEM
+    getrusage(RUSAGE_SELF, &usage);
+
+    // Stack CPU: ru_utime, ru_stime
+    buf = rpc_rusage_write_utime(buf, z_timeval_to_micros(&(usage.ru_utime)));
+    buf = rpc_rusage_write_stime(buf, z_timeval_to_micros(&(usage.ru_stime)));
+
+    // Memory
+    buf = rpc_rusage_write_maxrss(buf, usage.ru_maxrss << 10);
+
+    // Stack I/O: ru_inblock, ru_oublock
+    buf = rpc_rusage_write_minflt(buf, usage.ru_minflt);
+    buf = rpc_rusage_write_majflt(buf, usage.ru_majflt);
+    buf = rpc_rusage_write_inblock(buf, usage.ru_inblock);
+    buf = rpc_rusage_write_oublock(buf, usage.ru_oublock);
+
+    // Stack Switch: ru_nvcsw, ru_nivcsw
+    buf = rpc_rusage_write_nvcsw(buf, usage.ru_nvcsw);
+    buf = rpc_rusage_write_nivcsw(buf, usage.ru_nivcsw);
+
+
+    // IOPOLL
+    z_iopoll_stats_t *stats = &(z_ipc_client_iopoll(client)->engines[0].stats);
+    buf = rpc_rusage_write_iowait(buf, stats->iowait.sum);
+    buf = rpc_rusage_write_ioread(buf, stats->ioread.sum);
+    buf = rpc_rusage_write_iowrite(buf, stats->iowrite.sum);
+
+    /* send response */
+    __write_framed_buffer(client, ebuffer, buf - ebuffer);
+    z_ipc_client_set_writable(client, 1);
+}
+
 static int __client_read (z_ipc_client_t *ipc_client) {
     struct stats_client *client = (struct stats_client *)ipc_client;
     z_ipc_msg_t msg;
 
     while (z_ipc_msgbuf_add(&(client->imsgbuf), Z_IOPOLL_ENTITY_FD(client)) > 0) {
         while (z_ipc_msgbuf_get(&(client->imsgbuf), &msg) != NULL) {
-            unsigned char ebuffer[512];
-            unsigned char *buf = ebuffer;
-            struct rusage usage;
+            struct rpc_reqhead reqhead;
+            z_ipc_msg_reader_t reader;
+
+            /* Parse Request */
+            z_reader_open(&reader, &msg);
+            rpc_reqhead_parse(&reqhead, &reader);
+            rpc_reqhead_dump(stdout, &reqhead);
+            z_reader_close(&reader);
 
             z_ipc_msg_free(&msg);
 
-            // SYSTEM
-            getrusage(RUSAGE_SELF, &usage);
-
-            // Stack CPU: ru_utime, ru_stime
-            buf = rpc_rusage_write_utime(buf, z_timeval_to_micros(&(usage.ru_utime)));
-            buf = rpc_rusage_write_stime(buf, z_timeval_to_micros(&(usage.ru_stime)));
-
-            // Memory
-            buf = rpc_rusage_write_maxrss(buf, usage.ru_maxrss << 10);
-
-            // Stack I/O: ru_inblock, ru_oublock
-            buf = rpc_rusage_write_minflt(buf, usage.ru_minflt);
-            buf = rpc_rusage_write_majflt(buf, usage.ru_majflt);
-            buf = rpc_rusage_write_inblock(buf, usage.ru_inblock);
-            buf = rpc_rusage_write_oublock(buf, usage.ru_oublock);
-
-            // Stack Switch: ru_nvcsw, ru_nivcsw
-            buf = rpc_rusage_write_nvcsw(buf, usage.ru_nvcsw);
-            buf = rpc_rusage_write_nivcsw(buf, usage.ru_nivcsw);
-
-
-            // IOPOLL
-            z_iopoll_stats_t *stats = &(z_ipc_client_iopoll(client)->engines[0].stats);
-            buf = rpc_rusage_write_iowait(buf, stats->iowait.sum);
-            buf = rpc_rusage_write_ioread(buf, stats->ioread.sum);
-            buf = rpc_rusage_write_iowrite(buf, stats->iowrite.sum);
-
-            /* send response */
-            __write_framed_buffer(client, ebuffer, buf - ebuffer);
-            z_ipc_client_set_writable(client, 1);
+            __client_send_stats(client);
         }
     }
+
     return(0);
 }
 

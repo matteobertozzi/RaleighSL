@@ -53,7 +53,7 @@ int main (int argc, char **argv) {
   z_ipc_stats_plug(&memory, &iopoll, NULL, "11217", NULL);
 
   /* Start spinning... */
-  z_iopoll_poll(&iopoll, &__is_running, -1);
+  z_iopoll_poll(&iopoll, &__is_running, 1000);
 
   /* ...and we're done */
   z_iopoll_close(&iopoll);

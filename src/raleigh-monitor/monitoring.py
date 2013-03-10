@@ -43,15 +43,16 @@ def __stats_update():
         with client.connection('127.0.0.1', 11217):
           iopoll.add(client)
           while _running:
-            client.send('x')
+            client.rusage()
             count = 0
             while count < 1 and _running:
               for data in client.recv_struct():
                 _rusage.append((int(time() * 1000), data))
                 count += 1
             sleep(1)
-      except:
-        pass
+      except Exception as e:
+        print e
+        sleep(1)
   finally:
     iopoll.stop()
 

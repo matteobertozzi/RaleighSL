@@ -27,8 +27,10 @@
 #include <fcntl.h>
 #include <stdio.h>
 
+#define __EPOLL_QSIZE           256
+
 static int __epoll_open (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
-    if ((engine->data.fd = epoll_create(512)) < 0) {
+    if ((engine->data.fd = epoll_create(__EPOLL_QSIZE)) < 0) {
         perror("epoll_create()");
         return(-1);
     }
@@ -82,21 +84,20 @@ static int __epoll_remove (z_iopoll_t *iopoll,
 }
 
 static void __epoll_poll (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
-    struct epoll_event events[512];
+    struct epoll_event events[__EPOLL_QSIZE];
     struct epoll_event *e;
     z_timer_t timer;
     int n;
 
     while (z_iopoll_is_looping(iopoll)) {
         z_timer_start(&timer);
-        n = epoll_wait(engine->data.fd, events, 512, iopoll->timeout);
-        z_timer_stop(&timer);
-        z_iopoll_stats_add_events(engine, n, z_timer_micros(&timer));
-
+        n = epoll_wait(engine->data.fd, events, __EPOLL_QSIZE, iopoll->timeout);
         if (Z_UNLIKELY(n < 0)) {
             perror("epoll_wait()");
             continue;
         }
+        z_timer_stop(&timer);
+        z_iopoll_stats_add_events(engine, n, z_timer_micros(&timer));
 
         for (e = events; n--; ++e) {
             uint32_t eflags = (!!(e->events & EPOLLIN)) << Z_IOPOLL_READ |
@@ -105,6 +106,8 @@ static void __epoll_poll (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
             z_iopoll_process(iopoll, engine, Z_IOPOLL_ENTITY(e->data.ptr), eflags);
         }
     }
+
+    z_iopoll_stats_dump(engine);
 }
 
 const z_vtable_iopoll_t z_iopoll_epoll = {

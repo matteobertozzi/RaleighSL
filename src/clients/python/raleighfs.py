@@ -33,14 +33,16 @@ class IpcFramedClient(NetIOClientWrapper):
             ibuf = self._client.fetch()
 
 class IpcRpcClient(IpcFramedClient):
-    pass
+    def send_message(self, msg_type, data):
+        msghead = coding.z_encode_field_uint(1, msg_type)
+        self.send(msghead + data)
 
-class RaleighFS(IpcFramedClient):
+class RaleighFS(IpcRpcClient):
     pass
 
 class StatsClient(IpcRpcClient):
     def rusage(self):
-        self.send('x')
+        self.send_message(1, 'x')
 
     def recv_struct(self):
         for data in self.recv():
@@ -93,3 +95,10 @@ class RUsageStruct(FieldStruct):
         11: ('ioread',       'uint',  None),
         12: ('iowrite',      'uint',  None),
     }
+
+class MsgHeadStruct(FieldStruct):
+    _FIELDS = {
+         0: ('req_id',       'uint',  None),
+         1: ('req_type',     'uint',  None),
+    }
+

@@ -41,6 +41,7 @@ struct z_iobuf_interfaces {
 struct z_iobuf_reader {
     __Z_READABLE__
     z_iobuf_node_t *node;
+    size_t available;
     size_t offset;
 };
 

@@ -38,6 +38,9 @@ struct z_iobuf_node {
 #define __iobuf_total_size(iobuf)                                           \
     ((iobuf)->offset + (iobuf)->length)
 
+#define __iobuf_last_block_size(iobuf)                                      \
+    (__iobuf_total_size(iobuf) & (__iobuf_block(iobuf) - 1))
+
 /* ===========================================================================
  *  PRIVATE iobuf methods
  */
@@ -85,19 +88,22 @@ void z_iobuf_drain (z_iobuf_t *iobuf, unsigned int n) {
             iobuf->tail = NULL;
         }
     } else {
-        if (n > iobuf->offset) {
-            z_iobuf_node_t *node = iobuf->head;
-            unsigned int size = __iobuf_block(iobuf) - iobuf->offset;
-            iobuf->length -= size;
-            iobuf->offset = 0;
-            n -= size;
+        unsigned char *data;
+        ssize_t rd;
 
-            iobuf->head = node->next;
-            __iobuf_node_free(iobuf, node);
+        while ((rd = z_iobuf_read(iobuf, &data)) > 0) {
+            if (n <= rd) {
+                z_iobuf_read_backup(iobuf, rd - n);
+                break;
+            }
+            n -= rd;
         }
 
-        while (n > 0) {
-            /* TODO */
+        if (iobuf->head != NULL) {
+            __iobuf_node_free(iobuf, iobuf->head);
+            iobuf->head = NULL;
+            iobuf->tail = NULL;
+            iobuf->offset = 0;
         }
     }
 }
@@ -108,10 +114,10 @@ ssize_t z_iobuf_read (z_iobuf_t *iobuf, unsigned char **data) {
 
     if (Z_LIKELY(iobuf->length > 0)) {
         if (iobuf->offset == __iobuf_block(iobuf)) {
-            n = __iobuf_block(iobuf);
-            n = z_min(n, iobuf->length);
             node = node->next;
             *data = node->data;
+            n = __iobuf_block(iobuf);
+            n = z_min(n, iobuf->length);
             iobuf->offset = n;
 
             __iobuf_node_free(iobuf, iobuf->head);
@@ -146,7 +152,7 @@ ssize_t z_iobuf_write (z_iobuf_t *iobuf, unsigned char **data) {
     z_iobuf_node_t *node = iobuf->tail;
     ssize_t n;
 
-    n = __iobuf_total_size(iobuf) & (__iobuf_block(iobuf) - 1);
+    n = __iobuf_last_block_size(iobuf);
     /* TODO: CHECK ME EMPTY BLOCK? */
     if (n == 0) {
         if ((node = __iobuf_node_alloc(iobuf)) == NULL)
@@ -208,7 +214,8 @@ static int __iobuf_reader_open (void *self, const void *object) {
     const z_iobuf_t *iobuf = Z_CONST_IOBUF(object);
     Z_READER_INIT(reader, iobuf);
     reader->node = iobuf->head;
-    reader->offset = 0;
+    reader->available = iobuf->length;
+    reader->offset = iobuf->offset;
     return(0);
 }
 
@@ -221,25 +228,25 @@ static size_t __iobuf_reader_next (void *self, uint8_t **data) {
     z_iobuf_node_t *node = reader->node;
     size_t n;
 
-    if (node == NULL)
+    if (node == NULL || reader->available == 0)
         return(0);
 
-    if (node->next == NULL) {
-        n = __iobuf_total_size(iobuf) & (__iobuf_block(iobuf) - 1);
-    } else {
-        n = __iobuf_block(iobuf);
-    }
-
+    n = (node->next != NULL) ? __iobuf_block(iobuf) : __iobuf_last_block_size(iobuf);
     if (reader->offset < n) {
         *data = node->data + reader->offset;
         n -= reader->offset;
+        n = z_min(n, reader->available);
+        reader->available -= n;
         reader->offset += n;
         return(n);
     }
 
-    if ((reader->node = node->next) == NULL)
+    if ((node = node->next) == NULL)
         return(0);
 
+    n = z_min(n, reader->available);
+    reader->node = node;
+    reader->available -= n;
     reader->offset = n;
     *data = node->data;
     return(n);
@@ -247,11 +254,12 @@ static size_t __iobuf_reader_next (void *self, uint8_t **data) {
 
 static void __iobuf_reader_backup (void *self, size_t count) {
     z_iobuf_reader_t *reader = Z_IOBUF_READER(self);
+    reader->available += count;
     reader->offset -= count;
 }
 
 static size_t __iobuf_reader_available (void *self) {
-    return(Z_READER_READABLE(z_iobuf_t, self)->length);
+    return(Z_IOBUF_READER(self)->available);
 }
 
 /* ===========================================================================

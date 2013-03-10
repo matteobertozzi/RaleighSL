@@ -2,7 +2,7 @@ _charts = {}
 
 function setupChart(canvasId, chart) {
     d3.select('#' + canvasId + ' svg')
-      .datum([])
+      //.datum([])
       .transition().duration(0)
       .call(chart);
     nv.utils.windowResize(chart.update);
@@ -10,7 +10,7 @@ function setupChart(canvasId, chart) {
     return chart;
 }
 
-function StackedAreaChart(canvasId, data) {
+function StackedAreaChart(canvasId) {
   nv.addGraph(function() {
     var chart = nv.models.stackedAreaChart()
                   .x(function(d) { return d[0] })
@@ -28,7 +28,7 @@ function StackedAreaChart(canvasId, data) {
   });
 }
 
-function CumulativeLineChart(canvasId, data) {
+function CumulativeLineChart(canvasId) {
   nv.addGraph(function() {
     var chart = nv.models.cumulativeLineChart()
                   .x(function(d) { return d[0] })
@@ -50,7 +50,7 @@ function CumulativeLineChart(canvasId, data) {
   });
 }
 
-function MultiBarChart(canvasId, data) {
+function MultiBarChart(canvasId) {
   nv.addGraph(function() {
     var chart = nv.models.multiBarChart();
 
@@ -64,7 +64,7 @@ function MultiBarChart(canvasId, data) {
   });
 }
 
-function PieChart(canvasId, data) {
+function PieChart(canvasId) {
   nv.addGraph(function() {
     var chart = nv.models.pieChart()
       .x(function(d) { return d.label })
@@ -77,9 +77,10 @@ function PieChart(canvasId, data) {
   });
 }
 
-function updateChart(canvasId, data) {
-  d3.select('#' + canvasId +' svg')
-      .datum(data)
-      .transition().duration(0)
-      .call(_charts[canvasId]);
+function updateChart(canvasId, dataa) {
+  chart = _charts[canvasId];
+  x = d3.select('#' + canvasId +' svg')
+      .datum(dataa)
+      .transition().duration(100);
+  x.call(chart.update);
 }

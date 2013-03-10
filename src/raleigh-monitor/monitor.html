@@ -5,8 +5,6 @@
   <link href="resources/css/nv.d3.css" rel="stylesheet">
   <script src="resources/lib/d3.v2.js"></script>
   <script src="resources/nv.d3.js"></script>
-  <script src="resources/lib/fisheye.js"></script>
-  <script src="resources/jquery-1.9.1.min.js"></script>
   <script src="resources/nvd3-charts.js"></script>
   <style>
     html { overflow-y: scroll; }
@@ -17,7 +15,7 @@
   </style>
   <script type="text/javascript">
   function _fetchAndUpdateData(canvasId, url) {
-    $.getJSON(url, function(data) {
+    d3.json(url, function(data) {
        updateChart(canvasId, data);
     });
   }

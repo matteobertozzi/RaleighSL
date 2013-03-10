@@ -7,6 +7,9 @@
 #include <unistd.h>
 #include <stdio.h>
 
+#include "rpc/generated/stats.h"
+#include "rpc/generated/rpc.h"
+
 #include "server.h"
 
 static int __iobuf_write_buf (struct raleighfs_client *client,
@@ -29,24 +32,9 @@ static int __iobuf_write_buf (struct raleighfs_client *client,
     return((const void *)p - blob);
 }
 
-static void __msg_parse (struct raleighfs_client *client, const z_ipc_msg_t *msg) {
-    z_ipc_msg_reader_t reader;
+static void __msg_parse (struct raleighfs_client *client, const z_ipc_msg_reader_t *reader) {
     unsigned char buf[32];
-    uint16_t field_id;
-    uint64_t length;
-
-    z_reader_open(&reader, msg);
-
-    z_reader_decode_field(&reader, &field_id, &length);
-
-    z_reader_close(&reader);
-
-    //int i, elen;
     int elen;
-    printf("msg_get offset=%3u length=%3lu ",
-           msg->offset, msg->length);
-    //for (i = 0; i < msg.length; ++i) printf("=");
-    printf("\n");
 
     /* send response */
     elen = z_encode_vint(buf, 10);
@@ -79,7 +67,21 @@ static int __client_read (z_ipc_client_t *ipc_client) {
 
     while (z_ipc_msgbuf_add(&(client->msgbuf), Z_IOPOLL_ENTITY_FD(client)) > 0) {
         while (z_ipc_msgbuf_get(&(client->msgbuf), &msg) != NULL) {
-            __msg_parse(client, &msg);
+            struct rpc_reqhead reqhead;
+            z_ipc_msg_reader_t reader;
+
+            printf("msg_get offset=%3u length=%3lu ",
+                    msg.offset, msg.length);
+            //for (i = 0; i < msg.length; ++i) printf("=");
+            printf("\n");
+
+            /* Parse Request */
+            z_reader_open(&reader, &msg);
+            rpc_reqhead_parse(&reqhead, &reader);
+            rpc_reqhead_dump(stdout, &reqhead);
+            __msg_parse(client, &reader);
+            z_reader_close(&reader);
+
             z_ipc_msg_free(&msg);
         }
     }

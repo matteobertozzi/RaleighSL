@@ -135,7 +135,7 @@ int z_slice_equals (z_slice_t *self, const void *data, size_t size) {
             if ((n = z_min(size, bslice->length)) == 0)
                 return(size == 0);
 
-            if (!z_byteslice_starts_with(bslice, pdata, size))
+            if (!z_byteslice_starts_with(bslice, pdata, n))
                 return(0);
 
             pdata += n;
@@ -246,6 +246,7 @@ static size_t __slice_reader_next (void *self, uint8_t **data) {
         if ((node = node->next) == NULL)
             return(0);
 
+        reader->node = node;
         reader->iblock = 0;
         block = &(node->blocks[0]);
     }

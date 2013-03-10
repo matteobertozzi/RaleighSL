@@ -33,6 +33,10 @@ int           z_decode_vint       (const unsigned char *buf,
                                    uint64_t *value);
 
 /* Encode/Decode int */
+#define       z_encode_uint16     z_encode_uint
+#define       z_encode_uint32     z_encode_uint
+#define       z_encode_uint64     z_encode_uint
+
 void          z_encode_uint       (unsigned char *buf,
                                    unsigned int length,
                                    uint64_t value);

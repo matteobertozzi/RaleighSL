@@ -1,6 +1,7 @@
 #include <zcl/humans.h>
 #include <zcl/slice.h>
 #include <zcl/iobuf.h>
+#include <zcl/debug.h>
 #include <zcl/ipc.h>
 
 #include <unistd.h>
@@ -96,13 +97,13 @@ struct redis_command {
 };
 
 static const struct redis_command __redis_commands[] = {
-    { "ping", 4, __process_ping },
-    { "quit", 4, __process_quit },
-    { "stat", 4, __process_stat },
-
     { "PING", 4, __process_ping },
     { "QUIT", 4, __process_quit },
     { "STAT", 4, __process_stat },
+
+    { "ping", 4, __process_ping },
+    { "quit", 4, __process_quit },
+    { "stat", 4, __process_stat },
 
     { NULL, 0, NULL },
 };
@@ -124,6 +125,7 @@ static int __redis_process (struct redis_client *client) {
         for (p = __redis_commands; p->name != NULL; ++p) {
             if (n < p->length) continue;
             if (z_slice_equals(&slice, p->name, p->length)) {
+                //printf("FOUND %s\n", p->name);
                 result = p->func(client, &reader, &slice);
                 break;
             }
@@ -132,7 +134,14 @@ static int __redis_process (struct redis_client *client) {
         if (result < 0) {
             printf("NOT FOUND %lu:", z_slice_length(&slice));
             z_slice_dump(&slice);
-            return(result);
+
+            if ((client->ibuffer.length - ndrain) > 8196) {
+                printf("BROKEN CLIENT\n");
+                return(result);
+            }
+
+            ndrain -= n;
+            break;
         }
     }
     z_iobuf_drain(&(client->ibuffer), ndrain);
@@ -146,19 +155,17 @@ static int __redis_process (struct redis_client *client) {
  */
 static int __client_connected (z_ipc_client_t *client) {
     struct redis_client *redis = (struct redis_client *)client;
-
-    printf("redis client connected\n");
     z_iobuf_alloc(&(redis->ibuffer), client->server->memory, 128);
     z_iobuf_alloc(&(redis->obuffer), client->server->memory, 128);
+    Z_LOG_INFO("Redis Client %d connected\n", Z_IOPOLL_ENTITY_FD(client));
     return(0);
 }
 
 static void __client_disconnected (z_ipc_client_t *client) {
     struct redis_client *redis = (struct redis_client *)client;
-
-    printf("redis client disconnected\n");
     z_iobuf_free(&(redis->ibuffer));
     z_iobuf_free(&(redis->obuffer));
+    Z_LOG_INFO("Redis Client %d disconnected\n", Z_IOPOLL_ENTITY_FD(client));
 }
 
 static int __client_read (z_ipc_client_t *client) {

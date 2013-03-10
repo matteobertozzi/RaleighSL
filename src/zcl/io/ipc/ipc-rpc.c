@@ -290,7 +290,7 @@ static int __ipc_msg_reader_open (void *self, const void *object) {
     Z_READER_INIT(reader, ipc_msg);
     reader->node = ipc_msg->head;
     reader->available = ipc_msg->length;
-    reader->offset = 0;
+    reader->offset = ipc_msg->offset;
     return(0);
 }
 
@@ -306,7 +306,7 @@ static size_t __ipc_msg_reader_next (void *self, uint8_t **data) {
         return(0);
 
     /* still some bytes left */
-    size = z_min(reader->available, __msgbuf_node_used(node));
+    size = z_min(reader->offset + reader->available, __msgbuf_node_used(node));
     if (reader->offset < size) {
         unsigned int n = size - reader->offset;
         *data = node->data + reader->offset;
@@ -332,6 +332,10 @@ static void __ipc_msg_reader_backup (void *self, size_t count) {
     reader->offset -= count;
 }
 
+static size_t __ipc_msg_reader_available (void *self) {
+    return(Z_IPC_MSG_READER(self)->available);
+}
+
 /* ===========================================================================
  *  Slice vtables
  */
@@ -347,7 +351,7 @@ static const z_vtable_reader_t __ipc_msg_reader = {
     .close      = __ipc_msg_reader_close,
     .next       = __ipc_msg_reader_next,
     .backup     = __ipc_msg_reader_backup,
-    .available  = NULL,
+    .available  = __ipc_msg_reader_available,
 };
 
 static const z_ipc_msg_interfaces_t __ipc_msg_interfaces = {

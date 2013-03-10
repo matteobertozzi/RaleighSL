@@ -68,12 +68,12 @@ static void __ipc_client_close (z_iopoll_entity_t *client) {
 
 static int __ipc_client_read (z_iopoll_entity_t *entity) {
     const z_ipc_protocol_t *proto = Z_IPC_CLIENT(entity)->server->protocol;
-    return((proto->read != NULL) ? proto->read(Z_IPC_CLIENT(entity)) : 0);
+    return(Z_LIKELY(proto->read != NULL) ? proto->read(Z_IPC_CLIENT(entity)) : 0);
 }
 
 static int __ipc_client_write (z_iopoll_entity_t *entity) {
     const z_ipc_protocol_t *proto = Z_IPC_CLIENT(entity)->server->protocol;
-    return((proto->write != NULL) ? proto->write(Z_IPC_CLIENT(entity)) : 0);
+    return(Z_LIKELY(proto->write != NULL) ? proto->write(Z_IPC_CLIENT(entity)) : 0);
 }
 
 /* ============================================================================

@@ -113,6 +113,10 @@ def z_decode_field(buf):
 
     return elength, field_id, length
 
+def z_encode_field_uint(field_id, value):
+    length = z_uint_bytes(value)
+    return z_encode_field(field_id, length) + z_encode_uint(length, value)
+
 def z_encode_vint(value):
   data = bytearray()
   bits = value & 0x7f

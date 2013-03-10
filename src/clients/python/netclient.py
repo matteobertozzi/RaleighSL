@@ -89,8 +89,12 @@ class NetIOClient(INetClient):
       self._wbuf = bytearray()
     self._wlock.release()
     if len(data) > 0:
-      self._sock.send(data)
-      self.txbytes += len(data)
+      n = self._sock.send(data)
+      if n < len(data):
+        self._wlock.acquire()
+        self._wbuf = data[n:] + self._wbuf
+        self._wlock.release()
+      self.txbytes += n
 
   def read(self):
     data = self._sock.recv(4096)
@@ -121,6 +125,9 @@ class NetIOClientWrapper(INetClient):
       rxbytes = self._client.rxbytes
       print 'tx %s %s/sec' % (humanSize(txbytes), humanSize(txbytes / t))
       print 'rx %s %s/sec' % (humanSize(rxbytes), humanSize(rxbytes / t))
+
+    txbytes = property(lambda x: x._client.txbytes)
+    rxbytes = property(lambda x: x._client.rxbytes)
 
     def fileno(self):
       return self._client.fileno()

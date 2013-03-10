@@ -16,6 +16,7 @@
 
 import threading
 import select
+import socket
 
 class IOPoll(object):
   MAX_DELAY = 0.050
@@ -64,8 +65,13 @@ class IOPoll(object):
         if not fd in fds:
           try:
             fds_map[fd].read()
+          except socket.error as e:
+            if e.errno == 11:
+              print 'got exception while reading, retry', fd, e
+            else:
+              fds.add(fd)
           except Exception as e:
-            print 'got exception while reading', fd, e
+            print 'got exception while reading', fd, type(e), e
             fds.add(fd)
       # Writes
       for fd in wfds:
@@ -83,6 +89,9 @@ class IOPoll(object):
             self._fds.discard(fds_map[fd])
         finally:
           self._lock.release()
+
+  def __contains__(self, o):
+    return o in self._fds
 
   def add(self, fd):
     self._lock.acquire()

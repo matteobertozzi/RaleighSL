@@ -155,6 +155,8 @@ size_t z_v_reader_tokenize (const z_vtable_reader_t *vtable, void *self,
                 nread += last_read;
                 break;
             }
+        } else {
+            z_extent_reset(&extent);
         }
 
         nread += n;
@@ -163,12 +165,15 @@ size_t z_v_reader_tokenize (const z_vtable_reader_t *vtable, void *self,
     return(nread);
 }
 
-void z_v_reader_skip (const z_vtable_reader_t *vtable, void *self, size_t length) {
+int z_v_reader_skip (const z_vtable_reader_t *vtable, void *self, size_t length) {
     uint8_t *data;
     size_t n;
-    while ((n = vtable->next(self, &data)) < length)
+    while ((n = vtable->next(self, &data)) < length) {
+        if (Z_UNLIKELY(!n)) return(-1);
         length -= n;
+    }
     vtable->backup(self, n - length);
+    return(0);
 }
 
 uint8_t *z_v_reader_fetch (const z_vtable_reader_t *vtable, void *self,
@@ -177,6 +182,10 @@ uint8_t *z_v_reader_fetch (const z_vtable_reader_t *vtable, void *self,
     uint8_t *pbuffer;
     uint8_t *data;
     size_t n;
+
+    /* Data is required to be there */
+    if (vtable->available == NULL || vtable->available(self) < length)
+        return(NULL);
 
     if ((n = vtable->next(self, &data)) >= length) {
         vtable->backup(self, n - length);
@@ -193,7 +202,7 @@ uint8_t *z_v_reader_fetch (const z_vtable_reader_t *vtable, void *self,
         }
 
         z_memcpy(pbuffer, data, n);
-        data += n;
+        pbuffer += n;
         length -= n;
     }
 
@@ -207,16 +216,18 @@ int z_v_reader_decode_field (const z_vtable_reader_t *vtable, void *self,
     int elength;
     size_t n;
 
-    n = vtable->next(self, &data);
+    if (!(n = vtable->next(self, &data)))
+        return(-1);
+
     if ((elength = z_decode_field(data, n, field_id, length)) > 0) {
         vtable->backup(self, n - elength);
     } else {
         uint8_t buffer[16];
-
         /* Not in the first chunk */
         elength = -elength;
         vtable->backup(self, n);
-        z_v_reader_fetch(vtable, self, buffer, elength);
+        if (Z_UNLIKELY(!z_v_reader_fetch(vtable, self, buffer, elength)))
+            return(-elength);
         elength = z_decode_field(buffer, elength, field_id, length);
     }
 
@@ -224,8 +235,8 @@ int z_v_reader_decode_field (const z_vtable_reader_t *vtable, void *self,
 }
 
 
-void z_v_reader_decode_uint16 (const z_vtable_reader_t *vtable, void *self,
-                               unsigned int length, uint16_t *value)
+int z_v_reader_decode_uint16 (const z_vtable_reader_t *vtable, void *self,
+                              unsigned int length, uint16_t *value)
 {
     uint8_t *data;
     size_t n;
@@ -235,17 +246,19 @@ void z_v_reader_decode_uint16 (const z_vtable_reader_t *vtable, void *self,
         vtable->backup(self, n - length);
     } else {
         uint8_t buffer[8];
-
         /* Not in the first chunk */
         vtable->backup(self, n);
-        z_v_reader_fetch(vtable, self, buffer, length);
+        if (Z_UNLIKELY(!z_v_reader_fetch(vtable, self, buffer, length)))
+            return(-length);
         z_decode_uint16(buffer, length, value);
     }
+
+    return(0);
 }
 
 
-void z_v_reader_decode_uint32 (const z_vtable_reader_t *vtable, void *self,
-                               unsigned int length, uint32_t *value)
+int z_v_reader_decode_uint32 (const z_vtable_reader_t *vtable, void *self,
+                              unsigned int length, uint32_t *value)
 {
     uint8_t *data;
     size_t n;
@@ -255,17 +268,19 @@ void z_v_reader_decode_uint32 (const z_vtable_reader_t *vtable, void *self,
         vtable->backup(self, n - length);
     } else {
         uint8_t buffer[8];
-
         /* Not in the first chunk */
         vtable->backup(self, n);
-        z_v_reader_fetch(vtable, self, buffer, length);
+        if (Z_UNLIKELY(!z_v_reader_fetch(vtable, self, buffer, length)))
+            return(-length);
         z_decode_uint32(buffer, length, value);
     }
+
+    return(0);
 }
 
 
-void z_v_reader_decode_uint64 (const z_vtable_reader_t *vtable, void *self,
-                               unsigned int length, uint64_t *value)
+int z_v_reader_decode_uint64 (const z_vtable_reader_t *vtable, void *self,
+                              unsigned int length, uint64_t *value)
 {
     uint8_t *data;
     size_t n;
@@ -275,10 +290,12 @@ void z_v_reader_decode_uint64 (const z_vtable_reader_t *vtable, void *self,
         vtable->backup(self, n - length);
     } else {
         uint8_t buffer[8];
-
         /* Not in the first chunk */
         vtable->backup(self, n);
-        z_v_reader_fetch(vtable, self, buffer, length);
+        if (Z_UNLIKELY(!z_v_reader_fetch(vtable, self, buffer, length)))
+            return(-length);
         z_decode_uint64(buffer, length, value);
     }
+
+    return(0);
 }
