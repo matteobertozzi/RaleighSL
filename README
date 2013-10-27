@@ -1,0 +1,43 @@
+ RaleighFS - Abstract Storage Layer
+=========================================
+
+How To Compile & Run
+~~~~~~~~~~~~~~~~~~~~~~
+
+To run the build process just type python build.py
+     python build.py
+
+To run the server:
+     export LD_LIBRARY_PATH=./build/zcl/libs:./build/raleighfs/libs/
+     ./build/raleigh-server/raleigh-server
+
+Source Code
+~~~~~~~~~~~~~
+ - src/zcl                contains the abstraction classes and some tool
+                          that is used by every piece of code.
+ - src/raleighfs-core     contains the file-system core module.
+ - src-raleighfs-plugins  contains all the file-system's pluggable objects
+                          and semantics layers.
+ - src/raleigh-server     currently contains the entry point to run a
+                          memcache compatible (memccapable text protocol),
+                          and a redis get/set interface server.
+                          The in-memory storage is relegated in engine.{h,c}
+                          and is currently based on a Chained HashTable or
+                          a Skip List or a Binary Tree.
+
+
+Source Code References
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+In src/zcl/hash/hash.c you can find some general purpose hash function that you
+can find here: http://www.partow.net/programming/hashfunctions/
+
+In src/zcl/hash/murmur*.c you can find the murmur* hash function that you can
+find on the author website: http://code.google.com/p/smhasher/
+
+In src/zcl/hash/lookup3.c you can find the lookup3 hash function that you can
+find on the author website: http://burtleburtle.net/bob/c/lookup3.c
+
+In src/zcl/encode/base64.c you can find the base64 encoder/decoder that you can
+find on the author website: http://base64.sourceforge.net/b64.c
+
