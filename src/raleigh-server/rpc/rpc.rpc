@@ -1,0 +1,264 @@
+/* ==================================================
+ *  Generic
+ */
+struct status {
+  1: uint64 code [default=0];
+  2: bytes message;
+}
+
+/* ==================================================
+ *  Semantic
+ */
+request semantic_open {
+  1: bytes name;
+}
+
+response semantic_open {
+  0: status status;
+  1: uint64 oid;
+}
+
+request semantic_create {
+  1: bytes name;
+  2: bytes type;
+}
+
+response semantic_create {
+  0: status status;
+  1: uint64 oid;
+}
+
+request semantic_delete {
+  1: bytes name;
+}
+response semantic_delete {
+  0: status status;
+}
+
+request semantic_rename {
+  1: bytes old_name;
+  2: bytes new_name;
+}
+response semantic_rename {
+  0: status status;
+}
+
+/* ==================================================
+ *  Transaction
+ */
+request transaction_create {
+}
+response transaction_create {
+  0: status status;
+  1: uint64 txn_id;
+}
+
+request transaction_commit {
+  1: uint64 txn_id;
+}
+response transaction_commit {
+  0: status status;
+}
+
+request transaction_rollback {
+  1: uint64 txn_id;
+}
+response transaction_rollback {
+  0: status status;
+}
+
+/* ==================================================
+ *  Counter
+ */
+request counter_get {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+}
+
+response counter_get {
+  0: status status;
+  1: int64 value;
+}
+
+request counter_set {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: int64 value;
+}
+
+response counter_set {
+  0: status status;
+}
+
+request counter_cas {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: int64 old_value;
+  3: int64 new_value;
+}
+
+response counter_cas {
+  0: status status;
+  1: int64 value;
+}
+
+request counter_add {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: int64 value;
+}
+
+response counter_add {
+  0: status status;
+  1: int64 value;
+}
+
+request counter_mul {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: int64 value;
+}
+
+response counter_mul {
+  0: status status;
+  1: int64 value;
+}
+
+/* ==================================================
+ *  Sorted-Set
+ */
+request sset_insert {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: bool allow_update [default=false];
+  3: bytes key;
+  4: bytes value;
+}
+
+response sset_insert {
+  0: status status;
+}
+
+request sset_update {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: bytes key;
+  3: bytes value;
+}
+
+response sset_update {
+  0: status status;
+  1: bytes old_value;
+}
+
+request sset_pop {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: bytes key;
+}
+
+response sset_pop {
+  0: status status;
+  1: bytes value;
+}
+
+request sset_get {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: bytes key;
+}
+
+response sset_get {
+  0: status status;
+  1: bytes value;
+}
+
+request sset_scan {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: uint32 count;
+  3: bytes key;
+  4: bool include_key [default=true];
+}
+
+response sset_scan {
+  0: status status;
+  1: list[bytes] keys;
+  2: list[bytes] values;
+}
+
+/* ==================================================
+ *  Deque
+ */
+request deque_push {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: bool front [default=false];
+  3: bytes data;
+}
+
+response deque_push {
+  0: status status;
+}
+
+request deque_pop {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: bool front [default=true];
+}
+
+response deque_pop {
+  0: status status;
+  1: bytes data;
+}
+
+/* ==================================================
+ *  Server
+ */
+request server_ping { }
+response server_ping { }
+
+request server_info { }
+response server_info { }
+
+request server_quit { }
+response server_quit { }
+
+/* ==================================================
+ *  RPCs
+ */
+rpc raleighfs_rpc {
+  /* Semantic */
+  10: semantic_open;
+  11: semantic_create;
+  12: semantic_delete;
+  13: semantic_rename;
+
+  /* Transaction */
+  20: transaction_create;
+  21: transaction_commit;
+  22: transaction_rollback;
+
+  /* Counter */
+  30: counter_get;
+  31: counter_set;
+  32: counter_cas;
+  33: counter_add;
+  34: counter_mul;
+
+  /* Sorted Set */
+  40: sset_insert;
+  41: sset_update;
+  43: sset_pop;
+  45: sset_get;
+  46: sset_scan;
+
+  /* Deque */
+  50: deque_push;
+  51: deque_pop;
+
+  /* Server */
+  90: server_ping;
+  91: server_info;
+  92: server_quit;
+}

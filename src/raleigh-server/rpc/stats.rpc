@@ -1,0 +1,30 @@
+request rusage { }
+response rusage {
+   1: uint64 utime;         /* user CPU time used */
+   2: uint64 stime;         /* system CPU time used */
+   3: uint64 maxrss;        /* maximum resident set size */
+   4: uint64 minflt;        /* page reclaims (soft page faults) */
+   5: uint64 majflt;        /* page faults (hard page faults) */
+   6: uint64 inblock;       /* block input operations */
+   7: uint64 oublock;       /* block output operations */
+   8: uint64 nvcsw;         /* voluntary context switches */
+   9: uint64 nivcsw;        /* involuntary context switches */
+
+  10: uint64 iowait;
+  11: uint64 ioread;
+  12: uint64 iowrite;
+}
+
+struct rpc_histogram {
+  0: uint64 nevents;
+  1: uint64 min;
+  2: uint64 max;
+  3: uint64 sum;
+  4: uint16 nbuckets;
+  5: list[uint64] bounds;
+  6: list[uint64] events;
+};
+
+rpc stats_rpc {
+  0: rusage;
+}
