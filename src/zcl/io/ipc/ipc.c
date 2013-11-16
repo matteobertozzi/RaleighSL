@@ -34,7 +34,7 @@ static z_ipc_client_t *__ipc_client_alloc (z_ipc_server_t *server, int csock) {
     return(NULL);
 
   /* Initialize client */
-  z_iopoll_entity_init(Z_IOPOLL_ENTITY(client), &__ipc_client_vtable, csock);
+  z_iopoll_entity_open(Z_IOPOLL_ENTITY(client), &__ipc_client_vtable, csock);
   client->server = server;
 
   /* Ask the protocol to do its own stuff before starting up */
@@ -56,7 +56,7 @@ static void __ipc_client_free (z_ipc_client_t *client) {
     server->protocol->disconnected(client);
 
   /* Close client description */
-  close(Z_IOPOLL_ENTITY_FD(client));
+  z_iopoll_entity_close(Z_IOPOLL_ENTITY(client));
 
   /* Deallocate client */
   z_memory_free(z_global_memory(), client);
@@ -101,7 +101,7 @@ static z_ipc_server_t *__ipc_server_alloc (const z_ipc_protocol_t *proto,
     return(NULL);
   }
 
-  z_iopoll_entity_init(Z_IOPOLL_ENTITY(server), &__ipc_server_vtable, socket);
+  z_iopoll_entity_open(Z_IOPOLL_ENTITY(server), &__ipc_server_vtable, socket);
   server->protocol = proto;
 
   if (proto->setup != NULL && proto->setup(server)) {
@@ -114,7 +114,7 @@ static z_ipc_server_t *__ipc_server_alloc (const z_ipc_protocol_t *proto,
 }
 
 static void __ipc_server_free (z_ipc_server_t *server) {
-  close(Z_IOPOLL_ENTITY_FD(server));
+  z_iopoll_entity_close(Z_IOPOLL_ENTITY(server));
   z_memory_struct_free(z_global_memory(), z_ipc_server_t, server);
 }
 

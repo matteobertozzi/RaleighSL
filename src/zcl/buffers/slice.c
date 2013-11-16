@@ -102,12 +102,12 @@ int z_slice_add (z_slice_t *self, const z_slice_t *slice) {
 
   for (node = &(self->head); node != NULL; node = node->next) {
     __slice_node_blocks_scan(node, bslice, {
-      if (bslice->length != 0) {
-        if (z_slice_append(self, bslice->data, bslice->length))
+      if (bslice->size != 0) {
+        if (z_slice_append(self, bslice->data, bslice->size))
           return(1);
       }
     });
-  }  
+  }
 
   return(0);
 }
@@ -166,15 +166,35 @@ int z_slice_ltrim (z_slice_t *self, size_t size) {
 
   for (node = &(self->head); node != NULL; node = node->next) {
     __slice_node_blocks_scan(node, bslice, {
-      size_t n = z_min(size, bslice->length);
+      size_t n = z_min(size, bslice->size);
       size -= n;
 
       bslice->data += n;
-      bslice->length -= n;
+      bslice->size -= n;
     });
   }
 
   return(0);
+}
+
+void z_slice_to_lower (z_slice_t *self) {
+  const z_byte_slice_t *bslice;
+  const z_slice_node_t *node;
+  for (node = &(self->head); node != NULL; node = node->next) {
+    __slice_node_blocks_scan(node, bslice, {
+      z_strnlower((char *)bslice->data, bslice->size);
+    });
+  }
+}
+
+void z_slice_to_upper (z_slice_t *self) {
+  const z_byte_slice_t *bslice;
+  const z_slice_node_t *node;
+  for (node = &(self->head); node != NULL; node = node->next) {
+    __slice_node_blocks_scan(node, bslice, {
+      z_strnupper((char *)bslice->data, bslice->size);
+    });
+  }
 }
 
 size_t z_slice_length (const z_slice_t *self) {
@@ -184,9 +204,9 @@ size_t z_slice_length (const z_slice_t *self) {
 
   for (node = &(self->head); node != NULL; node = node->next) {
     __slice_node_blocks_scan(node, bslice, {
-      if (bslice->length == 0)
+      if (bslice->size == 0)
         return(length);
-      length += bslice->length;
+      length += bslice->size;
     });
   }
 
@@ -206,10 +226,10 @@ int z_slice_equals (const z_slice_t *self, const void *data, size_t size) {
     __slice_node_blocks_scan(node, bslice, {
       size_t n;
 
-      if (size < bslice->length)
+      if (size < bslice->size)
         return(0);
 
-      if ((n = z_min(size, bslice->length)) == 0)
+      if ((n = z_min(size, bslice->size)) == 0)
         return(size == 0);
 
       if (!z_byte_slice_starts_with(bslice, pdata, n))
@@ -232,7 +252,7 @@ int z_slice_starts_with (const z_slice_t *self, const void *data, size_t size) {
     __slice_node_blocks_scan(node, bslice, {
       size_t n;
 
-      if ((n = z_min(size, bslice->length)) == 0)
+      if ((n = z_min(size, bslice->size)) == 0)
         return(size == 0);
 
       if (!z_byte_slice_starts_with(bslice, pdata, size))
@@ -256,13 +276,13 @@ size_t z_slice_dump (FILE *stream, const z_slice_t *self) {
   for (node = &(self->head); node != NULL; node = node->next) {
     for (i = 0; i < Z_SLICE_NBLOCKS; ++i) {
       bslice = &(node->blocks[i]);
-      if (bslice->length == 0) {
+      if (bslice->size == 0) {
         fputc('\n', stream);
         return(length);
       }
 
-      length += bslice->length;
-      for (j = 0; j < bslice->length; ++j) {
+      length += bslice->size;
+      for (j = 0; j < bslice->size; ++j) {
         fputc(bslice->data[j], stream);
       }
     }
@@ -278,7 +298,7 @@ size_t z_slice_copy (const z_slice_t *self, void *buf, size_t size) {
 
   for (node = &(self->head); node != NULL; node = node->next) {
     __slice_node_blocks_scan(node, bslice, {
-      size_t n = z_min(size, bslice->length);
+      size_t n = z_min(size, bslice->size);
       size -= n;
 
       z_memcpy(pbuf, bslice->data, n);
@@ -330,10 +350,10 @@ static size_t __slice_reader_next (void *self, const uint8_t **data) {
     return(0);
 
   /* still some bytes left */
-  if (reader->offset < block->length) {
+  if (reader->offset < block->size) {
     *data = block->data + reader->offset;
-    n = block->length - reader->offset;
-    reader->offset = block->length;
+    n = block->size - reader->offset;
+    reader->offset = block->size;
     return(n);
   }
 
@@ -351,9 +371,9 @@ static size_t __slice_reader_next (void *self, const uint8_t **data) {
   if (z_byte_slice_is_empty(block))
     return(0);
 
-  reader->offset = block->length;
+  reader->offset = block->size;
   *data = block->data;
-  return(block->length);
+  return(block->size);
 }
 
 static void __slice_reader_backup (void *self, size_t count) {

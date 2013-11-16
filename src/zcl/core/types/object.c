@@ -34,8 +34,8 @@ void *__z_object_alloc (z_object_t *object, const z_vtable_type_t *type, ...) {
   }
 
   /* Initialize Object fields */
-  object->flags.uflags16 = 0;
-  z_atomic_set(&(object->flags.irefs), 1);
+  object->flags.u16 = 0;
+  object->flags.u32 = 0;
 
   /* Call the object constructor */
   va_start(args, type);
@@ -49,9 +49,6 @@ void *__z_object_alloc (z_object_t *object, const z_vtable_type_t *type, ...) {
 }
 
 void __z_object_free (z_object_t *object, const z_vtable_type_t *type) {
-  if (z_object_dec_ref(object) > 0)
-    return;
-
   /* Call destructor */
   if (type != NULL && type->dtor != NULL)
     type->dtor(object);

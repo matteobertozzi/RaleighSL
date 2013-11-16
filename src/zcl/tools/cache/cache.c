@@ -45,9 +45,9 @@ struct q2_cache {
   uint32_t kin;
   uint32_t kout;
 
-  unsigned int am_size;
-  unsigned int a1in_size;
-  unsigned int a1out_size;
+  uint32_t am_size;
+  uint32_t a1in_size;
+  uint32_t a1out_size;
 
   z_dlink_node_t am;
   z_dlink_node_t a1in;
@@ -62,17 +62,17 @@ struct hnode {
 struct htable {
   z_rwlock_t lock;
   struct hnode *buckets;
-  unsigned int size;
-  unsigned int mask;
-  unsigned int used;
+  uint32_t size;
+  uint32_t mask;
+  uint32_t used;
 };
 
 struct z_cache {
   uint64_t hit;
   uint64_t miss;
 
-  unsigned int usage;
-  unsigned int capacity;
+  uint32_t usage;
+  uint32_t capacity;
 
   struct htable table;
 
@@ -101,7 +101,7 @@ static void __htable_resize (struct htable *table, unsigned int required_size) {
   unsigned int new_size;
   unsigned int size;
 
-  new_size = 4;
+  new_size = 64;
   while (new_size < required_size)
     new_size <<= 1;
 
@@ -292,7 +292,7 @@ void z_cache_entry_init (z_cache_entry_t *entry, uint64_t oid) {
  */
 static void __lru_reclaim (z_cache_t *cache, struct lru_cache *lru) {
   z_dlink_node_t *tail = lru->queue.prev;
-  size_t usage = cache->usage;
+  uint32_t usage = cache->usage;
   while (usage > cache->capacity && tail != &(lru->queue)) {
     z_cache_entry_t *evicted = z_dlink_entry(tail, z_cache_entry_t, cache);
 
@@ -377,7 +377,7 @@ static void __policy_lru_dump (FILE *stream, z_cache_t *cache) {
   z_cache_entry_t *entry;
   fprintf(stream, "LRU CACHE\n");
   z_dlink_for_each_entry(&(lru->queue), entry, z_cache_entry_t, cache, {
-    fprintf(stream, "%lu -> ", entry->oid);
+    fprintf(stream, "%"PRIu64" -> ", entry->oid);
   });
   fprintf(stream, "X\n");
 }
@@ -533,22 +533,22 @@ static void __policy_2q_dump (FILE *stream, z_cache_t *cache) {
   struct q2_cache *q2 = &(cache->dpolicy.q2);
   z_cache_entry_t *entry;
   fprintf(stream, "2Q CACHE\n");
-  fprintf(stream, " - am_size:    %u\n", q2->am_size);
-  fprintf(stream, " - a1out_size: %u\n", q2->a1out_size);
-  fprintf(stream, " - a1in_size:  %u\n", q2->a1in_size);
+  fprintf(stream, " - am_size:    %"PRIu32"\n", q2->am_size);
+  fprintf(stream, " - a1out_size: %"PRIu32"\n", q2->a1out_size);
+  fprintf(stream, " - a1in_size:  %"PRIu32"\n", q2->a1in_size);
   fprintf(stream, " - am: ");
   z_dlink_for_each_entry(&(q2->am), entry, z_cache_entry_t, cache, {
-    fprintf(stream, "%lu -> ", entry->oid);
+    fprintf(stream, "%"PRIu64" -> ", entry->oid);
   });
   fprintf(stream, "X\n");
   fprintf(stream, " - a1out: ");
   z_dlink_for_each_entry(&(q2->a1out), entry, z_cache_entry_t, cache, {
-    fprintf(stream, "%lu -> ", entry->oid);
+    fprintf(stream, "%"PRIu64" -> ", entry->oid);
   });
   fprintf(stream, "X\n");
   fprintf(stream, " - a1in: ");
   z_dlink_for_each_entry(&(q2->a1in), entry, z_cache_entry_t, cache, {
-    fprintf(stream, "%lu -> ", entry->oid);
+    fprintf(stream, "%"PRIu64" -> ", entry->oid);
   });
   fprintf(stream, "X\n");
 }
@@ -612,7 +612,7 @@ void z_cache_free (z_cache_t *cache) {
 void z_cache_release (z_cache_t *cache, z_cache_entry_t *entry) {
   Z_ASSERT(entry->refs > 0, "Entry already unreferenced");
   if (z_atomic_dec(&(entry->refs)) == 0) {
-    Z_LOG_TRACE("Cache Release %u", entry->oid);
+    Z_LOG_TRACE("Cache Release %"PRIu64, entry->oid);
     z_atomic_dec(&(cache->usage));
     if (cache->entry_free != NULL)
       cache->entry_free(cache->user_data, entry);
@@ -660,9 +660,9 @@ z_cache_entry_t *z_cache_remove (z_cache_t *cache, uint64_t oid) {
 void z_cache_dump (FILE *stream, z_cache_t *cache) {
   cache->vpolicy->dump(stream, cache);
   fprintf(stream,
-          " - hit %lu miss %lu (%.2f hit)\n"
-          " - htable used %u size %u\n"
-          " - usage %u capacity %u\n\n",
+          " - hit %"PRIu64" miss %"PRIu64" (%.2f hit)\n"
+          " - htable used %"PRIu32" size %"PRIu32"\n"
+          " - usage %"PRIu32" capacity %"PRIu32"\n\n",
           cache->hit, cache->miss, (double)cache->hit / (cache->hit + cache->miss),
           cache->table.used, cache->table.size,
           cache->usage, cache->capacity);

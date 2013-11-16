@@ -14,6 +14,8 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+from contextlib import contextmanager
+
 import threading
 import select
 
@@ -169,3 +171,11 @@ class IOPoll(object):
         print e
         self._engine.remove(self, entity)
         entity.close()
+
+  @contextmanager
+  def loop(self):
+    self.open()
+    try:
+      yield
+    finally:
+      self.close()

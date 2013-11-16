@@ -18,7 +18,6 @@
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
-#include <zcl/memory.h>
 #include <zcl/atomic.h>
 #include <zcl/type.h>
 
@@ -27,8 +26,8 @@ Z_TYPEDEF_STRUCT(z_object)
 struct z_object {
   struct obj_flags {
     uint16_t iflags;        /* Internal flags */
-    uint16_t uflags16;      /* User flags 16bit (free extra space) */
-    uint32_t irefs;         /* Internal Reference Count */
+    uint16_t u16;           /* User flags 16bit (free extra space) */
+    uint32_t u32;           /* User flags 32bit (free extra space) */
   } flags;
 };
 
@@ -44,9 +43,6 @@ struct z_object {
 
 #define z_object_free(obj)                                                    \
   __z_object_free(Z_OBJECT(obj), z_vtable_type(obj))
-
-#define z_object_inc_ref(obj)       z_atomic_inc(&((obj)->flags.irefs))
-#define z_object_dec_ref(obj)       z_atomic_dec(&((obj)->flags.irefs))
 
 void *__z_object_alloc  (z_object_t *object, const z_vtable_type_t *type, ...);
 void  __z_object_free   (z_object_t *object, const z_vtable_type_t *type);

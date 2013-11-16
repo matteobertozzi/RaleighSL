@@ -14,8 +14,14 @@
 
 #include <sys/time.h>
 #include <stdio.h>
+#include <time.h>
 
 #include <zcl/time.h>
+
+#if defined(Z_SYS_HAS_MACH_CLOCK_GET_TIME)
+  #include <mach/clock.h>
+  #include <mach/mach.h>
+#endif
 
 #define __NSEC_PER_SEC         ((uint64_t)1000000000U)
 #define __NSEC_PER_USEC        ((uint64_t)1000U)
@@ -36,18 +42,23 @@ uint64_t z_time_micros (void) {
 }
 
 uint64_t z_time_nanos (void) {
-#if defined(Z_TIME_HAS_CLOCK_GETTIME)
+#if defined(Z_SYS_HAS_CLOCK_GETTIME)
   struct timespec now;
-
   #if defined(CLOCK_UPTIME)
     clock_gettime(CLOCK_UPTIME, &now);
-#elif defined(CLOCK_MONOTONIC)
+  #elif defined(CLOCK_MONOTONIC)
     clock_gettime(CLOCK_MONOTONIC, &now);
-#else
-    #warning "clock_gettime() has no clocks UPTIME/MONOTONIC"
+  #else
+    #error "clock_gettime() has no clocks UPTIME/MONOTONIC"
   #endif
-
   return(now.tv_sec * __NSEC_PER_SEC + now.tv_nsec);
+#elif defined(Z_SYS_HAS_MACH_CLOCK_GET_TIME)
+  clock_serv_t cclock;
+  mach_timespec_t mts;
+  host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+  clock_get_time(cclock, &mts);
+  mach_port_deallocate(mach_task_self(), cclock);
+  return(mts.tv_sec * __NSEC_PER_SEC + mts.tv_nsec);
 #else
   struct timeval now;
   gettimeofday(&now, NULL);

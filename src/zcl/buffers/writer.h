@@ -45,13 +45,13 @@ void z_dump_int64       (FILE *stream, int64_t value);
 void z_dump_uint64      (FILE *stream, uint64_t value);
 void z_dump_byte_slice  (FILE *stream, const z_byte_slice_t *value);
 void z_dump_buffer      (FILE *stream, const z_buffer_t *value);
-void z_dump_bytes       (FILE *stream, const z_bytes_t *value);
+void z_dump_bytes       (FILE *stream, const z_bytes_ref_t *value);
 
 int z_write_field            (z_buffer_t *buf, uint16_t field_id, size_t length);
 int z_write_field_int64      (z_buffer_t *buf, uint16_t field_id, int64_t value);
 int z_write_field_uint64     (z_buffer_t *buf, uint16_t field_id, uint64_t value);
 int z_write_field_byte_slice (z_buffer_t *buf, uint16_t field_id, const z_byte_slice_t *value);
 int z_write_field_buffer     (z_buffer_t *buf, uint16_t field_id, const z_buffer_t *value);
-int z_write_field_bytes      (z_buffer_t *buf, uint16_t field_id, const z_bytes_t *value);
+int z_write_field_bytes      (z_buffer_t *buf, uint16_t field_id, const z_bytes_ref_t *value);
 
 #endif /* !_Z_WRITER_H_ */

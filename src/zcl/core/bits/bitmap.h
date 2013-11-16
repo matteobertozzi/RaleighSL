@@ -21,8 +21,8 @@ __Z_BEGIN_DECLS__
 #include <zcl/macros.h>
 #include <zcl/bits.h>
 
-#define z_bitmap_size(num_bits)       (((num_bits) + 7) & 7)
-#define z_bitmap_byte(bmap, bit)      *((bmap) + ((bit) >> 3))
+#define z_bitmap_size(num_bits)         (((num_bits) + 7) >> 3)
+#define z_bitmap_byte(bmap, bit)        *((bmap) + ((bit) >> 3))
 
 #define z_bitmap_set(bmap, bit)         z_set_1bit(z_bitmap_byte(bmap, bit), bit)
 #define z_bitmap_clear(bmap, bit)       z_clear_1bit(z_bitmap_byte(bmap, bit), bit)

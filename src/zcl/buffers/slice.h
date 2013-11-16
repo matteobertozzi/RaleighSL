@@ -71,6 +71,9 @@ int         z_slice_prepend     (z_slice_t *self, const void *data, size_t size)
 
 int         z_slice_ltrim       (z_slice_t *self, size_t size);
 
+void        z_slice_to_lower    (z_slice_t *self);
+void        z_slice_to_upper    (z_slice_t *self);
+
 size_t      z_slice_length      (const z_slice_t *self);
 int         z_slice_is_empty    (const z_slice_t *self);
 

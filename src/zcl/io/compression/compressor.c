@@ -16,7 +16,7 @@
 #include <zcl/string.h>
 #include <zcl/coding.h>
 #include <zcl/debug.h>
- 
+
 #define __SAFETY_THRESHOLD(size)        ((size >> 8) + 16)
 
 /* ============================================================================
@@ -25,7 +25,7 @@
 static int __compressor_flush_buffer (z_compressor_t *self, const uint8_t *data, size_t size) {
   uint8_t *dst = self->dst_buffer + (self->dst_size - self->dst_avail);
   unsigned int size_len;
-  size_t data_len;  
+  size_t data_len;
 
   Z_ASSERT(size > 0, "Flush size must be not zero: %zu", size);
 
@@ -150,19 +150,19 @@ int z_compressor_add_bytes (z_compressor_t *self, const z_byte_slice_t *current)
   uint8_t head[32];
   uint8_t *data;
 
-  if (__compressor_emergency_flush(self, current->length))
+  if (__compressor_emergency_flush(self, current->size))
     return(1);
 
   data = current->data;
-  length = current->length;
+  length = current->size;
   if (Z_UNLIKELY(z_byte_slice_is_empty(&(self->bprev)))) {
     prefix = 0;
     suffix = 0;
   } else {
-    prefix = z_memshared(self->bprev.data, self->bprev.length, data, length);
+    prefix = z_memshared(self->bprev.data, self->bprev.size, data, length);
     data += prefix;
     length -= prefix;
-    suffix = z_memrshared(self->bprev.data + prefix, self->bprev.length - prefix, data, length);
+    suffix = z_memrshared(self->bprev.data + prefix, self->bprev.size - prefix, data, length);
     length -= suffix;
   }
 

@@ -24,6 +24,9 @@ unsigned int z_ilog2 (unsigned int n);
 
 unsigned int z_rand (unsigned int *seed);
 
+int z_fequals  (double a, double b);
+int z_fsimilar (double a, double b, double eps);
+
 __Z_END_DECLS__
 
 #endif /* _Z_MATH_H_ */

@@ -29,7 +29,6 @@ Z_TYPEDEF_STRUCT(z_buffer)
 struct z_buffer {
   __Z_OBJECT__(z_type)
   uint8_t *block;
-  size_t blksize;
   size_t size;
 };
 

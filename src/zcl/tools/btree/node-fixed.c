@@ -11,7 +11,7 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-
+#if 0
 #include <zcl/checksum.h>
 #include <zcl/coding.h>
 #include <zcl/string.h>
@@ -212,3 +212,4 @@ const z_vtable_btree_node_t z_btree_xnode = {
   .fetch_first  = __node_fetch_first,
   .fetch_next   = __node_fetch_next,
 };
+#endif

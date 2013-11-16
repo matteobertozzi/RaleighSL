@@ -20,6 +20,7 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/ringbuf.h>
 #include <zcl/locking.h>
+#include <zcl/reader.h>
 #include <zcl/macros.h>
 #include <zcl/object.h>
 #include <zcl/iopoll.h>
@@ -36,6 +37,9 @@ Z_TYPEDEF_STRUCT(z_ipc_server)
 Z_TYPEDEF_STRUCT(z_ipc_client)
 Z_TYPEDEF_STRUCT(z_ipc_msgbuf)
 
+typedef int (*z_ipc_msg_parse_t)     (z_iopoll_entity_t *client,
+                                      const struct iovec iov[2]);
+
 struct z_ipc_protocol {
   /* server protocol */
   int    (*bind)          (const void *host, const void *service);
@@ -47,8 +51,6 @@ struct z_ipc_protocol {
   int    (*read)          (z_ipc_client_t *client);
   int    (*write)         (z_ipc_client_t *client);
 };
-
-typedef int (*z_ipc_msg_parse_t) (z_ipc_client_t *client, const struct iovec iov[2]);
 
 struct z_ipc_server {
   __Z_IOPOLL_ENTITY__
@@ -112,13 +114,14 @@ int             z_ipc_msgbuf_open   (z_ipc_msgbuf_t *msgbuf,
                                      size_t isize);
 void            z_ipc_msgbuf_close  (z_ipc_msgbuf_t *msgbuf);
 int             z_ipc_msgbuf_fetch  (z_ipc_msgbuf_t *msgbuf,
-                                     z_ipc_client_t *client,
+                                     z_iopoll_entity_t *client,
                                      z_ipc_msg_parse_t msg_parse_func);
 int             z_ipc_msgbuf_push   (z_ipc_msgbuf_t *self,
                                      void *buf,
                                      size_t n);
 int             z_ipc_msgbuf_flush  (z_ipc_msgbuf_t *msgbuf,
-                                     z_ipc_client_t *client);
+                                     z_iopoll_t *iopoll,
+                                     z_iopoll_entity_t *client);
 
 __Z_END_DECLS__
 

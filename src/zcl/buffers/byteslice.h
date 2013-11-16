@@ -27,27 +27,33 @@ Z_TYPEDEF_STRUCT(z_byte_slice)
 
 struct z_byte_slice {
   uint8_t *data;
-  uint32_t length;
+  uint32_t size;
 };
 
-#define z_byte_slice_set(slice, data_, length_)                               \
+#define z_byte_slice_set(slice, data_, size_)                                 \
   do {                                                                        \
     (slice)->data = ((uint8_t *)data_);                                       \
-    (slice)->length = length_;                                                \
+    (slice)->size = size_;                                                    \
   } while (0)
 
 #define z_byte_slice_copy(self, slice)                                        \
-  z_byte_slice_set(self, (slice)->data, (slice)->length)
+  z_byte_slice_set(self, (slice)->data, (slice)->size)
 
 #define z_byte_slice_clear(slice)                                             \
   z_byte_slice_set(slice, NULL, 0)
 
 #define z_byte_slice_is_empty(slice)                                          \
-  (Z_CONST_BYTE_SLICE(slice)->length == 0)
+  (Z_CONST_BYTE_SLICE(slice)->size == 0)
+
+#define z_byte_slice_is_not_empty(slice)                                      \
+  (Z_CONST_BYTE_SLICE(slice)->size > 0)
 
 #define z_byte_slice_starts_with(slice, blob, n)                              \
-  ((Z_CONST_BYTE_SLICE(slice)->length >= (n)) &&                              \
+  ((Z_CONST_BYTE_SLICE(slice)->size >= (n)) &&                                \
    !z_memcmp(Z_CONST_BYTE_SLICE(slice)->data, blob, n))
+
+#define z_byte_slice_memcpy(dst, slice)                                       \
+  z_memcpy(dst, (slice)->data, (slice)->size)
 
 int z_byte_slice_strcmp  (const z_byte_slice_t *self, const char *str);
 int z_byte_slice_compare (const z_byte_slice_t *self, const z_byte_slice_t *other);

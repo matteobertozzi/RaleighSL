@@ -23,7 +23,7 @@ int z_mempool_open (z_mempool_t *mmpool, z_allocator_t *allocator, size_t size) 
   z_spin_alloc(&(mmpool->lock));
   for (i = 0; i < Z_MMPOOL_BLOCKS; ++i) {
     mmpool->blocks[i] = z_allocator_alloc(allocator, uint8_t, Z_MEMPOOL_BLOCK_SIZE);
-    Z_ASSERT(mmpool->blocks[i] != NULL, "Unable to allocate mmpool %u", size);
+    Z_ASSERT(mmpool->blocks[i] != NULL, "Unable to allocate mmpool %zu", size);
     z_free_list_init(&(mmpool->free_lists[i]));
   }
   return(0);

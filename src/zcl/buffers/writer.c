@@ -18,30 +18,30 @@
 #include <zcl/writer.h>
 
 void z_dump_int64  (FILE *stream, int64_t value) {
-  fprintf(stream, "%lds", value);
+  fprintf(stream, "%"PRIi64, value);
 }
 
 void z_dump_uint64 (FILE *stream, uint64_t value) {
-  fprintf(stream, "%lus", value);
+  fprintf(stream, "%"PRIu64, value);
 }
 
 void z_dump_buf (FILE *stream, const uint8_t *data, size_t size) {
   size_t i;
-  fprintf(stream, "%lu:", size);
+  fprintf(stream, "%zu:", size);
   for (i = 0; i < size; ++i) {
     fputc(data[i], stream);
   }
 }
 
 void z_dump_byte_slice (FILE *stream, const z_byte_slice_t *value) {
-  z_dump_buf(stream, value->data, value->length);
+  z_dump_buf(stream, value->data, value->size);
 }
 
 void z_dump_buffer (FILE *stream, const z_buffer_t *value) {
   z_dump_buf(stream, value->block, value->size);
 }
 
-void z_dump_bytes (FILE *stream, const z_bytes_t *value) {
+void z_dump_bytes (FILE *stream, const z_bytes_ref_t *value) {
   z_dump_byte_slice(stream, &(value->slice));
 }
 
@@ -73,14 +73,14 @@ int z_write_field_buf (z_buffer_t *buf, uint16_t field_id, const void *data, siz
 }
 
 int z_write_field_byte_slice (z_buffer_t *buf, uint16_t field_id, const z_byte_slice_t *value) {
-  return(z_write_field_buf(buf, field_id, value->data, value->length));
+  return(z_write_field_buf(buf, field_id, value->data, value->size));
 }
 
 int z_write_field_buffer (z_buffer_t *buf, uint16_t field_id, const z_buffer_t *value) {
   return(z_write_field_buf(buf, field_id, value->block, value->size));
 }
 
-int z_write_field_bytes (z_buffer_t *buf, uint16_t field_id, const z_bytes_t *value) {
+int z_write_field_bytes (z_buffer_t *buf, uint16_t field_id, const z_bytes_ref_t *value) {
   return(z_write_field_byte_slice(buf, field_id, &(value->slice)));
 }
 

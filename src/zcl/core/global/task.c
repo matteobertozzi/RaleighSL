@@ -20,21 +20,21 @@
  *  PRIVATE Task Tree
  */
 static int __task_tree_key_compare (void *udata, const void *a, const void *b) {
-  int64_t cmp = Z_TASK(a)->itime - Z_TASK(b)->itime;
-  return((cmp < 0) ? -1 : (cmp) > 0 ? 1 : 0);
+  uint64_t atime = Z_TASK(a)->itime;
+  uint64_t btime = Z_TASK(b)->itime;
+  return(z_cmp(atime, btime));
 }
 
 static void __task_tree_node_free (void *udata, void *object) {
   z_task_free(Z_TASK(object));
 }
 
-const z_tree_info_t __task_tree_info = {
-  .plug        = &z_tree_red_black,
+static const z_tree_info_t __task_tree_info = {
+  .plug        = &z_tree_avl,
   .key_compare = __task_tree_key_compare,
   .data_free   = __task_tree_node_free,
   .user_data   = NULL,
 };
-
 
 /* ===========================================================================
  *  PUBLIC Task
@@ -46,14 +46,13 @@ z_task_t *z_task_alloc (z_task_func_t func) {
   if (Z_MALLOC_IS_NULL(task))
     return(NULL);
 
-  task->__node__.child[0] = Z_TREE_NODE(task);
-  task->__node__.child[1] = Z_TREE_NODE(task);
+  task->__node__.child[0] = NULL;
+  task->__node__.child[1] = NULL;
   task->__node__.data = task;
   task->__node__.balance = 0;
 
-  task->itime = z_time_millis();
+  task->itime = 0;
   task->func = func;
-
   return(task);
 }
 
@@ -61,16 +60,9 @@ void z_task_free (z_task_t *task) {
   z_memory_struct_free(z_global_memory(), z_task_t, task);
 }
 
-void z_task_reset_time(z_task_t *task) {
-  task->itime = z_time_millis();
-}
-
 /* ===========================================================================
  *  PUBLIC Task queue
  */
-#define __task_prev(x)     ((x)->__node__.child[0])
-#define __task_next(x)     ((x)->__node__.child[1])
-
 void z_task_queue_open (z_task_queue_t *self) {
   self->head = NULL;
 }
@@ -79,34 +71,36 @@ void z_task_queue_close (z_task_queue_t *self) {
 }
 
 void z_task_queue_push (z_task_queue_t *self, z_task_t *task) {
-  if (task == NULL)
-    return;
+  if (task != NULL) {
+    z_tree_node_t *node = Z_TREE_NODE(task);
+    if (self->head != NULL) {
+      z_tree_node_t *head = Z_TREE_NODE(self->head);
+      z_tree_node_t *tail = head->child[1];
 
-  if (self->head == NULL) {
-    self->head = task;
-  } else {
-    z_task_t *iprev = Z_TASK(__task_prev(self->head));
-    z_task_t *inext = self->head;
-    __task_next(task) = Z_TREE_NODE(inext);
-    __task_prev(task) = Z_TREE_NODE(iprev);
-    __task_prev(inext) = Z_TREE_NODE(task);
-    __task_next(iprev) = Z_TREE_NODE(task);
+      tail->child[0] = node;
+      head->child[1] = node;
+      node->child[0] = NULL;
+      node->child[1] = NULL;
+    } else {
+      node->child[0] = NULL;
+      node->child[1] = node;
+      self->head = task;
+    }
   }
 }
 
 z_task_t *z_task_queue_pop (z_task_queue_t *self) {
   if (self->head != NULL) {
     z_task_t *task = self->head;
-    z_task_t *iprev = Z_TASK(__task_prev(task));
-    z_task_t *inext = Z_TASK(__task_next(task));
+    z_tree_node_t *head = Z_TREE_NODE(self->head);
+    z_tree_node_t *next = head->child[0];
+    z_tree_node_t *tail = head->child[1];
 
-    self->head = (inext != task) ? inext : NULL;
+    if ((self->head = Z_TASK(next)) != NULL)
+      next->child[1] = tail;
 
-    __task_prev(inext) = Z_TREE_NODE(iprev);
-    __task_next(iprev) = Z_TREE_NODE(inext);
-
-    __task_prev(task) = Z_TREE_NODE(task);
-    __task_next(task) = Z_TREE_NODE(task);
+    task->__node__.child[0] = NULL;
+    task->__node__.child[1] = NULL;
     return(task);
   }
   return(NULL);
@@ -129,22 +123,16 @@ void z_task_tree_close (z_task_tree_t *self) {
 }
 
 void z_task_tree_push (z_task_tree_t *self, z_task_t *task) {
-  if (task != NULL) {
-    z_task_t *next;
-    do {
-      next = Z_TASK(__task_next(task));
-      z_tree_node_attach(&__task_tree_info, &(self->root), Z_TREE_NODE(task));
-      task = next;
-    } while (task != next);
+  while (task != NULL) {
+    z_task_t *next = Z_TASK(task->__node__.child[0]);
+    z_tree_node_attach(&__task_tree_info, &(self->root), Z_TREE_NODE(task));
+    task = next;
   }
 }
 
 z_task_t *z_task_tree_pop (z_task_tree_t *self) {
   if (self->root != NULL) {
-    z_task_t *task = Z_TASK(z_tree_node_detach_min(&__task_tree_info, &(self->root)));
-    task->__node__.child[0] = Z_TREE_NODE(task);
-    task->__node__.child[1] = Z_TREE_NODE(task);
-    return(task);
+    return(Z_TASK(z_tree_node_detach_min(&__task_tree_info, &(self->root))));
   }
   return(NULL);
 }
@@ -172,14 +160,18 @@ static void __task_rwcsem_add (z_task_rwcsem_t *self,
   }
 }
 
-static void __task_rwcsem_wake (z_task_rwcsem_t *self,
-                                z_task_t *tasks[4],
-                                uint32_t state)
+static void __task_rwcsem_runnables (z_task_rwcsem_t *self,
+                                     z_task_t *tasks[4],
+                                     uint32_t state)
 {
-  if (state & Z_RWCSEM_READABLE)   tasks[0] = z_task_queue_drain(&(self->readq));
-  if (state & Z_RWCSEM_WRITABLE)   tasks[1] = z_task_queue_drain(&(self->writeq));
-  if (state & Z_RWCSEM_COMMITABLE) tasks[2] = z_task_queue_drain(&(self->commitq));
-  if (state & Z_RWCSEM_LOCKABLE)   tasks[3] = z_task_queue_drain(&(self->lockq));
+  if (self->readq.head != NULL && z_rwcsem_is_readable(state))
+    tasks[0] = z_task_queue_drain(&(self->readq));
+  if (self->writeq.head != NULL && z_rwcsem_is_writable(state))
+    tasks[1] = z_task_queue_drain(&(self->writeq));
+  if (self->commitq.head != NULL && z_rwcsem_is_committable(state))
+    tasks[2] = z_task_queue_drain(&(self->commitq));
+  if (self->lockq.head != NULL && z_rwcsem_is_lockable(state))
+    tasks[3] = z_task_queue_drain(&(self->lockq));
 }
 
 int z_task_rwcsem_open (z_task_rwcsem_t *self) {
@@ -208,7 +200,6 @@ int z_task_rwcsem_acquire (z_task_rwcsem_t *self,
     /* Add the task to the waiting queue */
     z_lock(&(self->wlock), z_spin, {
       __task_rwcsem_add(self, operation_type, task);
-      /* get state and wake? */
     });
     return(1);
   }
@@ -224,11 +215,9 @@ void z_task_rwcsem_release (z_task_rwcsem_t *self,
   uint32_t state;
 
   state = z_rwcsem_release(&(self->lock), operation_type);
-
   /* Wake up the waiting tasks */
   z_lock(&(self->wlock), z_spin, {
-    /* self->state = state; */
-    __task_rwcsem_wake(self, wake, state);
+    __task_rwcsem_runnables(self, wake, state);
   });
 
   /* Add pending tasks to the dispatcher */

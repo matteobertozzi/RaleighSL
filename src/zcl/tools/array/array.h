@@ -44,13 +44,13 @@ struct z_array {
 };
 
 #define z_array_get(self, type, index)                \
-  ((const type *)z_array_get_raw(self, index))
+  Z_CAST(type, z_array_get_raw(self, index))
 
 #define z_array_get_ptr(self, type, index)            \
-  ((const type *)z_array_get_raw_ptr(self, index))
+  Z_CAST(type, z_array_get_raw_ptr(self, index))
 
-int   z_array_open            (z_array_t *self, int type_size);
-void  z_array_close           (z_array_t *self);
+int   z_array_open              (z_array_t *self, int type_size);
+void  z_array_close             (z_array_t *self);
 
 void  z_array_clear             (z_array_t *self);
 void *z_array_push_back         (z_array_t *self);

@@ -51,6 +51,13 @@ class CodeGenerator(object):
     raise NotImplementedError
 
   def add_rpc(self, entity):
+    self.add_rpc_server(entity)
+    self.add_rpc_client(entity)
+
+  def add_rpc_client(self, entity):
+    raise NotImplementedError
+
+  def add_rpc_server(self, entity):
     raise NotImplementedError
 
   def write(self, outdir):
@@ -67,7 +74,7 @@ class CCodeGenerator(CodeGenerator):
     'bool': 'int8_t',
     'int8': 'int8_t', 'int16': 'int16_t', 'int32': 'int32_t', 'int64': 'int64_t',
     'uint8': 'uint8_t', 'uint16': 'uint16_t', 'uint32': 'uint32_t', 'uint64': 'uint64_t',
-    'bytes': 'z_bytes_t',
+    'bytes': 'z_bytes_ref_t',
   }
 
   C_PRIMITIVE_TYPES_NAME_MAP = {'bool': 'int8'}
@@ -85,14 +92,10 @@ class CCodeGenerator(CodeGenerator):
     ctype = self.C_PRIMITIVE_TYPES_MAP.get(field.vtype, 'struct %s' % field.vtype)
     if field.repeated:
       ctype = 'z_array_t'
-    elif field.vtype == 'bytes':
-      ctype = 'z_bytes_t *'
     return ctype
 
   def _get_def_value_type(self, vtype):
     ctype = self.C_PRIMITIVE_TYPES_MAP.get(vtype, 'struct %s' % vtype)
-    if vtype == 'bytes':
-      ctype = 'z_bytes_t *'
     return ctype
 
   def _get_value_type(self, vtype):
@@ -127,22 +130,23 @@ class CCodeGenerator(CodeGenerator):
       }
 
       if field.repeated:
-        if field.vtype == 'bytes':
-          array_push = 'z_array_push_back_ptr(&(msg->{FIELD_NAME}), {FIELD_NAME})'
-          fields_free.append(replace("""
-  do {
-    int i;
-    for (i = 0; i < msg->{FIELD_NAME}.count; ++i) {
-      z_bytes_t *value = (z_bytes_t *)z_array_get_ptr(&(msg->{FIELD_NAME}), z_bytes_t, i);
-      z_bytes_free(value);
-    }
-  } while (0);
-""", rvars))
-        else:
-          array_push = 'z_array_push_back_copy(&(msg->{FIELD_NAME}), &{FIELD_NAME})'
+        array_push = 'z_array_push_back_copy(&(msg->{FIELD_NAME}), &{FIELD_NAME})'
         rvars['{ARRAY_PUSH}'] = replace(array_push, rvars)
 
         fields_alloc.append('  z_array_open(&(msg->%s), sizeof(%s));' % (field.name, ctype))
+
+        if field.vtype == 'bytes':
+          parse_blob = """
+  do {
+    size_t i;
+    for (i = 0; i < msg->{FIELD_NAME}.count; ++i) {
+      {FIELD_CTYPE} *value = z_array_get(&(msg->{FIELD_NAME}), {FIELD_CTYPE}, i);
+      z_bytes_ref_release(value);
+    }
+  } while (0);
+"""
+          fields_free.append(replace(parse_blob, rvars))
+
         fields_free.append('  z_array_close(&(msg->%s));' % field.name)
         parse_blob = """
       case {FIELD_UID}: { /* list[{FIELD_VTYPE}] {FIELD_NAME} */
@@ -157,8 +161,8 @@ class CCodeGenerator(CodeGenerator):
       }
 """
       elif field.vtype in 'bytes':
-        fields_alloc.append('  msg->%s = NULL;' % field.name)
-        fields_free.append('   z_bytes_free(msg->%s);' % field.name)
+        fields_alloc.append('  z_bytes_ref_reset(&(msg->%s));' % field.name)
+        fields_free.append('   z_bytes_ref_release(&(msg->%s));' % field.name)
         parse_blob = """
       case {FIELD_UID}: { /* {FIELD_VTYPE} {FIELD_NAME} */
         if (Z_UNLIKELY(length > 1024)) return(-1);
@@ -202,10 +206,11 @@ class CCodeGenerator(CodeGenerator):
         continue
 
       ctype = self.C_PRIMITIVE_TYPES_MAP[field.vtype]
-
       if field.vtype == 'bytes':
+        value_field = '&(msg->{FIELD_NAME})'
         repeated_field_value = 'value'
       else:
+        value_field = 'msg->{FIELD_NAME}'
         repeated_field_value = '*value'
 
       rvars = {
@@ -213,6 +218,7 @@ class CCodeGenerator(CodeGenerator):
         '{FIELD_VTYPE}': self._get_value_type_name(field.vtype),
         '{FIELD_CTYPE}': ctype,
         '{FIELD_NAME}': field.name,
+        '{VALUE_FIELD}': value_field,
         '{REPEATED_FIELD_VALUE}': repeated_field_value,
       }
 
@@ -221,10 +227,7 @@ class CCodeGenerator(CodeGenerator):
   if ({ENTITY_NAME}_has_{FIELD_NAME}(msg)) {
 """
       if field.repeated:
-        if field.vtype == 'bytes':
-          array_get = 'z_array_get_ptr(&(msg->{FIELD_NAME}), {FIELD_CTYPE}, i)'
-        else:
-          array_get = 'z_array_get(&(msg->{FIELD_NAME}), {FIELD_CTYPE}, i)'
+        array_get = 'z_array_get(&(msg->{FIELD_NAME}), {FIELD_CTYPE}, i)'
         rvars['{ARRAY_GET}'] = replace(array_get, rvars)
 
         parse_blob += """
@@ -236,7 +239,7 @@ class CCodeGenerator(CodeGenerator):
     }
 """
       else:
-        parse_blob += "    z_dump_{FIELD_VTYPE}(stream, msg->{FIELD_NAME});"
+        parse_blob += "    z_dump_{FIELD_VTYPE}(stream, {VALUE_FIELD});"
 
       parse_blob += """
   } else {
@@ -249,11 +252,12 @@ class CCodeGenerator(CodeGenerator):
     all_fields_size = []
     for field in entity.fields:
       ctype = self._get_value_type(field.vtype)
-      value_field = 'msg->{FIELD_NAME}'
 
       if field.vtype == 'bytes':
+        value_field = '&(msg->{FIELD_NAME})'
         repeated_field_value = 'value'
       else:
+        value_field = 'msg->{FIELD_NAME}'
         repeated_field_value = '*value'
 
       rvars = {
@@ -267,18 +271,15 @@ class CCodeGenerator(CodeGenerator):
       }
 
       if field.repeated:
-        if field.vtype == 'bytes':
-          array_get = 'z_array_get_ptr(&(msg->{FIELD_NAME}), {FIELD_CTYPE}, i)'
-        else:
-          array_get = 'z_array_get(&(msg->{FIELD_NAME}), {FIELD_CTYPE}, i)'
+        array_get = 'z_array_get(&(msg->{FIELD_NAME}), {FIELD_CTYPE}, i)'
         rvars['{ARRAY_GET}'] = replace(array_get, rvars)
 
+        # TODO WRITE struct
         parse_blob_write = """
   if ({ENTITY_NAME}_has_{FIELD_NAME}(msg)) {
     size_t i;
     for (i = 0; i < msg->{FIELD_NAME}.count; ++i) {
       const {FIELD_CTYPE} *value = {ARRAY_GET};
-      /* TODO WRITE struct */
       r = z_write_field_{FIELD_VTYPE}(buffer, {FIELD_UID}, {REPEATED_FIELD_VALUE});
       if (Z_UNLIKELY(r)) return(-{FIELD_UID});
     }
@@ -295,21 +296,21 @@ class CCodeGenerator(CodeGenerator):
         if field.vtype == 'bytes':
           parse_blob_size = """
   if ({ENTITY_NAME}_has_{FIELD_NAME}(msg)) {
-    size += z_encoded_field_length({FIELD_UID}, {VALUE_FIELD}->slice.length);
-    size += {VALUE_FIELD}->slice.length;
+    size += z_encoded_field_length({FIELD_UID}, msg->{FIELD_NAME}.slice.size);
+    size += msg->{FIELD_NAME}.slice.size;
   }
 """
         else:
           parse_blob_size = """
   if ({ENTITY_NAME}_has_{FIELD_NAME}(msg)) {
-    unsigned int length = z_{FIELD_VTYPE}_size({VALUE_FIELD});
+    size_t length = z_{FIELD_VTYPE}_size({VALUE_FIELD});
     size += z_encoded_field_length({FIELD_UID}, length) + length;
   }
 """
       else:
         parse_blob_write = """
   if ({ENTITY_NAME}_has_{FIELD_NAME}(msg)) {
-    unsigned int size = {FIELD_VTYPE}_size(&(msg->{FIELD_NAME}));
+    size_t size = {FIELD_VTYPE}_size(&(msg->{FIELD_NAME}));
     z_write_field(buffer, {FIELD_UID}, size);
     r = {FIELD_VTYPE}_write(&(msg->{FIELD_NAME}), buffer);
     if (Z_UNLIKELY(r)) return(-{FIELD_UID});
@@ -324,13 +325,7 @@ class CCodeGenerator(CodeGenerator):
       all_fields_write.append(replace(parse_blob_write, rvars))
       all_fields_size.append(replace(parse_blob_size, rvars))
 
-    if entity.has_rpc_head:
-      rpc_head = "uint64_t rpc_head[2];       /* Request (Id, Type) */"
-    else:
-      rpc_head = ''
-
     rheaders = {
-      '{RPC_HEAD}': rpc_head,
       '{ENTITY_FIELDS}': '\n'.join(fields),
       '{ENTITY_HAS_MACROS}': '\n'.join(has_macros),
     }
@@ -351,8 +346,6 @@ class CCodeGenerator(CodeGenerator):
 
     self.headers.append(replace("""
 struct {ENTITY_NAME} {
-  {RPC_HEAD}
-
   /* Internal states */
   uint8_t {ENTITY_NAME}_fields_bitmap[{ENTITY_BITMAP_SIZE}];
   int {ENTITY_NAME}_ialloc;
@@ -397,7 +390,7 @@ int {ENTITY_NAME}_parse (struct {ENTITY_NAME} *msg, void *reader, uint64_t size)
   uint64_t total_length = 0;
   uint16_t field_id;
   uint64_t length;
-  int r;
+  int r = 0;
 
   while (z_reader_decode_field(reader, &field_id, &length) > 0) {
     switch (field_id) {
@@ -412,11 +405,11 @@ int {ENTITY_NAME}_parse (struct {ENTITY_NAME} *msg, void *reader, uint64_t size)
     }
 
     total_length += length;
-    if (total_length >= size)
+    if (Z_UNLIKELY(total_length >= size))
       break;
   }
 
-  return(0);
+  return(r);
 }
 
 size_t {ENTITY_NAME}_size (struct {ENTITY_NAME} *msg) {
@@ -438,11 +431,243 @@ void {ENTITY_NAME}_dump (FILE *stream, const struct {ENTITY_NAME} *msg) {
 }
 """, rsources, rvars))
 
-  def add_rpc(self, entity):
+  def add_rpc_client(self, entity):
+    rpc_ids = []
+    for call in entity.calls:
+      rpc_ids.append('#define %s_ID %d' % (call.name.upper(), call.uid))
+
+    req_handle = []
+    req_builder = []
+    resp_handle = []
+    for call in entity.calls:
+      rvars = {
+        '{MSG_ID}': '%s_ID' % call.name.upper(),
+        '{MSG_NAME}': call.name,
+        '{MSG_REQ_TYPE}': call.atype,
+        '{MSG_RESP_TYPE}': call.rtype,
+        '{REQ_TYPE_ID}': call.rtype.upper(),
+        '{RESP_TYPE_ID}': call.rtype.upper(),
+      }
+
+      resp_handle.append(replace("""
+    case {MSG_ID}: {
+      struct {MSG_RESP_TYPE} *resp = NULL;
+
+      resp = {MSG_RESP_TYPE}_alloc(resp);
+      if (Z_MALLOC_IS_NULL(resp)) {
+        Z_LOG_FATAL("Unable to allocate response {MSG_RESP_TYPE}");
+        /* TODO */
+        break;
+      }
+
+      if ((r = {MSG_RESP_TYPE}_parse(resp, reader, size))) {
+        Z_LOG_FATAL("Unable to parse message {REQ_ATYPE}");
+        {MSG_RESP_TYPE}_free(resp);
+        /* TODO */
+        break;
+      }
+
+      call->callback(call->ctx, call->ucallback, call->udata);
+      {MSG_RESP_TYPE}_free(resp);
+      /* TODO */
+      break;
+    }
+""", rvars))
+
+      req_handle.append(replace("""
+    case {MSG_ID}: {
+      r = {MSG_REQ_TYPE}_write(Z_RPC_CTX_REQ(struct {MSG_REQ_TYPE}, ctx), &buffer);
+      break;
+    }
+""", rvars))
+
+      req_builder.append(replace("""
+    case {MSG_ID}: {
+      ctx = z_rpc_ctx_alloc(struct {MSG_REQ_TYPE}, struct {MSG_RESP_TYPE});
+      if (Z_MALLOC_IS_NULL(ctx)) {
+        Z_LOG_FATAL("Unable to allocate rpc context {MSG_NAME}");
+        return(NULL);
+      }
+
+      /* TODO: CHECK ME! */
+      z_rpc_ctx_init(ctx, struct {MSG_REQ_TYPE});
+      {MSG_REQ_TYPE}_alloc(Z_RPC_CTX_REQ(struct {MSG_REQ_TYPE}, ctx));
+      {MSG_RESP_TYPE}_alloc(Z_RPC_CTX_RESP(struct {MSG_RESP_TYPE}, ctx));
+      break;
+    }
+""", rvars))
+
+    rvars = {
+      '{ENTITY_NAME}': entity.name,
+      '{RPC_IDS}': '\n'.join(rpc_ids),
+    }
+
+    rheaders = {}
+    rsources = {'{REQ_HANDLE}': '\n'.join(req_handle),
+                '{RESP_HANDLE}': '\n'.join(resp_handle),
+                '{REQ_BUILDER}': '\n'.join(req_builder),
+               }
+
+    self.headers_client.append(replace("""
+{RPC_IDS}
+
+z_rpc_ctx_t *{ENTITY_NAME}_client_build_request (z_iopoll_entity_t *client,
+                                                 uint64_t msg_type,
+                                                 uint64_t req_id);
+
+int  {ENTITY_NAME}_client_parse (z_iopoll_entity_t *client,
+                                 z_rpc_map_t *rpc_map,
+                                 const struct iovec iov[2]);
+int  {ENTITY_NAME}_client_push_request (z_iopoll_t *iopoll,
+                                        z_rpc_ctx_t *ctx,
+                                        z_ipc_msgbuf_t *msgbuf,
+                                        z_rpc_map_t *rpc_map,
+                                        void *sys_callback,
+                                        void *ucallback,
+                                        void *udata);
+""", rheaders, rvars))
+
+    self.sources_client.append(replace("""
+static int __{ENTITY_NAME}_client_parse_request (z_iovec_reader_t *reader,
+                                                 uint64_t msg_type,
+                                                 uint64_t req_id)
+{
+  return(-1);
+}
+
+static int __{ENTITY_NAME}_client_parse_response (z_iovec_reader_t *reader,
+                                                  z_rpc_map_t *rpc_map,
+                                                  uint64_t msg_type,
+                                                  uint64_t req_id)
+{
+  z_rpc_call_t *call;
+  uint64_t size;
+  int r = -1;
+
+  size = z_reader_available(reader);
+  call = z_rpc_map_remove(rpc_map, req_id);
+
+  switch (msg_type) {
+{RESP_HANDLE}
+
+    default:
+      /* ctx->handle_unknown(client, Z_IPC_UNKNOWN_MESSAGE, msg_type, req_id); */
+      Z_LOG_FATAL("Unknown type %u for response %u", msg_type, req_id);
+      break;
+  }
+
+  return(r);
+}
+
+int {ENTITY_NAME}_client_parse (z_iopoll_entity_t *client,
+                                z_rpc_map_t *rpc_map,
+                                const struct iovec iov[2])
+{
+  z_iovec_reader_t reader;
+  uint64_t msg_type;
+  uint64_t req_id;
+  int is_req;
+  int r = -1;
+
+  z_iovec_reader_open(&reader, iov, 2);
+
+  /* Parse the RPC header */
+  if (z_rpc_parse_head(&reader, &msg_type, &req_id, &is_req)) {
+    Z_LOG_FATAL("Unable to read the Request-Head from the RPC header");
+    return(-1);
+  }
+
+  if (Z_UNLIKELY(is_req)) {
+    r = __{ENTITY_NAME}_client_parse_request(&reader, msg_type, req_id);
+  } else {
+    r = __{ENTITY_NAME}_client_parse_response(&reader, rpc_map, msg_type, req_id);
+  }
+
+  z_iovec_reader_close(&reader);
+  return(r);
+}
+
+z_rpc_ctx_t *{ENTITY_NAME}_client_build_request (z_iopoll_entity_t *client,
+                                                 uint64_t msg_type,
+                                                 uint64_t req_id)
+{
+  z_rpc_ctx_t *ctx;
+
+  switch (msg_type) {
+{REQ_BUILDER}
+
+    default:
+      Z_LOG_FATAL("Unknown type %"PRIu64" for request\\n", msg_type);
+      return(NULL);
+  }
+
+  ctx->client   = client;
+  ctx->req_id   = req_id;
+  ctx->req_time = z_time_micros();
+  ctx->msg_type = msg_type;
+  return(ctx);
+}
+
+int {ENTITY_NAME}_client_push_request (z_iopoll_t *iopoll,
+                                       z_rpc_ctx_t *ctx,
+                                       z_ipc_msgbuf_t *msgbuf,
+                                       z_rpc_map_t *rpc_map,
+                                       void *sys_callback,
+                                       void *ucallback,
+                                       void *udata)
+{
+  z_rpc_call_t *call;
+  z_buffer_t buffer;
+  int r = -1;
+
+  call = z_rpc_map_add(rpc_map, ctx, sys_callback, ucallback, udata);
+  if (Z_MALLOC_IS_NULL(call)) {
+    return(-1);
+  }
+
+  if (Z_UNLIKELY(z_buffer_alloc(&buffer) == NULL)) {
+    Z_LOG_FATAL("TODO unable to allocate buffer (free req/resp)\\n");
+    return(-1);
+  }
+
+  if (Z_UNLIKELY(z_buffer_reserve(&buffer, 128))) {
+    Z_LOG_FATAL("TODO unable to reserve buffer space (free req/resp)\\n");
+    return(-1);
+  }
+
+  /* Write the RPC header */
+  buffer.size = z_rpc_write_head(buffer.block, ctx->msg_type, ctx->req_id, 1);
+
+  /* Write the Response */
+  switch (ctx->msg_type) {
+{REQ_HANDLE}
+
+    default:
+      Z_LOG_FATAL("Unknown type %"PRIu64" for request\\n", ctx->msg_type);
+      break;
+  }
+
+  if (Z_UNLIKELY(r == 0)) {
+    r = z_ipc_msgbuf_push(msgbuf, buffer.block, buffer.size);
+    z_iopoll_set_writable(iopoll, ctx->client, 1);
+    Z_LOG_TRACE("Send request of size=%zu time=%.5fsec",
+                buffer.size, (z_time_micros() - ctx->req_time) / 1000000.0f);
+
+    z_buffer_release(&buffer);
+  }
+
+  z_buffer_free(&buffer);
+  return(r);
+}
+""", rsources, rvars))
+
+  def add_rpc_server(self, entity):
+    rpc_ids = []
     rpc_methods = []
     for call in entity.calls:
       spaces = ' ' * len(call.name)
-      rpc_methods.append("  int (*%s) (z_ipc_client_t *client,\n" % (call.name) +
+      rpc_ids.append('#define %s_ID %d' % (call.name.upper(), call.uid))
+      rpc_methods.append("  int (*%s) (z_rpc_ctx_t *ctx,\n" % (call.name) +
                          "        %s   struct %s *req,\n" % (spaces, call.atype) +
                          "        %s   struct %s *resp);" % (spaces, call.rtype))
 
@@ -459,54 +684,72 @@ void {ENTITY_NAME}_dump (FILE *stream, const struct {ENTITY_NAME} *msg) {
       }
 
       req_handle.append(replace("""
-    case {REQ_ID}: { /* {REQ_ID} */
+    case {REQ_ID}: { /* {REQ_ID} {REQ_NAME} */
+      z_rpc_ctx_t *ctx;
       struct {REQ_RTYPE} *resp;
       struct {REQ_ATYPE} *req;
 
       Z_LOG_TRACE("Handling RPC Request %lu Type %lu {REQ_NAME} from client %d",
                   req_id, msg_type, Z_IOPOLL_ENTITY_FD(client));
 
-      req = {REQ_ATYPE}_alloc(NULL);
+      ctx = z_rpc_ctx_alloc(struct {REQ_ATYPE}, struct {REQ_RTYPE});
+      if (Z_MALLOC_IS_NULL(ctx)) {
+        Z_LOG_FATAL("Unable to allocate rpc context {REQ_NAME}");
+        break;
+      }
+
+      z_rpc_ctx_init(ctx, struct {REQ_ATYPE});
+      req  = Z_RPC_CTX_REQ(struct {REQ_ATYPE}, ctx);
+      resp = Z_RPC_CTX_RESP(struct {REQ_RTYPE}, ctx);
+
+      ctx->client   = Z_IOPOLL_ENTITY(client);
+      ctx->msg_type = {REQ_ID};
+      ctx->req_id   = req_id;
+      ctx->req_time = req_st_time;
+
+      req = {REQ_ATYPE}_alloc(req);
       if (Z_MALLOC_IS_NULL(req)) {
         Z_LOG_FATAL("Unable to allocate request {REQ_ATYPE}");
+        z_rpc_ctx_free(ctx);
         break;
       }
 
       if ({REQ_ATYPE}_parse(req, &reader, size)) {
         Z_LOG_FATAL("Unable to parse request {REQ_ATYPE}");
         {REQ_ATYPE}_free(req);
+        z_rpc_ctx_free(ctx);
         break;
       }
 
-      req->rpc_head[0] = {REQ_ID};
-      req->rpc_head[1] = req_id;
-
-      resp = {REQ_RTYPE}_alloc(NULL);
+      resp = {REQ_RTYPE}_alloc(resp);
       if (Z_MALLOC_IS_NULL(resp)) {
         Z_LOG_FATAL("Unable to allocate response {REQ_RTYPE}");
         {REQ_ATYPE}_free(req);
+        z_rpc_ctx_free(ctx);
         break;
       }
 
-      if ((r = proto->{REQ_NAME}(client, req, resp))) {
+      if ((r = proto->{REQ_NAME}(ctx, req, resp))) {
         {REQ_RTYPE}_free(resp);
         {REQ_ATYPE}_free(req);
+        z_rpc_ctx_free(ctx);
       }
       break;
     }
 """, rvars))
 
       resp_handle.append(replace("""
-    case {REQ_ID}: { /* {REQ_ID} */
-      {REQ_ATYPE}_free(req);
-      r = {REQ_RTYPE}_write((struct {REQ_RTYPE} *)resp, buffer);
-      {REQ_RTYPE}_free(resp);
+    case {REQ_ID}: { /* {REQ_ID} {REQ_NAME} */
+      {REQ_ATYPE}_free((struct {REQ_ATYPE} *)ctx->req);
+      r = {REQ_RTYPE}_write((struct {REQ_RTYPE} *)ctx->resp, &buffer);
+      {REQ_RTYPE}_free((struct {REQ_RTYPE} *)ctx->resp);
       break;
     }
 """, rvars))
 
     rheaders = {
       '{RPC_METHODS}': '\n'.join(rpc_methods),
+      '{RPC_IDS}': '\n'.join(rpc_ids),
     }
 
     rsources = {
@@ -523,12 +766,13 @@ struct {ENTITY_NAME}_server {
 {RPC_METHODS}
 };
 
+{RPC_IDS}
+
 int  {ENTITY_NAME}_server_parse (const struct {ENTITY_NAME}_server *proto,
                                  z_ipc_client_t *client,
                                  const struct iovec iov[2]);
-int  {ENTITY_NAME}_server_push_response (z_ipc_client_t *client,
-                                         z_ipc_msgbuf_t *msgbuf,
-                                         void *req, void *resp);
+int  {ENTITY_NAME}_server_push_response (z_rpc_ctx_t *ctx,
+                                         z_ipc_msgbuf_t *msgbuf);
 """, rheaders, rvars))
 
     self.sources_server.append(replace("""
@@ -537,24 +781,25 @@ int {ENTITY_NAME}_server_parse (const struct {ENTITY_NAME}_server *proto,
                                 const struct iovec iov[2])
 {
   z_iovec_reader_t reader;
-  z_memory_t *memory;
+  uint64_t req_st_time;
   uint64_t msg_type;
   uint64_t req_id;
   uint64_t size;
   int r = -1;
 
+  req_st_time = z_time_micros();
+
   z_iovec_reader_open(&reader, iov, 2);
   size = z_reader_available(&reader);
-  memory = z_global_memory();
 
   /* Parse the RPC header */
-  if (z_reader_decode_uint64(&reader, 8, &msg_type)) {
-    Z_LOG_FATAL("Unable to read the Message-Type from the RPC header");
+  if (z_rpc_parse_head(&reader, &msg_type, &req_id, &r)) {
+    Z_LOG_FATAL("Unable to read the Request-Head from the RPC header");
     return(-1);
   }
 
-  if (z_reader_decode_uint64(&reader, 8, &req_id)) {
-    Z_LOG_FATAL("Unable to read the Request-ID from the RPC header");
+  if (Z_UNLIKELY(!r)) {
+    Z_LOG_FATAL("The request has the response flag");
     return(-1);
   }
 
@@ -570,47 +815,42 @@ int {ENTITY_NAME}_server_parse (const struct {ENTITY_NAME}_server *proto,
   return(r);
 }
 
-int  {ENTITY_NAME}_server_push_response (z_ipc_client_t *client,
-                                         z_ipc_msgbuf_t *msgbuf,
-                                         void *req, void *resp)
+int  {ENTITY_NAME}_server_push_response (z_rpc_ctx_t *ctx,
+                                         z_ipc_msgbuf_t *msgbuf)
 {
-  z_memory_t *memory;
-  uint64_t *rpc_head;
-  z_buffer_t *buffer;
+  z_buffer_t buffer;
   int r = -1;
 
-  memory = z_global_memory();
-  if ((buffer = z_buffer_alloc(NULL)) == NULL) {
+  if (Z_UNLIKELY(z_buffer_alloc(&buffer) == NULL)) {
     Z_LOG_FATAL("TODO unable to allocate buffer (free req/resp)\\n");
     return(-1);
   }
 
-  if (z_buffer_reserve(buffer, 128)) {
+  if (Z_UNLIKELY(z_buffer_reserve(&buffer, 128))) {
     Z_LOG_FATAL("TODO unable to reserve buffer space (free req/resp)\\n");
     return(-1);
   }
 
   /* Write the RPC header */
-  rpc_head = Z_UINT64_PTR(req);
-  z_encode_uint(buffer->block + 0, 8, *rpc_head++);
-  z_encode_uint(buffer->block + 8, 8, *rpc_head++);
-  buffer->size = 16;
+  buffer.size = z_rpc_write_head(buffer.block, ctx->msg_type, ctx->req_id, 0);
 
   /* Write the Response */
-  switch (Z_UINT64_PTR_VALUE(req)) {
+  switch (ctx->msg_type) {
 {RESP_HANDLE}
 
     default:
-      Z_LOG_FATAL("Unknown type %u for request\\n", Z_UINT64_PTR_VALUE(req));
+      Z_LOG_FATAL("Unknown type %"PRIu64" for request\\n", ctx->msg_type);
       break;
   }
 
-  Z_LOG_TRACE("Send response of size=%zu", buffer->size);
-  z_ipc_msgbuf_push(msgbuf, buffer->block, buffer->size);
-  z_ipc_client_set_writable(client, 1);
-  z_buffer_release(buffer);
-  z_buffer_free(buffer);
+  z_ipc_msgbuf_push(msgbuf, buffer.block, buffer.size);
+  z_ipc_client_set_writable(ctx->client, 1);
+  Z_LOG_TRACE("Send response of size=%zu time=%.5fsec",
+              buffer.size, (z_time_micros() - ctx->req_time) / 1000000.0f);
 
+  z_rpc_ctx_free(ctx);
+  z_buffer_release(&buffer);
+  z_buffer_free(&buffer);
   return(r);
 }
 """, rsources, rvars))
@@ -654,7 +894,7 @@ int  {ENTITY_NAME}_server_push_response (z_ipc_client_t *client,
 #ifndef _{MODULE_NAME_UPPER}_H_
 #define _{MODULE_NAME_UPPER}_H_
 
-#include <zcl/ipc.h>
+#include <zcl/bytesref.h>
 #include <zcl/macros.h>
 #include <zcl/coding.h>
 #include <zcl/reader.h>
@@ -662,7 +902,7 @@ int  {ENTITY_NAME}_server_push_response (z_ipc_client_t *client,
 #include <zcl/array.h>
 #include <zcl/buffer.h>
 #include <zcl/bitmap.h>
-#include <stdio.h>
+#include <zcl/debug.h>
 
 {HEADER_DATA}
 
@@ -681,7 +921,10 @@ int  {ENTITY_NAME}_server_push_response (z_ipc_client_t *client,
 #ifndef _{MODULE_NAME_UPPER}_CLIENT_H_
 #define _{MODULE_NAME_UPPER}_CLIENT_H_
 
+#include <zcl/debug.h>
 #include <zcl/ipc.h>
+#include <zcl/rpc.h>
+
 #include "{MODULE_NAME}.h"
 
 {HEADER_DATA}
@@ -701,7 +944,10 @@ int  {ENTITY_NAME}_server_push_response (z_ipc_client_t *client,
 #ifndef _{MODULE_NAME_UPPER}_SERVER_H_
 #define _{MODULE_NAME_UPPER}_SERVER_H_
 
+#include <zcl/debug.h>
 #include <zcl/ipc.h>
+#include <zcl/rpc.h>
+
 #include "{MODULE_NAME}.h"
 
 {HEADER_DATA}
@@ -720,6 +966,7 @@ int  {ENTITY_NAME}_server_push_response (z_ipc_client_t *client,
 #include <zcl/global.h>
 #include <zcl/string.h>
 #include <zcl/debug.h>
+
 #include "{MODULE_NAME}.h"
 
 {SOURCE_DATA}
@@ -737,6 +984,11 @@ int  {ENTITY_NAME}_server_push_response (z_ipc_client_t *client,
  * (this file should be part of the client library)
  */
 #include <zcl/string.h>
+#include <zcl/global.h>
+#include <zcl/iovec.h>
+#include <zcl/debug.h>
+#include <zcl/time.h>
+
 #include "{MODULE_NAME}_client.h"
 
 {SOURCE_DATA}
@@ -754,6 +1006,7 @@ int  {ENTITY_NAME}_server_push_response (z_ipc_client_t *client,
 #include <zcl/global.h>
 #include <zcl/iovec.h>
 #include <zcl/debug.h>
+#include <zcl/time.h>
 
 #include "{MODULE_NAME}_server.h"
 
@@ -801,9 +1054,7 @@ def parse_struct_entity(name, fields):
   return entity
 
 def parse_request_entity(name, fields):
-  request = parse_struct_entity(name + '_request', fields)
-  request.has_rpc_head = True
-  return request
+  return parse_struct_entity(name + '_request', fields)
 
 def parse_response_entity(name, fields):
   return parse_struct_entity(name + '_response', fields)
@@ -847,7 +1098,6 @@ class StructEntity(object):
   def __init__(self, name):
     self.name = name
     self.fields = []
-    self.has_rpc_head = False
 
   def add_field(self, uid, vtype, name, default):
     if len(self.fields) >= 128:

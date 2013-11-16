@@ -20,6 +20,7 @@ class _RaleighObject(object):
   TYPE = None
 
   def __init__(self, client, oid):
+    assert isinstance(client, RaleighClient), client
     self._client = client
     self._oid = oid
 
@@ -84,29 +85,32 @@ class RaleighSSet(_RaleighObject):
   def create_scanner(self):
     return RaleighSSet.Scanner(self)
 
-class RaleighCounter(_RaleighObject):
-  TYPE = 'counter'
+class RaleighNumber(_RaleighObject):
+  TYPE = 'number'
 
   def get(self, txn_id=None):
-    return self._client.counter_get(self._oid, txn_id)
+    return self._client.number_get(self._oid, txn_id)
 
   def set(self, value, txn_id=None):
-    return self._client.counter_set(self._oid, value, txn_id)
+    return self._client.number_set(self._oid, value, txn_id)
 
   def cas(self, old_value, new_value, txn_id=None):
-    return self._client.counter_cas(self._oid, old_value, new_value, txn_id)
+    return self._client.number_cas(self._oid, old_value, new_value, txn_id)
 
   def inc(self, txn_id=None):
-    return self._client.counter_inc(self._oid, txn_id)
+    return self._client.number_inc(self._oid, txn_id)
 
   def dec(self, txn_id=None):
-    return self._client.counter_dec(self._oid, txn_id)
+    return self._client.number_dec(self._oid, txn_id)
 
   def add(self, value, txn_id=None):
-    return self._client.counter_add(self._oid, value, txn_id)
+    return self._client.number_add(self._oid, value, txn_id)
 
   def mul(self, value, txn_id=None):
-    return self._client.counter_mul(self._oid, value, txn_id)
+    return self._client.number_mul(self._oid, value, txn_id)
+
+  def divmod(self, value, txn_id=None):
+    return self._client.number_divmod(self._oid, value, txn_id)
 
 class RaleighDeque(_RaleighObject):
   TYPE = 'deque'
@@ -122,3 +126,47 @@ class RaleighDeque(_RaleighObject):
 
   def pop_front(self, txn_id=None):
     return self._client.deque_pop(self._oid, True, txn_id)
+
+class _RaleighDataObject(_RaleighObject):
+  class Reader:
+    BUFFER_SIZE = 10
+
+    def __init__(self, obj):
+      self._obj = obj
+      self._last_offset = 0
+
+    def __iter__(self):
+      while True:
+        buf = self.next()
+        if not buf: break
+        yield buf
+
+    def next(self, size=None):
+      data = self._obj.read(self._last_offset, size or self.BUFFER_SIZE)
+      buf = data.get('data')
+      if buf: self._last_offset += len(buf)
+      return buf
+
+  def read(self, offset, size, txn_id=None):
+    raise NotImplementedError
+
+class RaleighFlow(_RaleighDataObject):
+  TYPE = 'flow'
+
+  def inject(self, offset, data, txn_id=None):
+    return self._client.flow_inject(self._oid, offset, data, txn_id)
+
+  def append(self, data, txn_id=None):
+    return self._client.flow_write(self._oid, data, txn_id)
+
+  def write(self, offset, data, txn_id=None):
+    return self._client.flow_write(self._oid, offset, data, txn_id)
+
+  def remove(self, offset, size, txn_id=None):
+    return self._client.flow_remove(self._oid, offset, size, txn_id)
+
+  def truncate(self, size, txn_id=None):
+    return self._client.flow_truncate(self._oid, size, txn_id)
+
+  def read(self, offset, size, txn_id=None):
+    return self._client.flow_read(self._oid, offset, size, txn_id)

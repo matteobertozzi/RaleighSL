@@ -21,7 +21,7 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 
-#if defined(Z_SYS_HAS_PTHREAD_SPIN_LOCK)
+#if defined(Z_SYS_HAS_PTHREAD)
   #include <pthread.h>
 #endif
 
@@ -51,7 +51,7 @@ __Z_BEGIN_DECLS__
 #elif defined(Z_SYS_HAS_OS_SPIN_LOCK)
   #define z_spinlock_t              OSSpinLock
   #define z_spin_alloc(lock)        (*(lock) = OS_SPINLOCK_INIT)
-  #define z_spin_free(lock)
+  #define z_spin_free(lock)         (void)lock;
   #define z_spin_lock(lock)         OSSpinLockLock(lock)
   #define z_spin_unlock(lock)       OSSpinLockUnlock(lock)
 #else
@@ -89,6 +89,14 @@ int   z_rwlock_try_write_lock   (z_rwlock_t *lock);
 /* ============================================================================
  *  Read-Write-Commit Semaphore
  */
+#define Z_RWCSEM_WRITE_FLAG         (1 << 29)    /* 0b00100000000000000000000000000000 */
+#define Z_RWCSEM_COMMIT_FLAG        (1 << 30)    /* 0b01000000000000000000000000000000 */
+#define Z_RWCSEM_LOCK_FLAG          (1 << 31)    /* 0b10000000000000000000000000000000 */
+#define Z_RWCSEM_READERS_MASK       (0x1fffffff) /* 0b00011111111111111111111111111111 */
+#define Z_RWCSEM_RW_MASK            (0x3fffffff) /* 0b00111111111111111111111111111111 */
+#define Z_RWCSEM_CW_MASK            (0x60000000) /* 0b01100000000000000000000000000000 */
+#define Z_RWCSEM_LC_MASK            (0xC0000000) /* 0b11000000000000000000000000000000 */
+
 typedef struct z_rwcsem {
   uint32_t state;
 } z_rwcsem_t;
@@ -100,12 +108,10 @@ typedef enum z_rwcsem_op {
   Z_RWCSEM_LOCK,
 } z_rwcsem_op_t;
 
-typedef enum z_rwcsem_state {
-  Z_RWCSEM_READABLE   = 0,
-  Z_RWCSEM_WRITABLE   = 1,
-  Z_RWCSEM_COMMITABLE = 2,
-  Z_RWCSEM_LOCKABLE   = 3,
-} z_rwcsem_state_t;
+#define z_rwcsem_is_readable(state)     (((state) & Z_RWCSEM_RW_MASK) == (state))
+#define z_rwcsem_is_writable(state)     (((state) & Z_RWCSEM_READERS_MASK) == (state))
+#define z_rwcsem_is_committable(state)  (((state) & Z_RWCSEM_COMMIT_FLAG) == (state))
+#define z_rwcsem_is_lockable(state)     (((state) & Z_RWCSEM_LOCK_FLAG) == (state))
 
 int   z_rwcsem_init                 (z_rwcsem_t *lock);
 
@@ -127,6 +133,10 @@ int   z_rwcsem_release_lock         (z_rwcsem_t *lock);
 
 int   z_rwcsem_try_acquire  (z_rwcsem_t *lock, z_rwcsem_op_t operation);
 int   z_rwcsem_release      (z_rwcsem_t *lock, z_rwcsem_op_t operation);
+
+int   z_rwcsem_try_switch   (z_rwcsem_t *lock,
+                             z_rwcsem_op_t op_current,
+                             z_rwcsem_op_t op_next);
 
 /* ============================================================================
  *  With Lock

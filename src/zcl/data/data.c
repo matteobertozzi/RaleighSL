@@ -43,6 +43,9 @@ int z_data_value_compare (z_data_type_t type, z_data_order_t order,
     case Z_TYPE_BLOB:
       cmp = z_bytes_compare(a->blob, b->blob);
       break;
+    default:
+      cmp = 0;
+      break;
   }
   return(order == Z_ORDER_ASCENDING ? cmp : -cmp);
 }

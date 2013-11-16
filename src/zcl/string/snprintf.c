@@ -84,6 +84,9 @@ int z_vsvnprintf (char *buf, unsigned int bufsize,
             else
               n = z_u64tostr(va_arg(ap, uint64_t), buf, avail, base);
             break;
+          default:
+            n = 0;
+            break;
         }
         nchars += n;
         frmt += 2;

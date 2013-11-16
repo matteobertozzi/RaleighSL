@@ -41,10 +41,9 @@ struct z_cache_entry {
   z_dlink_node_t cache;
 
   uint64_t oid;
-  unsigned int refs;
-  unsigned int state;
+  uint32_t refs;
+  uint32_t state;
 };
-
 
 enum z_cache_type {
   Z_CACHE_LRU,
@@ -68,8 +67,8 @@ struct z_cache_policy {
 
 #define z_cache_entry_oid(entry)     (Z_CACHE_ENTRY(entry)->oid)
 
-void              z_cache_entry_init    (z_cache_entry_t *entry,
-                                         uint64_t oid);
+void              z_cache_entry_init (z_cache_entry_t *entry,
+                                      uint64_t oid);
 
 z_cache_t *       z_cache_alloc      (z_cache_type_t type,
                                       unsigned int capacity,

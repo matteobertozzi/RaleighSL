@@ -23,9 +23,9 @@ int z_byte_slice_strcmp (const z_byte_slice_t *self, const char *str) {
 }
 
 int z_byte_slice_compare (const z_byte_slice_t *self, const z_byte_slice_t *other) {
-  if (self->length != other->length) {
-    int cmp = z_memcmp(self->data, other->data, z_min(self->length, other->length));
-    return (cmp != 0) ? cmp : (self->length - other->length);
+  if (self->size != other->size) {
+    int cmp = z_memcmp(self->data, other->data, z_min(self->size, other->size));
+    return((cmp != 0) ? cmp : (self->size - other->size));
   }
-  return(z_memcmp(self->data, other->data, self->length));
+  return(z_memcmp(self->data, other->data, self->size));
 }

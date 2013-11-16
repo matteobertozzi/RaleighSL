@@ -18,8 +18,16 @@
 #include <stdio.h>
 #include <time.h>
 
-#include <zcl/macros.h>
+#include <zcl/locking.h>
 #include <zcl/debug.h>
+
+struct debug_conf {
+  z_mutex_t lock;
+  int log_level;
+};
+
+#define __DEFAULT_LOG_LEVEL       4
+static struct debug_conf __current_debug_conf;
 
 static const char __weekday_name[7][3] = {
   "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
@@ -55,6 +63,10 @@ void __z_log (FILE *fp, int level,
   char datetime[25];
   va_list ap;
 
+  if (level > __current_debug_conf.log_level)
+    return;
+
+  z_mutex_lock(&(__current_debug_conf.lock));
   __date_time(datetime);
   fprintf(stderr, "[%s] %-5s %s:%d %s() - ",
           datetime, __log_level[level], file, line, func);
@@ -64,45 +76,29 @@ void __z_log (FILE *fp, int level,
   va_end(ap);
 
   fprintf(stderr, "\n");
-}
-
-void __z_bug (const char *file, int line, const char *func,
-              const char *format, ...)
-{
-  char datetime[25];
-  va_list ap;
-
-  __date_time(datetime);
-  fprintf(stderr, "[%s] BUG   at %s:%d in function %s(). ",
-          datetime, file, line, func);
-
-  va_start(ap, format);
-  vfprintf(stderr, format, ap);
-  va_end(ap);
-
-  fprintf(stderr, "\n");
-  abort();
+  z_mutex_unlock(&(__current_debug_conf.lock));
 }
 
 void __z_assert (const char *file, int line, const char *func,
                  int vcond, const char *condition,
                  const char *format, ...)
 {
-  if (Z_UNLIKELY(!vcond)) {
-    char datetime[25];
-    va_list ap;
+  char datetime[25];
+  va_list ap;
 
-    __date_time(datetime);
-    fprintf(stderr, "[%s] ASSERTION (%s) at %s:%d in function %s() failed. ",
-            datetime, condition, file, line, func);
+  z_mutex_lock(&(__current_debug_conf.lock));
+  __date_time(datetime);
+  fprintf(stderr, "[%s] ASSERTION (%s) at %s:%d in function %s() failed. ",
+          datetime, condition, file, line, func);
 
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
+  va_start(ap, format);
+  vfprintf(stderr, format, ap);
+  va_end(ap);
 
-    fprintf(stderr, "\n");
-    abort();
-  }
+  fprintf(stderr, "\n");
+  z_mutex_unlock(&(__current_debug_conf.lock));
+
+  abort();
 }
 
 void z_dump_stack_trace (FILE *fp, unsigned int levels) {
@@ -119,10 +115,31 @@ void z_dump_stack_trace (FILE *fp, unsigned int levels) {
     return;
   }
 
+  z_mutex_lock(&(__current_debug_conf.lock));
   fprintf(fp, "Obtained %zd stack frames.\n", size);
   for (i = 0; i < size; i++) {
     fprintf(fp, "%s\n", symbols[i]);
   }
+  z_mutex_unlock(&(__current_debug_conf.lock));
 
   free(symbols);
+}
+
+void z_debug_open (void) {
+  z_mutex_alloc(&(__current_debug_conf.lock));
+  __current_debug_conf.log_level = __DEFAULT_LOG_LEVEL;
+}
+
+void z_debug_close (void) {
+  z_mutex_free(&(__current_debug_conf.lock));
+}
+
+int z_debug_get_log_level (void) {
+  return(__current_debug_conf.log_level);
+}
+
+void z_debug_set_log_level (int level) {
+  z_mutex_lock(&(__current_debug_conf.lock));
+  __current_debug_conf.log_level = level;
+  z_mutex_unlock(&(__current_debug_conf.lock));
 }

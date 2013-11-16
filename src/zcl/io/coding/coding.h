@@ -18,6 +18,7 @@
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
+#include <zcl/string.h>
 #include <zcl/type.h>
 #include <zcl/bits.h>
 
@@ -57,6 +58,7 @@ int           z_decode_vint       (const uint8_t *buf,
 #define z_encode_int(buf, len, val)                                    \
   z_encode_uint(buf, len, z_decode_zigzag64(val))
 
+#if Z_CPU_IS_BIG_ENDIAN
 void          z_encode_uint       (uint8_t *buf,
                                    unsigned int length,
                                    uint64_t value);
@@ -69,6 +71,13 @@ void          z_decode_uint32     (const uint8_t *buffer,
 void          z_decode_uint64     (const uint8_t *buffer,
                                    unsigned int length,
                                    uint64_t *value);
+#else
+  #define z_encode_uint(buf, len, value)        z_memcpy(buf, &(value), len)
+  #define z_decode_uint64(buf, len, value)      (*(value)) = 0; z_memcpy(value, buf, len);
+
+  #define z_decode_uint16                       z_decode_uint64
+  #define z_decode_uint32                       z_decode_uint64
+#endif
 
 /* Encode/Decode int groups */
 int           z_encode_4int       (uint8_t *buf,

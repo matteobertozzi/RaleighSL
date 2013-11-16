@@ -26,6 +26,8 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/locking.h>
 
+typedef void *(*z_thread_func) (void *);
+
 #if defined(Z_SYS_HAS_PTHREAD_WAIT_COND)
   typedef pthread_cond_t z_wait_cond_t;
 
@@ -42,7 +44,6 @@ __Z_BEGIN_DECLS__
 
 #if defined(Z_SYS_HAS_PTHREAD)
   #define z_thread_t                       pthread_t
-  #define z_thread_start(tid, func, args)  pthread_create(tid, NULL, func, args)
   #define z_thread_join(tid)               pthread_join(*(tid), NULL)
   #define z_thread_self(tid)               *(tid) = pthread_self()
 
@@ -51,15 +52,15 @@ __Z_BEGIN_DECLS__
   #elif defined(Z_SYS_HAS_PTHREAD_YIELD_NP)
     #define z_thread_yield()                 pthread_yield_np()
   #else
+    /* https://developer.apple.com/library/mac/releasenotes/Performance/RN-AffinityAPI/index.html */
     #error "No thread yield supported"
   #endif
 #else
   #error "No thread support"
 #endif
 
-#define z_thread_core()                     sched_getcpu()
-
-int   z_thread_bind_to_core   (z_thread_t *thread, unsigned int core);
+int   z_thread_start          (z_thread_t *tid, z_thread_func func, void *args);
+int   z_thread_bind_to_core   (z_thread_t *thread, int core);
 
 __Z_END_DECLS__
 

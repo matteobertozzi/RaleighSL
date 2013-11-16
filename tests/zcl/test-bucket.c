@@ -23,15 +23,15 @@ static int __node_debug (void *udata, z_bucket_entry_t *item) {
   char kbuf[128];
 
   z_memset(kbuf, '-', item->kprefix);
-  z_memcpy(kbuf + item->kprefix, item->key.data, item->key.length);
-  kbuf[item->kprefix + item->key.length] = 0;
+  z_memcpy(kbuf + item->kprefix, item->key.data, item->key.size);
+  kbuf[item->kprefix + item->key.size] = 0;
 
-  z_memcpy(vbuf, item->value.data, item->value.length);
-  vbuf[item->value.length] = 0;
+  z_memcpy(vbuf, item->value.data, item->value.size);
+  vbuf[item->value.size] = 0;
 
   fprintf(stderr,
-          "Node-Debug: prefix=%u ksize=%u vsize=%u value=\"%s\" key=\"%s\"\n",
-          item->kprefix, item->key.length, item->value.length, vbuf, kbuf);
+          "Node-Debug: prefix=%"PRIu32" ksize=%"PRIu32" vsize=%"PRIu32" value=\"%s\" key=\"%s\"\n",
+          item->kprefix, item->key.size, item->value.size, vbuf, kbuf);
   return(0);
 }
 #endif
@@ -78,7 +78,7 @@ static void __test_iter_node (const uint8_t *block) {
   const z_map_entry_t *entry;
   z_bucket_iterator_t iter;
 
-  z_bucket_iterator_open(&iter, &z_bucket_variable, block);
+  z_bucket_iterator_open(&iter, &z_bucket_variable, block, NULL, NULL);
   z_map_iterator_begin(&iter);
   while ((entry = z_map_iterator_current(&iter)) != NULL) {
     fprintf(stderr, "ITER - key=");
@@ -116,27 +116,27 @@ static int __test_lookup (void) {
   __test_iter_node(block);
 
   cmp = __node_search(block, "aaaaa", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "ccdda", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "bbbbb", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "bbbcc", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "bbccc", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "bbcdd", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "ccccc", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "ccddd", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "cdefg", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "defgh", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "eeeee", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
 
   return(0);
 }
@@ -245,12 +245,12 @@ static int __test_merge (void) {
 
   z_map_merger_open(&merger);
 
-  z_bucket_iterator_open(&iter_a, &z_bucket_variable, block_a);
+  z_bucket_iterator_open(&iter_a, &z_bucket_variable, block_a, NULL, NULL);
   z_map_iterator_begin(&iter_a);
   z_map_merger_add(&merger, Z_MAP_ITERATOR(&iter_a));
   Z_LOG_TRACE("Add Iterator %p", &iter_a);
 
-  z_bucket_iterator_open(&iter_b, &z_bucket_variable, block_b);
+  z_bucket_iterator_open(&iter_b, &z_bucket_variable, block_b, NULL, NULL);
   z_map_iterator_begin(&iter_b);
   z_map_merger_add(&merger, Z_MAP_ITERATOR(&iter_b));
   Z_LOG_TRACE("Add Iterator %p", &iter_b);
@@ -282,17 +282,17 @@ static int __test_unprefixed (void) {
   __node_append(block, "eefff", 0, 5, "value-05", 8);
 
   cmp = __node_search(block, "aaaaa", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "abbbb", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "ccccc", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "ddddd", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "ddfff", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
   cmp = __node_search(block, "eefff", 5, &value);
-  printf("cmp=%d vsize=%u value=%s\n", cmp, value.length, value.data);
+  printf("cmp=%d vsize=%"PRIu32" value=%s\n", cmp, value.size, value.data);
 
   return(0);
 }

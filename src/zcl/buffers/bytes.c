@@ -16,6 +16,9 @@
 #include <zcl/atomic.h>
 #include <zcl/bytes.h>
 
+/* ============================================================================
+ *  PUBLIC bytes methods
+ */
 z_bytes_t *z_bytes_alloc (size_t size) {
   z_bytes_t *self;
   uint8_t *buf;
@@ -55,3 +58,19 @@ z_bytes_t *z_bytes_from_data (const void *data, size_t size) {
   z_bytes_set(self, data, size);
   return(self);
 }
+
+/* ============================================================================
+ *  PRIVATE vtable-refs methods
+ */
+static void __bytes_inc_ref (void *object) {
+  z_bytes_acquire(Z_BYTES(object));
+}
+
+static void __bytes_dec_ref (void *object) {
+  z_bytes_free(Z_BYTES(object));
+}
+
+const z_vtable_refs_t z_vtable_bytes_refs = {
+  .inc_ref = __bytes_inc_ref,
+  .dec_ref = __bytes_dec_ref,
+};

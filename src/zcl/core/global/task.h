@@ -34,7 +34,7 @@ Z_TYPEDEF_STRUCT(z_task)
 typedef void (*z_task_func_t) (z_task_t *task);
 
 struct z_task {
-  z_tree_node_t __node__;
+  __Z_TREE_NODE__
 
   uint64_t itime;
   z_task_func_t func;
@@ -44,8 +44,6 @@ struct z_task {
 
   z_opaque_t object;
   void *context;
-  void *request;
-  void *response;
   void *udata;
 
   z_opaque_t args[4];
@@ -60,8 +58,8 @@ struct z_task_tree {
 };
 
 struct z_task_rwcsem {
-  z_rwcsem_t   lock;                    /* Object RWC-Lock */
-  z_spinlock_t wlock;                   /* Object wait-queue lock */
+  z_rwcsem_t   lock;                      /* Object RWC-Lock */
+  z_spinlock_t wlock;                     /* Object wait-queue lock */
   z_task_queue_t readq;                   /* Object task-read wait queue */
   z_task_queue_t writeq;                  /* Object task-write wait queue */
   z_task_queue_t commitq;                 /* Object task-commit wait queue */

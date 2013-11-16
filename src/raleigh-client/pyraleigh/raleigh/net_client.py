@@ -35,7 +35,7 @@ class NetIOClient(IOPollEntity):
     self.txbytes = 0
 
   @contextmanager
-  def connection(self, iopoll, host, port):
+  def connection(self, iopoll, host, port, dump_stats=False):
     self.connect(host, port)
     iopoll.add(self)
     self._online = time()
@@ -45,8 +45,10 @@ class NetIOClient(IOPollEntity):
       t = time() - self._online
       iopoll.remove(self)
       self.disconnect()
-      print 'tx %s %s/sec' % (humanSize(self.txbytes), humanSize(self.txbytes / t))
-      print 'rx %s %s/sec' % (humanSize(self.rxbytes), humanSize(self.rxbytes / t))
+      if dump_stats:
+        tx_info = 'tx %s %s/sec' % (humanSize(self.txbytes), humanSize(self.txbytes / t))
+        rx_info = 'rx %s %s/sec' % (humanSize(self.rxbytes), humanSize(self.rxbytes / t))
+        print '%s - %s' % (tx_info, rx_info)
 
   def connect(self, host, port):
     self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -72,23 +74,28 @@ class NetIOClient(IOPollEntity):
 
   def send(self, data):
     self._wlock.acquire()
-    self._wbuf += data
-    self._wlock.release()
+    try:
+      self._wbuf += data
+    finally:
+      self._wlock.release()
     self.set_writable()
     return len(data)
 
   def fetch(self):
     self._rlock.acquire()
-    data = self._rbuf
-    self._rlock.release()
-    return data
+    try:
+      return self._rbuf
+    finally:
+      self._rlock.release()
 
   def pop(self, n):
     self._rlock.acquire()
-    data = self._rbuf
-    self._rbuf = data[n:]
-    self._rlock.release()
-    return data[:n]
+    try:
+      data = self._rbuf
+      self._rbuf = data[n:]
+      return data[:n]
+    finally:
+      self._rlock.release()
 
   def write(self):
     self._wlock.acquire()
@@ -118,3 +125,81 @@ class NetIOClient(IOPollEntity):
     self._rlock.acquire()
     self._rbuf += data
     self._rlock.release()
+
+
+class NetIOClient(object):
+  def __init__(self):
+    super(NetIOClient, self).__init__()
+    self._wlock = threading.Lock()
+    self._rlock = threading.Lock()
+    self._rbuf = bytearray()
+    self._wbuf = bytearray()
+    self._sock = None
+    self.rxbytes = 0
+    self.txbytes = 0
+
+  @contextmanager
+  def connection(self, iopoll, host, port, dump_stats=False):
+    self.connect(host, port)
+    self._online = time()
+    try:
+      yield
+    finally:
+      t = time() - self._online
+      self.disconnect()
+      if dump_stats:
+        tx_info = 'tx %s %s/sec' % (humanSize(self.txbytes), humanSize(self.txbytes / t))
+        rx_info = 'rx %s %s/sec' % (humanSize(self.rxbytes), humanSize(self.rxbytes / t))
+        print '%s - %s' % (tx_info, rx_info)
+
+  def connect(self, host, port):
+    self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    self._sock.connect((host, port))
+
+  def disconnect(self):
+    if self._sock:
+      self._sock.close()
+      self._sock = None
+
+  def close(self):
+    self.disconnect()
+
+  def is_closed(self):
+    return self._sock == None
+
+  def set_no_delay(self, no_delay=True):
+    self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, no_delay)
+
+  def fileno(self):
+    return self._sock.fileno() if self._sock else -1
+
+  def is_readable(self):
+    return self._sock is not None
+  def is_writable(self):
+    return self._sock is not None
+  def is_watched(self):
+    return False
+
+  def send(self, data):
+    self._sock.sendall(data)
+
+  def pop(self, n):
+    if not self._rbuf:
+      self.fetch()
+    data = self._rbuf[:n]
+    self._rbuf = self._rbuf[n:]
+    return data
+
+  def fetch(self):
+    if self._rbuf:
+      from select import select
+      from time import time
+      st = time()
+      r, w, e = select([self._sock], [], [], 0.1)
+      if r:
+        self._rbuf += self._sock.recv(4096)
+      et = time()
+      print 'wait %.3fsec for %r' % (et - st, r)
+    else:
+      self._rbuf += self._sock.recv(4096)
+    return self._rbuf

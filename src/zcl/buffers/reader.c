@@ -57,25 +57,29 @@ static int __memsearch_step (const uint8_t *src,
   return(!!(extent->length - needle_len));
 }
 
-static int __istok (uint8_t c, const uint8_t *tokens, unsigned int ntokens) {
+static int __istok (uint8_t c, const uint8_t *tokens, size_t ntokens) {
   int r = 0;
   switch (ntokens) {
+    case 8: r  = (c == tokens[7]);
+    case 7: r |= (c == tokens[6]);
+    case 6: r |= (c == tokens[5]);
+    case 5: r |= (c == tokens[4]);
     case 4: r |= (c == tokens[3]);
     case 3: r |= (c == tokens[2]);
     case 2: r |= (c == tokens[1]);
     case 1: r |= (c == tokens[0]);
-            break;
-    default:
-        while (ntokens--)
-          r |= (c == *tokens++);
+            return(r);
   }
+
+  while (ntokens--)
+    r |= (c == *tokens++);
   return(r);
 }
 
 static int __memtok_step (const uint8_t *src,
                           size_t src_len,
                           const uint8_t *tokens,
-                          unsigned int ntokens,
+                          size_t ntokens,
                           z_extent_t *extent)
 {
   const uint8_t *psrc = src;
@@ -83,8 +87,8 @@ static int __memtok_step (const uint8_t *src,
   if (extent->length == 0) {
     /* Skip heading tokens */
     while (src_len > 0 && __istok(*psrc, tokens, ntokens)) {
-      psrc++;
-      src_len--;
+      ++psrc;
+      --src_len;
     }
 
     extent->offset = psrc - src;
@@ -97,8 +101,8 @@ static int __memtok_step (const uint8_t *src,
       extent->length += psrc - src;
       return(0);
     }
-    psrc++;
-    src_len--;
+    ++psrc;
+    --src_len;
   }
 
   extent->length += psrc - src;
@@ -184,15 +188,12 @@ int z_v_reader_skip (const z_vtable_reader_t *vtable, void *self, size_t length)
   return(0);
 }
 
-const uint8_t *z_v_reader_fetch (const z_vtable_reader_t *vtable, void *self,
-                                 uint8_t *buffer, size_t length)
+const uint8_t *z_v_reader_fetch_fallback (const z_vtable_reader_t *vtable, void *self,
+                                          uint8_t *buffer, size_t length)
 {
   const uint8_t *data;
   uint8_t *pbuffer;
   size_t n;
-
-  if (Z_LIKELY(vtable->fetch != NULL))
-    return(vtable->fetch(self, buffer, length));
 
   if ((n = vtable->next(self, &data)) >= length) {
     vtable->backup(self, n - length);
@@ -234,7 +235,8 @@ int z_v_reader_decode_field (const z_vtable_reader_t *vtable, void *self,
   int elength;
   size_t n;
 
-  if (!(n = vtable->next(self, &data)))
+  n = vtable->next(self, &data);
+  if (Z_UNLIKELY(n == 0))
     return(-1);
 
   if ((elength = z_decode_field(data, n, field_id, length)) > 0) {
@@ -253,7 +255,6 @@ int z_v_reader_decode_field (const z_vtable_reader_t *vtable, void *self,
     elength = z_decode_field(buffer, elength, field_id, length);
   }
 
-  //Z_LOG_TRACE("elength %d field_id %u length %lu", elength, *field_id, *length);
   return(elength);
 }
 
@@ -371,7 +372,7 @@ int  z_v_reader_decode_buffer  (const z_vtable_reader_t *vtable, void *self,
 }
 
 int z_v_reader_decode_bytes (const z_vtable_reader_t *vtable, void *self,
-                             size_t length, z_bytes_t **value)
+                             size_t length, z_bytes_ref_t *value)
 {
   const uint8_t *pbuf;
   z_bytes_t *bytes;
@@ -390,6 +391,6 @@ int z_v_reader_decode_bytes (const z_vtable_reader_t *vtable, void *self,
     z_bytes_set(bytes, pbuf, length);
   }
 
-  *value = bytes;
+  z_bytes_ref_set(value, &(bytes->slice), &z_vtable_bytes_refs, bytes);
   return(0);
 }

@@ -121,11 +121,16 @@ struct z_vtable_reader {
 #define z_reader_decode_bytes(self, length, value)                             \
   z_v_reader_decode_bytes(Z_READER_VTABLE(self), self, length, value)
 
+#define z_v_reader_fetch(vtable, self, buffer, length)                         \
+  ((Z_LIKELY((vtable)->fetch != NULL)) ?                                       \
+    ((vtable)->fetch(self, buffer, length)) :                                  \
+    z_v_reader_fetch_fallback(vtable, self, buffer, length))
+
 /* Reader util */
 int z_v_reader_skip  (const z_vtable_reader_t *vtable, void *self, size_t n);
 
-const uint8_t *z_v_reader_fetch (const z_vtable_reader_t *vtable, void *self,
-                                 uint8_t *buffer, size_t length);
+const uint8_t *z_v_reader_fetch_fallback (const z_vtable_reader_t *vtable, void *self,
+                                          uint8_t *buffer, size_t length);
 
 /* Reader search/tokenize */
 int z_v_reader_search (const z_vtable_reader_t *vtable, void *self,
@@ -140,26 +145,26 @@ size_t z_v_reader_tokenize (const z_vtable_reader_t *vtable, void *self,
 int  z_v_reader_decode_field (const z_vtable_reader_t *vtable, void *self,
                               uint16_t *field_id, uint64_t *length);
 
-int  z_v_reader_decode_int8   (const z_vtable_reader_t *vtable, void *self,
-                               size_t length, int8_t *value);
-int  z_v_reader_decode_uint8  (const z_vtable_reader_t *vtable, void *self,
-                               size_t length, uint8_t *value);
-int  z_v_reader_decode_int16  (const z_vtable_reader_t *vtable, void *self,
-                               size_t length, int16_t *value);
-int  z_v_reader_decode_uint16 (const z_vtable_reader_t *vtable, void *self,
-                               size_t length, uint16_t *value);
-int  z_v_reader_decode_int32  (const z_vtable_reader_t *vtable, void *self,
-                               size_t length, int32_t *value);
-int  z_v_reader_decode_uint32 (const z_vtable_reader_t *vtable, void *self,
-                               size_t length, uint32_t *value);
-int  z_v_reader_decode_int64  (const z_vtable_reader_t *vtable, void *self,
-                               size_t length, int64_t *value);
-int  z_v_reader_decode_uint64 (const z_vtable_reader_t *vtable, void *self,
-                               size_t length, uint64_t *value);
-int  z_v_reader_decode_buffer (const z_vtable_reader_t *vtable, void *self,
-                               size_t length, z_buffer_t *value);
-int  z_v_reader_decode_bytes  (const z_vtable_reader_t *vtable, void *self,
-                               size_t length, z_bytes_t **value);
+int  z_v_reader_decode_int8      (const z_vtable_reader_t *vtable, void *self,
+                                  size_t length, int8_t *value);
+int  z_v_reader_decode_uint8     (const z_vtable_reader_t *vtable, void *self,
+                                  size_t length, uint8_t *value);
+int  z_v_reader_decode_int16     (const z_vtable_reader_t *vtable, void *self,
+                                  size_t length, int16_t *value);
+int  z_v_reader_decode_uint16    (const z_vtable_reader_t *vtable, void *self,
+                                  size_t length, uint16_t *value);
+int  z_v_reader_decode_int32     (const z_vtable_reader_t *vtable, void *self,
+                                  size_t length, int32_t *value);
+int  z_v_reader_decode_uint32    (const z_vtable_reader_t *vtable, void *self,
+                                  size_t length, uint32_t *value);
+int  z_v_reader_decode_int64     (const z_vtable_reader_t *vtable, void *self,
+                                  size_t length, int64_t *value);
+int  z_v_reader_decode_uint64    (const z_vtable_reader_t *vtable, void *self,
+                                  size_t length, uint64_t *value);
+int  z_v_reader_decode_buffer    (const z_vtable_reader_t *vtable, void *self,
+                                  size_t length, z_buffer_t *value);
+int  z_v_reader_decode_bytes     (const z_vtable_reader_t *vtable, void *self,
+                                  size_t length, z_bytes_ref_t *value);
 
 __Z_END_DECLS__
 

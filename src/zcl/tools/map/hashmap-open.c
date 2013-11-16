@@ -44,8 +44,8 @@ struct ohtnode {
     do __code__ while (0);                                                \
     do {                                                                  \
       unsigned int shift = z_ilog2(self->capacity);                       \
-      unsigned int p = hash;                                              \
-      unsigned int i = hash;                                              \
+      uint64_t p = hash;                                                  \
+      uint64_t i = hash;                                                  \
       while (count--) {                                                   \
         i = (i << 2) + i + p + 1;                                         \
         node = &(buckets[i & mask]);                                      \
@@ -57,7 +57,7 @@ struct ohtnode {
 
 static struct ohtnode *__node_lookup (z_hash_map_t *self,
                                       z_compare_t key_compare,
-                                      uint32_t hash,
+                                      uint64_t hash,
                                       const void *key)
 {
   struct ohtnode *node;
@@ -71,7 +71,7 @@ static struct ohtnode *__node_lookup (z_hash_map_t *self,
 /* ===========================================================================
  *  Open-HashMap plug methods
  */
-int __open_hash_map_put (z_hash_map_t *self, uint32_t hash, void *key_value) {
+int __open_hash_map_put (z_hash_map_t *self, uint64_t hash, void *key_value) {
   struct ohtnode *ientry = NULL;
   struct ohtnode *entry;
 
@@ -98,7 +98,7 @@ int __open_hash_map_put (z_hash_map_t *self, uint32_t hash, void *key_value) {
 
 void * __open_hash_map_get (z_hash_map_t *self,
                             z_compare_t key_compare,
-                            uint32_t hash,
+                            uint64_t hash,
                             const void *key)
 {
   struct ohtnode *node = __node_lookup(self, key_compare, hash, key);
@@ -107,7 +107,7 @@ void * __open_hash_map_get (z_hash_map_t *self,
 
 void *__open_hash_map_pop (z_hash_map_t *self,
                            z_compare_t key_compare,
-                           uint32_t hash,
+                           uint64_t hash,
                            const void *key)
 {
   struct ohtnode *node = __node_lookup(self, key_compare, hash, key);

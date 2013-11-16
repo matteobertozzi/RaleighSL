@@ -36,8 +36,8 @@ static size_t __iovec_reader_next (void *self, const uint8_t **data) {
     return(chunk);
   }
 
-  iov++;
-  reader->ivec++;
+  ++iov;
+  ++(reader->ivec);
   *data = Z_UINT8_PTR(iov[0].iov_base);
   reader->offset = iov[0].iov_len;
   reader->avail -= iov[0].iov_len;
@@ -66,8 +66,8 @@ const uint8_t *__iovec_reader_fetch (void *self, uint8_t *buffer, size_t length)
   iov += reader->ivec;
   if ((avail = (iov[0].iov_len - reader->offset)) == 0) {
     reader->offset = 0;
-    reader->ivec++;
-    iov++;
+    ++(reader->ivec);
+    ++iov;
     avail = iov[0].iov_len;
   }
 
@@ -85,16 +85,16 @@ const uint8_t *__iovec_reader_fetch (void *self, uint8_t *buffer, size_t length)
   z_memcpy(pbuf, Z_UINT8_PTR(iov[0].iov_base) + reader->offset, avail);
   length -= avail;
   pbuf += avail;
-  reader->ivec++;
-  iov++;
+  ++(reader->ivec);
+  ++iov;
 
   /* Read full middle chunks */
   while (length >= iov[0].iov_len) {
     z_memcpy(pbuf, iov[0].iov_base, iov[0].iov_len);
     length -= iov[0].iov_len;
     pbuf += iov[0].iov_len;
-    reader->ivec++;
-    iov++;
+    ++(reader->ivec);
+    ++iov;
   }
 
   /* Read last chunk */

@@ -20,6 +20,7 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/iterator.h>
 #include <zcl/object.h>
+#include <zcl/memory.h>
 #include <zcl/map.h>
 
 #define Z_SKIP_LIST_ITERATOR(x)         ((z_skip_list_iterator_t *)(x))
@@ -56,6 +57,9 @@ z_skip_list_t *z_skip_list_alloc  (z_skip_list_t *self,
                                    void *user_data,
                                    unsigned int seed);
 void            z_skip_list_free   (z_skip_list_t *self);
+
+int z_skip_list_put_direct (z_skip_list_t *self, void *key_value);
+void *z_skip_list_remove_direct (z_skip_list_t *self, z_compare_t key_compare, const void *key);
 
 int     z_skip_list_put            (z_skip_list_t *self, void *key_value);
 void *  z_skip_list_remove         (z_skip_list_t *self, const void *key);

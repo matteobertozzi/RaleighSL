@@ -29,19 +29,24 @@ struct z_dlink_node {
   z_dlink_node_t *prev;
 };
 
+#define z_dlink_node(entry, type, member)                               \
+  (&(((type *)(entry))->member))
+
 #define z_dlink_entry(node, type, member)                               \
-    ((type *)((char *)(node)-(unsigned long)(&((type *)0)->member)))
+  ((type *)((char *)(node)-(unsigned long)(&((type *)0)->member)))
 
 #define z_dlink_front(head)                   ((head)->next)
 #define z_dlink_back(head)                    ((head)->prev)
 #define z_dlink_is_empty(head)                ((head)->next == (head))
 #define z_dlink_is_not_empty(head)            ((head)->next != (head))
+#define z_dlink_is_linked                     z_dlink_is_empty
+#define z_dlink_is_not_linked                 z_dlink_is_not_empty
 
 #define z_dlink_front_entry(head, type, member)                         \
-    z_dlink_entry(z_dlink_front(head), type, member)
+  z_dlink_entry(z_dlink_front(head), type, member)
 
-#define z_dlink_back_entry(head, type, member)                         \
-    z_dlink_entry(z_dlink_back(head), type, member)
+#define z_dlink_back_entry(head, type, member)                          \
+  z_dlink_entry(z_dlink_back(head), type, member)
 
 #define z_dlink_init(node)                             \
   do {                                                 \
@@ -105,6 +110,14 @@ struct z_dlink_node {
     z_dlink_for_each_safe(head, __p_safe_node, {                            \
       entry = z_dlink_entry(__p_safe_node, type, member);                   \
       __code__                                                              \
+    });                                                                     \
+  } while (0)
+
+#define z_dlink_del_for_each_entry(head, entry, type, member, __code__)     \
+  do {                                                                      \
+    z_dlink_for_each_safe_entry(head, entry, type, member, {                \
+      z_dlink_del(z_dlink_node(entry, type, member));                       \
+      do __code__ while (0);                                                \
     });                                                                     \
   } while (0)
 

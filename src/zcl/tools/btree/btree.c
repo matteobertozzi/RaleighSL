@@ -61,7 +61,7 @@ static struct node *__mtree_find_level (z_btree_t *self,
     child = (struct node *)node->values[index];
     /* Key is greater then max update the node */
     if ((index == __NITEMS) || child == NULL) {
-      Z_BUG_ON(index == 0, "Hit first key");
+      Z_ASSERT(index > 0, "Hit first key");
       index--;
       child = (struct node *)node->values[index];
       if (child != NULL && !__node_is_full(child)) {
@@ -72,7 +72,7 @@ static struct node *__mtree_find_level (z_btree_t *self,
 
     node = child;
   }
-  Z_BUG_ON(!node, "Expected at least one node");
+  Z_ASSERT(node != NULL, "Expected at least one node");
   return(node);
 }
 
@@ -218,7 +218,7 @@ static void __mtree_shrink (z_btree_t *self) {
     return;
 
   node = self->root;
-  Z_BUG_ON(node->nkeys > 1, "At least one key is needed");
+  Z_ASSERT(node->nkeys < 1, "At least one key is needed");
   self->root = node->values[0];
   self->height--;
 
@@ -268,7 +268,7 @@ static void __mtree_rebalance (z_btree_t *self,
 
   parent = __mtree_find_level(self, level + 1, key);
   index = __key_slot(parent->keys, parent->nkeys, key);
-  Z_BUG_ON(parent->values[index] != child, "");
+  Z_ASSERT(parent->values[index] == child, "");
 
   if (index > 0) {
     struct node *left;
@@ -370,7 +370,7 @@ int z_btree_insert (z_btree_t *self, z_bytes_t *key, z_bytes_t *value) {
 }
 
 z_bytes_t *z_btree_remove (z_btree_t *self, z_bytes_t *key) {
-  Z_BUG_ON(self->height == 0, "There should be at least one node");
+  Z_ASSERT(self->height > 0, "There should be at least one node");
   __mtree_remove_level(self, 1, key);
   z_btree_debug(self);
   return(0);
@@ -402,8 +402,8 @@ static void __debug (struct node *node, unsigned int height) {
   fprintf(stderr, "Node %p %u: ", node, height);
   for (i = 0; i < node->nkeys; ++i) {
     char buffer[32];
-    z_memcpy(buffer, z_bytes_data(node->keys[i]), z_bytes_length(node->keys[i]));
-    buffer[z_bytes_length(node->keys[i])] = 0;
+    z_memcpy(buffer, z_bytes_data(node->keys[i]), z_bytes_size(node->keys[i]));
+    buffer[z_bytes_size(node->keys[i])] = 0;
     fprintf(stderr, "%s -> ", buffer);
   }
   fprintf(stderr, "X\n");

@@ -51,9 +51,11 @@ static int __ringbuf_write_iov (z_ringbuf_t *self, struct iovec iov[2]) {
   return(1);
 }
 
-static int __ringbuf_read_iov (z_ringbuf_t *self, struct iovec iov[2]) {
+static size_t __ringbuf_read_iov (z_ringbuf_t *self, struct iovec iov[2]) {
   if (z_ringbuf_is_empty(self)) {
+    iov[0].iov_base = NULL;
     iov[0].iov_len = 0;
+    iov[1].iov_base = NULL;
     iov[1].iov_len = 0;
     return(0);
   }
@@ -176,7 +178,7 @@ ssize_t z_ringbuf_fd_dump (z_ringbuf_t *self, int fd) {
   }
 
   if (wr > 0) {
-    self->head = (self->head + wr) & (self->size << 1) - 1;
+    self->head = (self->head + wr) & ((self->size << 1) - 1);
   }
   return(wr);
 }
@@ -194,16 +196,16 @@ size_t z_ringbuf_rbuffer (z_ringbuf_t *self, const uint8_t **buffer) {
   *buffer = self->buffer + head;
   n = (head < tail) ? (tail - head) : (self->size - head);
 
-  self->head = (self->head + n) & (self->size << 1) - 1;
+  self->head = (self->head + n) & ((self->size << 1) - 1);
   return(n);
 }
 
 void z_ringbuf_rback (z_ringbuf_t *self, size_t n) {
-  self->head = (self->head - n) & (self->size << 1) - 1;
+  self->head = (self->head - n) & ((self->size << 1) - 1);
 }
 
 void z_ringbuf_rskip (z_ringbuf_t *self, size_t n) {
-  self->head = (self->head + n) & (self->size << 1) - 1;
+  self->head = (self->head + n) & ((self->size << 1) - 1);
 }
 
 void *z_ringbuf_fetch (z_ringbuf_t *self, void *buf, size_t n) {
@@ -258,7 +260,7 @@ size_t z_ringbuf_pop (z_ringbuf_t *self, void *buf, size_t n) {
     z_memcpy(pbuf, iov[0].iov_base, total);
   }
 
-  self->head = (self->head + total) & (self->size << 1) - 1;
+  self->head = (self->head + total) & ((self->size << 1) - 1);
   return(total);
 }
 

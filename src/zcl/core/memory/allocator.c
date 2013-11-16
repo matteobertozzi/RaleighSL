@@ -15,6 +15,7 @@
 #include <stdlib.h>
 
 #include <zcl/allocator.h>
+#include <zcl/debug.h>
 
 /* ============================================================================
  *  System Allocator

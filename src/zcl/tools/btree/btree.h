@@ -21,65 +21,13 @@ __Z_BEGIN_DECLS__
 #include <zcl/macros.h>
 #include <zcl/bytes.h>
 
-Z_TYPEDEF_STRUCT(z_vtable_btree_node)
-Z_TYPEDEF_STRUCT(z_btree_item)
 Z_TYPEDEF_STRUCT(z_btree)
-
-typedef int (*z_btree_item_func_t) (void *udata, z_btree_item_t *item);
-
-struct z_vtable_btree_node {
-  int   (*open)         (uint8_t *node, uint32_t size);
-  void  (*create)       (uint8_t *node, uint32_t size);
-  void  (*finalize)     (uint8_t *node);
-
-  int   (*has_space)    (const uint8_t *node, const z_btree_item_t *item);
-  int   (*append)       (uint8_t *node, const z_btree_item_t *item);
-
-  int   (*remove)       (uint8_t *node,
-                         const void *key, size_t ksize,
-                         z_btree_item_t *item);
-
-  int   (*fetch_first)  (const uint8_t *node,
-                         z_btree_item_t *item);
-  int   (*fetch_next)   (const uint8_t *node,
-                         z_btree_item_t *item);
-};
-
-struct z_btree_item {
-  const uint8_t *key;
-  const uint8_t *value;
-  uint32_t kprefix;
-  uint32_t ksize;
-  uint32_t vsize;
-  uint32_t index;
-  uint8_t  is_deleted;
-};
 
 struct z_btree {
   void *root;
   unsigned int nnodes;
   unsigned int height;
 };
-
-extern const z_vtable_btree_node_t z_btree_vnode;
-extern const z_vtable_btree_node_t z_btree_xnode;
-
-int z_btree_node_search (const uint8_t *node,
-                         const z_vtable_btree_node_t *vtable,
-                         const void *key, size_t ksize,
-                         z_btree_item_t *item);
-
-void z_btree_node_merge (const uint8_t *node_a,
-                         const z_vtable_btree_node_t *vtable_a,
-                         const uint8_t *node_b,
-                         const z_vtable_btree_node_t *vtable_b,
-                         z_btree_item_func_t item_func,
-                         void *udata);
-void z_btree_node_multi_merge (const uint8_t *nodes[],
-                               unsigned int nnodes,
-                               const z_vtable_btree_node_t *vtable,
-                               z_btree_item_func_t item_func,
-                               void *udata);
 
 int z_btree_open (z_btree_t *btree);
 void z_btree_close (z_btree_t *btree);

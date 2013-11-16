@@ -48,7 +48,7 @@ __Z_BEGIN_DECLS__
 #define z_fetch_1bit(byte, pos)         ((byte) & z_mask_1bit(pos))
 
 #define z_change_bits(byte, nbits, pos, value)                                 \
-  (byte) = (((byte) & ~z_fetch_bits(byte, nbits, pos)) | ((value) << ((pos) & 0x7)))
+  (byte) = (((byte) & ~z_mask_bits(nbits, pos)) | ((!!(value)) << ((pos) & 0x7)))
 
 #define z_change_7bit(byte, pos, v)     z_change_bits(byte, 7, pos, v)
 #define z_change_6bit(byte, pos, v)     z_change_bits(byte, 6, pos, v)

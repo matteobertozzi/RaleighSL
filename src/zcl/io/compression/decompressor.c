@@ -86,7 +86,7 @@ int z_decompressor_get_bytes (z_decompressor_t *self,
     z_slice_ltrim(&(self->suffix), slice_len - suffix);
   } else {
     size_t n = suffix - slice_len;
-    z_slice_prepend(&(self->suffix), self->body.data + (self->body.length - n), n);
+    z_slice_prepend(&(self->suffix), self->body.data + (self->body.size - n), n);
   }
 
   z_slice_clear(current);
@@ -104,7 +104,6 @@ int z_decompressor_get_int (z_decompressor_t *self,
   int n;
   n = z_decode_vint(buffer, bufsize, current);
   *current += self->iprev;
-  //Z_ASSERT(*current == 5, "current=%lu prev=%lu bufsize=%u n=%d blksize=%u", *current, self->iprev, bufsize, n, self->bufsize);
   self->iprev = *current;
   return(n);
 }

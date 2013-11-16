@@ -19,6 +19,7 @@
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
+#include <zcl/memory.h>
 #include <zcl/iterator.h>
 #include <zcl/object.h>
 #include <zcl/hash.h>
@@ -49,15 +50,15 @@ struct z_hash_map_plug {
 
   void    (*clear)      (z_hash_map_t *self);
   int     (*put)        (z_hash_map_t *self,
-                         uint32_t hash,
+                         uint64_t hash,
                          void *key_value);
   void *  (*get)        (z_hash_map_t *self,
                          z_compare_t key_compare,
-                         uint32_t hash,
+                         uint64_t hash,
                          const void *key);
   void *  (*pop)        (z_hash_map_t *self,
                          z_compare_t key_compare,
-                         uint32_t hash,
+                         uint64_t hash,
                          const void *key);
 
   void *  (*iter_begin)  (z_hash_map_iterator_t *iter,
@@ -107,21 +108,21 @@ void *          z_hash_map_get            (z_hash_map_t *self,
                                            const void *key);
 void *          z_hash_map_get_custom     (z_hash_map_t *self,
                                            z_compare_t key_compare,
-                                           uint32_t hash,
+                                           uint64_t hash,
                                            const void *key);
 
 void *          z_hash_map_pop            (z_hash_map_t *self,
                                            const void *key);
 void *          z_hash_map_pop_custom     (z_hash_map_t *self,
                                            z_compare_t key_compare,
-                                           uint32_t hash,
+                                           uint64_t hash,
                                            const void *key);
 
 int             z_hash_map_remove         (z_hash_map_t *self,
                                            const void *key);
 int             z_hash_map_remove_custom  (z_hash_map_t *self,
                                            z_compare_t key_compare,
-                                           uint32_t hash,
+                                           uint64_t hash,
                                            const void *key);
 
 #endif /* !_Z_HASH_MAP_H_ */

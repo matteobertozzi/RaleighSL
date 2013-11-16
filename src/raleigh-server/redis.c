@@ -56,21 +56,18 @@ struct redis_command {
 };
 
 static const struct redis_command __redis_commands[] = {
-  { "PING", 4, __process_ping },
-  { "QUIT", 4, __process_quit },
-
   { "ping", 4, __process_ping },
   { "quit", 4, __process_quit },
-
   { NULL, 0, NULL },
 };
 
 static int __redis_process_command(struct redis_client *client,
-                                   const z_slice_t *tokens,
+                                   z_slice_t *tokens,
                                    size_t ntokens)
 {
   const struct redis_command *p;
 
+  z_slice_to_lower(&(tokens[COMMAND_TOKEN]));
   for (p = __redis_commands; p->name != NULL; ++p) {
     if (z_slice_length(&(tokens[COMMAND_TOKEN])) < p->length) continue;
     if (!z_slice_equals(&(tokens[COMMAND_TOKEN]), p->name, p->length))
@@ -149,8 +146,9 @@ static int __redis_process_multibulk (struct redis_client *client,
     }
 
     *trim += n;
-    ntokens++;
+    ++ntokens;
   }
+
   return(__redis_process_command(client, tokens, ntokens));
 }
 
@@ -169,15 +167,15 @@ static int __redis_process_inline (struct redis_client *client,
     if (z_slice_is_empty(&(tokens[ntokens])))
       continue;
 
-    ntokens++;
+    ++ntokens;
   }
 
   return(__redis_process_command(client, tokens, ntokens));
 }
 
 /* ===========================================================================
-*  IPC protocol handlers
-*/
+ *  IPC protocol handlers
+ */
 static int __client_connected (z_ipc_client_t *client) {
   struct redis_client *redis = (struct redis_client *)client;
   z_ringbuf_alloc(&(redis->ibuffer), 512);
@@ -198,8 +196,8 @@ static int __client_read (z_ipc_client_t *ipc_client) {
   z_slice_t tokens[MAX_TOKENS];
   z_iovec_reader_t reader;
   struct iovec iov[2];
+  int result = 1;
   size_t trim;
-  int result;
   ssize_t n;
   int i;
 

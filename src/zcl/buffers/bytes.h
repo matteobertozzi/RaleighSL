@@ -19,6 +19,7 @@
 __Z_BEGIN_DECLS__
 
 #include <zcl/byteslice.h>
+#include <zcl/bytesref.h>
 #include <zcl/macros.h>
 #include <zcl/string.h>
 
@@ -32,12 +33,12 @@ struct z_bytes {
 };
 
 #define z_bytes_slice(self)          (&((self)->slice))
-#define z_bytes_length(self)         ((self)->slice.length)
+#define z_bytes_size(self)           ((self)->slice.size)
 #define z_bytes_data(self)           ((self)->slice.data)
 #define z_bytes_equals(a, b)         (!z_bytes_compare(a, b))
 
-#define z_bytes_from_byteslice(slice)                        \
-  z_bytes_from_data((slice)->data, (slice)->length)
+#define z_bytes_from_byte_slice(slice)                       \
+  z_bytes_from_data((slice)->data, (slice)->size)
 
 #define z_bytes_from_str(str)                                \
   z_bytes_from_data(str, z_strlen(str))
@@ -47,6 +48,8 @@ struct z_bytes {
 
 #define z_bytes_compare(a, b)                                \
   z_byte_slice_compare(z_bytes_slice(a), z_bytes_slice(b))
+
+extern const z_vtable_refs_t z_vtable_bytes_refs;
 
 z_bytes_t *z_bytes_alloc   (size_t size);
 z_bytes_t *z_bytes_acquire (z_bytes_t *self);

@@ -83,11 +83,12 @@ static int __epoll_remove (z_iopoll_t *iopoll,
 
 static void __epoll_poll (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
   struct epoll_event events[__EPOLL_QSIZE];
-  struct epoll_event *e;
   z_timer_t timer;
-  int n;
 
   while (z_iopoll_is_looping(iopoll)) {
+    struct epoll_event *e;
+    int n;
+
     z_timer_start(&timer);
     n = epoll_wait(engine->data.fd, events, __EPOLL_QSIZE, iopoll->timeout);
     if (Z_UNLIKELY(n < 0)) {

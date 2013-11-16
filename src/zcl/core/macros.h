@@ -18,6 +18,7 @@
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
+#include <inttypes.h>
 #include <sys/uio.h>
 #include <stdint.h>
 #include <stdarg.h>
@@ -134,6 +135,8 @@ __Z_BEGIN_DECLS__
 #define __zin_5(x, a, b, c, d, e)       __zin_0(x, a, __zin_4(x, b, c, d, e))
 #define __zin_6(x, a, b, c, d, e, f)    __zin_0(x, a, __zin_5(x, b, c, d, e, f))
 #define z_in(x, ...)                    (Z_FOLD(__zin_, x, __VA_ARGS__))
+
+#define z_between(v, a, b)              ((v) >= (a) && (v) <= (b))
 
 #define z_container_of(ptr, type, member)                                     \
     ((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))

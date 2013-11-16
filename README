@@ -1,4 +1,4 @@
- RaleighFS - Abstract Storage Layer
+ RaleighSL - Abstract Storage Layer
 =========================================
 
 How To Compile & Run
@@ -8,15 +8,15 @@ To run the build process just type python build.py
      python build.py
 
 To run the server:
-     export LD_LIBRARY_PATH=./build/zcl/libs:./build/raleighfs/libs/
+     export LD_LIBRARY_PATH=./build/zcl/libs:./build/raleighsl/libs/
      ./build/raleigh-server/raleigh-server
 
 Source Code
 ~~~~~~~~~~~~~
  - src/zcl                contains the abstraction classes and some tool
                           that is used by every piece of code.
- - src/raleighfs-core     contains the file-system core module.
- - src-raleighfs-plugins  contains all the file-system's pluggable objects
+ - src/raleighsl-core     contains the file-system core module.
+ - src-raleighsl-plugins  contains all the file-system's pluggable objects
                           and semantics layers.
  - src/raleigh-server     currently contains the entry point to run a
                           memcache compatible (memccapable text protocol),

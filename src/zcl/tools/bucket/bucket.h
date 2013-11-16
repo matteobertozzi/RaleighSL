@@ -18,11 +18,12 @@
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
+#include <zcl/byteslice.h>
 #include <zcl/iterator.h>
 #include <zcl/macros.h>
-#include <zcl/bytes.h>
 #include <zcl/map.h>
 
+#define Z_CONST_BUCKET_ITERATOR(x)          Z_CONST_CAST(z_bucket_iterator_t, x)
 #define Z_BUCKET_ITERATOR(x)                Z_CAST(z_bucket_iterator_t, x)
 
 Z_TYPEDEF_STRUCT(z_vtable_bucket)
@@ -39,7 +40,7 @@ struct z_bucket_entry {
 };
 
 struct z_bucket_iterator {
-  __Z_ITERABLE__
+  __Z_MAP_ITERABLE__
   const z_vtable_bucket_t *vtable;
   z_map_entry_t map_entry;
   z_bucket_entry_t entry;
@@ -49,21 +50,22 @@ struct z_bucket_iterator {
 };
 
 struct z_vtable_bucket {
-  int   (*open)         (const uint8_t *node, uint32_t size);
-  void  (*create)       (uint8_t *node, uint32_t size);
-  void  (*finalize)     (uint8_t *node);
+  int       (*open)         (const uint8_t *node, uint32_t size);
+  void      (*create)       (uint8_t *node, uint32_t size);
+  void      (*finalize)     (uint8_t *node);
 
-  int   (*has_space)    (const uint8_t *node,
-                         const z_bucket_entry_t *item);
-  int   (*append)       (uint8_t *node,
-                         const z_bucket_entry_t *item);
-  void  (*remove)       (uint8_t *node,
-                         z_bucket_entry_t *entry);
+  uint32_t  (*available)    (const uint8_t *node);
+  int       (*has_space)    (const uint8_t *node,
+                             const z_bucket_entry_t *item);
+  int       (*append)       (uint8_t *node,
+                             const z_bucket_entry_t *item);
+  void      (*remove)       (uint8_t *node,
+                             z_bucket_entry_t *entry);
 
-  int   (*fetch_first)  (const uint8_t *node,
-                         z_bucket_entry_t *entry);
-  int   (*fetch_next)   (const uint8_t *node,
-                         z_bucket_entry_t *entry);
+  int       (*fetch_first)  (const uint8_t *node,
+                             z_bucket_entry_t *entry);
+  int       (*fetch_next)   (const uint8_t *node,
+                             z_bucket_entry_t *entry);
 };
 
 extern const z_vtable_map_iterator_t z_bucket_map_iterator;
@@ -76,7 +78,9 @@ int z_bucket_search (const z_vtable_bucket_t *vtable,
 
 void z_bucket_iterator_open (z_bucket_iterator_t *self,
                              const z_vtable_bucket_t *vtable,
-                             const uint8_t *node);
+                             const uint8_t *node,
+                             const z_vtable_refs_t *vrefs,
+                             void *object);
 
 __Z_END_DECLS__
 

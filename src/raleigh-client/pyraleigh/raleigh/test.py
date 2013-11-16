@@ -17,7 +17,7 @@ from uuid import uuid1
 import unittest
 
 from raleigh.objects import RaleighClient
-from iopoll import IOPoll
+from iopoll import IOPoll, IOPollEntity
 
 class RaleighTestCase(unittest.TestCase):
   RALEIGH_HOST = '127.0.0.1'
@@ -30,16 +30,20 @@ class RaleighTestCase(unittest.TestCase):
     self.client = RaleighClient()
     self.client.REPLY_MAX_WAIT = 3
     self.client.connect(self.RALEIGH_HOST, self.RALEIGH_PORT)
-    self.iopoll.add(self.client)
+    if isinstance(self.client, IOPollEntity):
+      self.iopoll.add(self.client)
     self.objects = {}
 
   def tearDown(self):
-    if self.REMOVE_OBJECTS:
-      for oid in self.objects:
-        self.removeObject(oid)
-    self.iopoll.remove(self.client)
-    self.client.close()
-    self.iopoll.close()
+    try:
+      if self.REMOVE_OBJECTS:
+        for oid in self.objects:
+          self.removeObject(oid)
+      if isinstance(self.client, IOPollEntity):
+        self.iopoll.remove(self.client)
+      self.client.close()
+    finally:
+      self.iopoll.close()
 
   def generateName(self):
     return str(uuid1())

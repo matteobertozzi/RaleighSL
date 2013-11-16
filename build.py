@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 #
-#   Copyright 2011-2013 Matteo Bertozzi
-#
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
 #   You may obtain a copy of the License at
@@ -14,12 +12,11 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from commands import getstatusoutput as execCommand
 from multiprocessing import cpu_count
 from contextlib import contextmanager
-from collections import deque
 from threading import Thread
 from itertools import chain
+from Queue import Queue
 
 import shutil
 import string
@@ -31,9 +28,73 @@ import re
 BASE_DIR = os.path.split(os.path.abspath(__file__))[0]
 ZCL_COMPILER = os.path.join(BASE_DIR, os.path.join('bin', 'zcl-compiler.py'))
 
-SYSTEM_CPU_COUNT = cpu_count()
-NO_OUTPUT = False
+def execCommand(cmd):
+  import subprocess
+  try:
+    output = subprocess.check_output(cmd.split(' '), stderr=subprocess.STDOUT)
+  except Exception as e:
+    return e.returncode, e.output
+  return 0, output
 
+# =============================================================================
+#  Job Executor
+# =============================================================================
+class JobExecutor:
+  __shared_state = {}
+
+  class Worker:
+    def __init__(self, jobq):
+      self.jobq = jobq
+      self.reset()
+
+    def reset(self):
+      self.job_results = []
+      self.job_failures = []
+
+    def run(self):
+      while True:
+        job = self.jobq.get()
+        try:
+          result = job()
+          self.job_results.append(result)
+        except Exception as e:
+          self.job_failures.append(e)
+        finally:
+          self.jobq.task_done()
+
+  def __init__(self):
+    self.__dict__ = self.__shared_state
+    self._jobq = Queue()
+    self._workers = [self.Worker(self._jobq) for _ in xrange(cpu_count())]
+    for worker in self._workers:
+      t = Thread(target=worker.run)
+      t.setDaemon(True)
+      t.start()
+
+  def add_job(self, func, *args, **kwargs):
+    self._jobq.put(lambda: func(*args, **kwargs))
+
+  def wait_jobs(self, raise_failure=True):
+    self._jobq.join()
+    if not self._jobq.empty():
+      raise Exception("NOT EMPTY")
+
+    job_results = []
+    job_failures = []
+    for worker in self._workers:
+      job_results.extend(worker.job_results)
+      job_failures.extend(worker.job_failures)
+      worker.reset()
+    if raise_failure and len(job_failures) > 0:
+      for e in job_failures:
+        print e
+      raise Exception('%d Job Failures' % len(job_failures))
+    return sorted(job_results)
+
+# =============================================================================
+#  Output
+# =============================================================================
+NO_OUTPUT = False
 def msg_write(*args):
   if not NO_OUTPUT:
     data = ' '.join([str(x) for x in args]) if len(args) > 0 else ''
@@ -48,6 +109,9 @@ def bench(format):
     et = time.time()
     msg_write(format, (et - st))
 
+# =============================================================================
+#  I/O
+# =============================================================================
 def writeFile(filename, content):
   fd = open(filename, 'w')
   try:
@@ -69,7 +133,20 @@ def removeDirectoryContents(path):
     for name in dirs:
       _removeDirectory(os.path.join(root, name))
 
-def _findCompiler():
+def filesWalk(regex, dir_src, func):
+  for root, dirs, files in os.walk(dir_src, topdown=False):
+    for name in files:
+      if regex.match(name):
+        func(os.path.join(root, name))
+
+def cFilesWalk(dir_src, func):
+  pattern = re.compile('[A-Za-z0-9_-]+\.c$')
+  return filesWalk(pattern, dir_src, func)
+
+# =============================================================================
+#  Build System
+# =============================================================================
+def findCompiler():
   paths = os.getenv('PATH', '/usr/bin').split(':')
   compilers = ['clang', 'gcc', 'distcc']
 
@@ -89,59 +166,55 @@ def ldLibraryPathUpdate(ldlibs):
     env = '%s:%s' % (env, env_libs) if env else env_libs
     os.environ[env_name] = env
 
-class ThreadPool(object):
-  class Worker(Thread):
-    def __init__(self, pool):
-      Thread.__init__(self)
-      self.daemon = True
-      self.pool = pool
-      self.start()
+def compileZclStructs(src_dir, out_dir, dump_error=True):
+  def _compile(source):
+    cmd = '%s %s %s' % (ZCL_COMPILER, out_dir, source)
+    msg_write(' [CG]', source)
+    exit_code, output = execCommand(cmd)
+    if exit_code != 0:
+      if dump_error:
+        msg_write(' * Failed with Status %d\n * %s\n%s' % (exit_code, cmd, output))
+      raise RuntimeError("Linking Failure!")
 
-    def run(self):
-      pool = self.pool
-      while pool.running:
-        try:
-          job_func = pool.jobs.popleft()
-        except IndexError:
-          time.sleep(0)
-          continue
+  pattern = re.compile('[A-Za-z0-9_-]+\.rpc$')
+  filesWalk(pattern, src_dir, _compile)
+  msg_write()
 
-        try:
-          result = job_func()
-          pool.job_results.append(result)
-        except:
-          pool.job_failures += 1
+def runTool(tool, verbose=True):
+  exit_code, output = execCommand(tool)
 
-  def __init__(self):
-    self.running = True
-    self.jobs = deque()
-    self.job_results = []
-    self.job_failures = 0
-    self._workers = [self.Worker(self) for _ in xrange(SYSTEM_CPU_COUNT)]
+  tool_output = []
+  if verbose:
+    tool_output.append(output)
 
-  def push(self, job, *args, **kwargs):
-    self.jobs.append(lambda: job(*args, **kwargs))
+  if exit_code != 0:
+    tool_output.append(' [FAIL] %s exit code %d' % (tool, exit_code))
+  else:
+    tool_output.append(' [ OK ] %s' % tool)
 
-  def join(self, raise_failure=True):
-    while len(self.jobs) > 0:
-      if raise_failure and self.job_failures > 0:
-        break
+  msg_write('\n'.join(tool_output))
 
-    self.running = False
-    for worker in self._workers:
-      worker.join()
+def runTools(name, tools, verbose=True):
+  if not tools:
+    return
+  msg_write('Run %s:' % name)
+  msg_write('-' * 60)
 
-    if raise_failure and self.job_failures > 0:
-      raise Exception('%d Job Failures' % self.job_failures)
+  job_exec = JobExecutor()
+  for tool in tools:
+    job_exec.add_job(runTool, tool, verbose)
+  job_exec.wait_jobs()
 
-    return self.job_results
+  msg_write()
 
-  def hasFailures(self):
-    return self.job_failures > 0
+def runTests(name, tests, verbose=True):
+  if tests:
+    tests = [t for t in tests if os.path.basename(t).startswith('test-')]
+    runTools(name, tests, verbose)
 
 class BuildOptions(object):
   def __init__(self):
-    self.cc = _findCompiler()
+    self.cc = findCompiler()
     self.ldlibs = set()
     self.cflags = set()
     self.defines = set()
@@ -213,38 +286,15 @@ class Build(object):
     else:
       _removeDirectory(self._dir_obj)
 
-  def runTool(self, tool, verbose=True):
-    ldLibraryPathUpdate([self._dir_lib])
-    exit_code, output = execCommand(tool)
-
-    tool_output = []
-    if verbose:
-      tool_output.append(output)
-
-    if exit_code != 0:
-      tool_output.append(' [FAIL] %s exit code %d' % (tool, exit_code))
-    else:
-      tool_output.append(' [ OK ] %s' % tool)
-
-    msg_write('\n'.join(tool_output))
-
-  def runTools(self, name, tools, verbose=True):
-    msg_write('Run Tools:', name)
-    msg_write('-' * 60)
-
-    pool = ThreadPool()
-    for tool in tools:
-      pool.push(self.runTool, tool, verbose)
-    pool.join()
-
-    msg_write()
-
   def _makeBuildDirs(self, build_dir):
     self._file_buildnr = os.path.join(build_dir, '.buildnr-%s' % self.name)
     self._dir_out = os.path.join(build_dir, self.name)
     self._dir_obj = os.path.join(self._dir_out, 'objs')
     self._dir_lib = os.path.join(self._dir_out, 'libs')
     self._dir_inc = os.path.join(self._dir_out, 'include')
+
+  def updateLdPath(self):
+    ldLibraryPathUpdate([self._dir_lib])
 
   def compileFile(self, filename, dump_error=True):
     obj_name, obj_path = self._objFilePath(filename)
@@ -263,17 +313,17 @@ class Build(object):
     if exit_code != 0:
       if dump_error:
         msg_write(' * Failed with Status %d\n * %s\n%s' % (exit_code, cmd, output))
-      raise RuntimeError("Compilation Failure!")
+      raise RuntimeError("Compilation Failure! %s" % filename)
 
     if self._options.pedantic and len(output) > 0:
       msg_write(output)
 
   def compileDirectories(self, dirs_src):
-    pool = ThreadPool()
-    compileFunc = lambda f: pool.push(self.compileFile, f)
+    job_exec = JobExecutor()
+    compileFunc = lambda f: job_exec.add_job(self.compileFile, f)
     for src in dirs_src:
-      self._cFilesWalk(src, compileFunc)
-    results = pool.join()
+      cFilesWalk(src, compileFunc)
+    results = job_exec.wait_jobs()
     return len(results)
 
   def linkFile(self, filename, dump_error=True):
@@ -292,20 +342,6 @@ class Build(object):
 
     return app_path
 
-  def compileZclStructs(self, src_dir, out_dir, dump_error=True):
-    def _compile(source):
-      cmd = '%s %s %s' % (ZCL_COMPILER, out_dir, source)
-      msg_write(' [CG]', source)
-      exit_code, output = execCommand(cmd)
-      if exit_code != 0:
-        if dump_error:
-          msg_write(' * Failed with Status %d\n * %s\n%s' % (exit_code, cmd, output))
-        raise RuntimeError("Linking Failure!")
-
-    pattern = re.compile('[A-Za-z0-9_-]+\.rpc$')
-    self._filesWalk(pattern, src_dir, _compile)
-    msg_write()
-
   def _objFilePath(self, filename):
     if filename.endswith('.o'):
       return os.path.basename(filename), filename
@@ -322,16 +358,6 @@ class Build(object):
     app_name = obj_path[obj_path.rfind('_') + 1:-2]
     app_path = os.path.join(self._dir_out, app_name)
     return app_name, app_path
-
-  def _cFilesWalk(self, dir_src, func):
-    pattern = re.compile('[A-Za-z0-9_-]+\.c$')
-    return self._filesWalk(pattern, dir_src, func)
-
-  def _filesWalk(self, regex, dir_src, func):
-    for root, dirs, files in os.walk(dir_src, topdown=False):
-      for name in files:
-        if regex.match(name):
-          func(os.path.join(root, name))
 
   def buildNumber(self, major, minor, inc=1):
     mx = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -388,10 +414,10 @@ class BuildMiniTools(Build):
     if not self.compileDirectories(self.src_dirs):
       return []
 
-    pool = ThreadPool()
+    job_exec = JobExecutor()
     for obj_name in os.listdir(self._dir_obj):
-      pool.push(self.linkFile, os.path.join(self._dir_obj, obj_name))
-    tools = pool.join()
+      job_exec.add_job(self.linkFile, os.path.join(self._dir_obj, obj_name))
+    tools = job_exec.wait_jobs()
 
     msg_write()
     return sorted(tools)
@@ -404,11 +430,11 @@ class BuildConfig(Build):
     self.src_dirs = src_dirs
 
   def _build(self, config_file, config_head, debug=False, dump_error=False):
-    pool = ThreadPool()
-    test_func = lambda f: pool.push(self._testApp, f, dump_error)
+    job_exec = JobExecutor()
+    test_func = lambda f: job_exec.add_job(self._testApp, f, dump_error)
     for src_dir in self.src_dirs:
-      self._cFilesWalk(src_dir, test_func)
-    config = pool.join(raise_failure=False)
+      cFilesWalk(src_dir, test_func)
+    config = job_exec.wait_jobs(raise_failure=False)
 
     self._writeConfigFile(config_file, config_head, config, debug)
 
@@ -434,17 +460,18 @@ class BuildConfig(Build):
   def _writeConfigFile(self, config_file, config_head, config, debug):
     msg_write(' [WR] Write config', config_file)
     fd = open(config_file, 'w')
+    fd.write('/* File autogenerated, do not edit */\n')
     fd.write('#ifndef _%s_BUILD_CONFIG_H_\n' % config_head)
     fd.write('#define _%s_BUILD_CONFIG_H_\n' % config_head)
     fd.write('\n')
 
     fd.write('/* C++ needs to know that types and declarations are C, not C++. */\n')
     fd.write('#ifdef __cplusplus\n')
-    fd.write('    #define __%s_BEGIN_DECLS__         extern "C" {\n' % config_head)
-    fd.write('    #define __%s_END_DECLS__           }\n' % config_head)
+    fd.write('  #define __%s_BEGIN_DECLS__         extern "C" {\n' % config_head)
+    fd.write('  #define __%s_END_DECLS__           }\n' % config_head)
     fd.write('#else\n')
-    fd.write('    #define __%s_BEGIN_DECLS__\n' % config_head)
-    fd.write('    #define __%s_END_DECLS__\n' % config_head)
+    fd.write('  #define __%s_BEGIN_DECLS__\n' % config_head)
+    fd.write('  #define __%s_END_DECLS__\n' % config_head)
     fd.write('#endif\n')
     fd.write('\n')
 
@@ -461,6 +488,7 @@ class BuildConfig(Build):
 
     fd.write('\n')
     fd.write('#endif /* !_%s_BUILD_CONFIG_H_ */\n' % config_head)
+    fd.flush()
     fd.close()
 
     msg_write()
@@ -509,7 +537,7 @@ class BuildLibrary(Build):
     lib_path = os.path.join(self._dir_lib, lib_name_full)
 
     if self.platformIsMac():
-      cmd = '%s -dynamiclib -current_version %s -o %s -dylib %s %s' % \
+      cmd = '%s -dynamiclib -current_version %s -o %s %s %s' %        \
               (self._options.cc, self.version, lib_path,              \
                string.join(obj_list, ' '),                            \
                string.join(self._options.ldlibs, ' '))
@@ -565,7 +593,219 @@ class BuildLibrary(Build):
             shutil.copyfile(src_path, dst_path)
             msg_write(' [CP]', dst_path)
 
-def _parseCmdline():
+# =============================================================================
+#  Project
+# =============================================================================
+_ldlib = lambda name: '-L%s/%s/libs -l%s' % (Build.DEFAULT_BUILD_DIR, name, name)
+_inclib = lambda name: '-I%s/%s/include' % (Build.DEFAULT_BUILD_DIR, name)
+
+class Project(object):
+  BUILD_DIR = 'build'
+  NAME = None
+
+  def __init__(self, options):
+    self.options = options
+
+    DEFAULT_CFLAGS = ['-Wall', '-Wmissing-field-initializers', '-msse4.2'] #, '-mcx16']
+    DEFAULT_RELEASE_CFLAGS = ['-O3']
+    DEFAULT_DEBUG_CFLAGS = ['-g']
+    DEFAULT_DEFINES = ['-D_GNU_SOURCE', '-D__USE_FILE_OFFSET64']
+    DEFAULT_LDLIBS = ['-lpthread', '-lm']
+
+    # Default Build Options
+    default_opts = BuildOptions()
+    self.default_opts = default_opts
+    default_opts.addDefines(DEFAULT_DEFINES)
+    default_opts.addLdLibs(DEFAULT_LDLIBS)
+    default_opts.addCFlags(DEFAULT_CFLAGS)
+    default_opts.setPedantic(options.pedantic)
+
+    if options.compiler is not None:
+      default_opts.setCompiler(options.compiler)
+
+    if options.release:
+      default_opts.addCFlags(DEFAULT_RELEASE_CFLAGS)
+    else:
+      default_opts.addCFlags(DEFAULT_DEBUG_CFLAGS)
+
+    if options.pedantic:
+      default_opts.addCFlags(['-pedantic', '-Wignored-qualifiers', '-Wsign-compare',
+          '-Wtype-limits', '-Wuninitialized', '-Winline', '-Wpacked', '-Wcast-align',
+          '-Wconversion', '-Wuseless-cast', '-Wsign-conversion'])
+    else:
+      default_opts.addCFlags(['-Werror'])
+
+    # Default Library Build Options
+    default_lib_opts = default_opts.clone()
+    self.default_lib_opts = default_lib_opts
+    default_lib_opts.addCFlags(['-fPIC', '-fno-strict-aliasing'])
+
+  def build_config(self):
+    print "No build-config step for '%s'" % self.NAME
+
+  def build_auto_generated(self):
+    print "No build auto-generated step for '%s'" % self.NAME
+
+  def setup_library(self):
+    return None
+
+  @classmethod
+  def get_includes(self):
+    return [_inclib(self.NAME)]
+
+  @classmethod
+  def get_ldlibs(self):
+    return [_ldlib(self.NAME)]
+
+  def build_tools(self):
+    print "No tools step for '%s'" % self.NAME
+
+  def build_tests(self):
+    print "No tests step for '%s'" % self.NAME
+    return None
+
+# =============================================================================
+#  Project Targets
+# =============================================================================
+class Zcl(Project):
+  VERSION = '0.5.0'
+  NAME = 'zcl'
+
+  def build_config(self):
+    build_opts = self.default_opts.clone()
+    build_opts.addCFlags(['-Werror'])
+    build = BuildConfig('zcl-config', ['build.config'], options=build_opts)
+    build.build('src/zcl/config.h', 'Z',
+                debug=not self.options.release and not self.options.no_assert,
+                dump_error=self.options.verbose)
+    build.cleanup()
+
+  def setup_library(self):
+    return BuildLibrary(self.NAME, self.VERSION,
+                        ['src/zcl'],
+                        options=self.default_lib_opts)
+
+  def build_tests(self):
+    build_opts = self.default_opts.clone()
+    build_opts.addLdLibs(self.get_ldlibs())
+    build_opts.addIncludePaths(self.get_includes())
+
+    build = BuildMiniTools('zcl-test', ['tests/zcl'], options=build_opts)
+    return build.build()
+
+class RaleighSL(Project):
+  VERSION = '0.5.0'
+  NAME = 'raleighsl'
+
+  def setup_library(self):
+    build_opts = self.default_lib_opts.clone()
+    build_opts.addLdLibs(Zcl.get_ldlibs())
+    build_opts.addIncludePaths(Zcl.get_includes())
+
+    copy_dirs = [
+                 ('devices', ['src/raleighsl/devices']),
+                 #('key', ['src/raleighsl/plugins/key']),
+                 ('objects', ['src/raleighsl/objects']),
+                 #('oid', ['src/raleighsl/plugins/oid']),
+                 ('semantics', ['src/raleighsl/semantics']),
+                 #('space', ['src/raleighsl/plugins/space']),
+                 #('format', ['src/raleighsl/plugins/format']),
+                ]
+
+    return BuildLibrary(self.NAME, self.VERSION,
+              ['src/raleighsl/core'] + list(chain(*[x for _, x in copy_dirs])),
+               copy_dirs=copy_dirs, options=build_opts)
+
+  @classmethod
+  def get_includes(self):
+    return [_inclib(self.NAME)] + Zcl.get_includes()
+
+  @classmethod
+  def get_ldlibs(self):
+    return [_ldlib(self.NAME)] + Zcl.get_ldlibs()
+
+  def build_tools(self):
+    build_opts = self.default_opts.clone()
+    build_opts.addLdLibs(self.get_ldlibs())
+    build_opts.addIncludePaths(self.get_includes())
+    build = BuildMiniTools('raleighsl-tools', ['src/raleighsl/tools'], options=build_opts)
+    tools = build.build()
+
+  def build_tests(self):
+    build_opts = self.default_opts.clone()
+    build_opts.addLdLibs(self.get_ldlibs())
+    build_opts.addIncludePaths(self.get_includes())
+
+    build = BuildMiniTools('raleighsl-test', ['tests/raleighsl'], options=build_opts)
+    return build.build()
+
+class RaleighServer(Project):
+  VERSION = '0.5.0'
+  NAME = 'raleigh-server'
+
+  def build_auto_generated(self):
+    compileZclStructs('src/raleigh-server/rpc',
+                      'src/raleigh-server/rpc/generated',
+                      dump_error=self.options.verbose)
+
+  def build_tools(self):
+    build_opts = self.default_opts.clone()
+    build_opts.addLdLibs(RaleighSL.get_ldlibs())
+    build_opts.addIncludePaths(RaleighSL.get_includes())
+
+    build = BuildApp(self.NAME, ['src/raleigh-server/'], options=build_opts)
+    if not self.options.xcode:
+      build.build()
+
+class RaleighClient(Project):
+  VERSION = '0.5.0'
+  NAME = 'raleigh-client'
+
+  def setup_library(self):
+    build_opts = self.default_lib_opts.clone()
+    build_opts.addLdLibs(RaleighSL.get_ldlibs())
+    build_opts.addIncludePaths(Zcl.get_includes())
+
+    return BuildLibrary(self.NAME, self.VERSION,
+                        ['src/raleigh-client/raleigh-c'],
+                        options=build_opts)
+
+  @classmethod
+  def get_includes(self):
+    return [_inclib(self.NAME)] + Zcl.get_includes()
+
+  @classmethod
+  def get_ldlibs(self):
+    return [_ldlib(self.NAME)] + Zcl.get_ldlibs()
+
+  def build_tests(self):
+    build_opts = self.default_opts.clone()
+    build_opts.addLdLibs(self.get_ldlibs())
+    build_opts.addIncludePaths(self.get_includes())
+
+    build = BuildMiniTools('%s-test' % self.NAME, ['tests/raleigh-client'], options=build_opts)
+    return build.build()
+
+def main(options):
+  for project in (Zcl, RaleighSL, RaleighServer, RaleighClient):
+    print '=' * 79
+    print ' Building Target: %s' % project.NAME
+    print '=' * 79
+    target = project(options)
+    target.build_config()
+    target.build_auto_generated()
+    library = target.setup_library()
+    if library is not None:
+      library.copyHeaders()
+      if not options.xcode:
+        library.build()
+        library.updateLdPath()
+    if not options.xcode:
+      target.build_tools()
+      tests = target.build_tests()
+      runTests('%s Test' % target.NAME, tests, verbose=options.verbose)
+
+def _parse_cmdline():
   try:
     from argparse import ArgumentParser
   except ImportError:
@@ -579,170 +819,39 @@ def _parseCmdline():
         return options
 
   parser = ArgumentParser()
+  parser.add_argument(dest='clean', nargs='?',
+                      help='Clean the build directory and exit')
+
   parser.add_argument('-c', '--compiler', dest='compiler', action='store',
                       help='Compiler to use')
-
   parser.add_argument('-x', '--xcode', dest='xcode', action='store_true', default=False,
                       help="Use XCode to build everything (copy headers only)")
   parser.add_argument('-r', '--release', dest='release', action='store_true', default=False,
                       help="Use release flags during compilation")
+  parser.add_argument('--no-assert', dest='no_assert', action='store_true', default=False,
+                      help="Disable the asserts even in debug mode")
   parser.add_argument('-p', '--pedantic', dest='pedantic', action='store_true', default=False,
                       help="Issue all the warnings demanded by strict ISO C")
   parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', default=False,
                       help="Show traceback infomation if something fails")
   parser.add_argument('--no-output', dest='no_output', action='store_true', default=False,
                       help='Do not print messages')
-  parser.add_argument('--no-zcl', dest='build_zcl', action='store_false', default=True,
-                      help='Do not build Zcl Library')
-  parser.add_argument('--no-fs', dest='build_fs', action='store_false', default=True,
-                      help='Do not build RaleighFS Library')
-  parser.add_argument('--no-server', dest='build_server', action='store_false', default=True,
-                      help='Do not build RaleighFS Servers')
-  parser.add_argument('--no-tests', dest='build_tests', action='store_false', default=True,
-                      help='Do not build Tests')
-  parser.add_argument('--no-config', dest='build_config', action='store_false', default=True,
-                      help='Do not build config.h for libraries')
 
   return parser.parse_args()
 
 if __name__ == '__main__':
-  options = _parseCmdline()
-
+  options = _parse_cmdline()
   NO_OUTPUT = options.no_output
 
-  DEFAULT_CFLAGS = ['-Wall', '-Wmissing-field-initializers', '-msse4.2'] #, '-mcx16']
-  DEFAULT_RELEASE_CFLAGS = []
-  DEFAULT_DEBUG_CFLAGS = ['-g']
-  DEFAULT_DEFINES = ['-D_GNU_SOURCE', '-D__USE_FILE_OFFSET64']
-  DEFAULT_LDLIBS = ['-lpthread']
-
-  # Default Build Options
-  default_opts = BuildOptions()
-  default_opts.addDefines(DEFAULT_DEFINES)
-  default_opts.addLdLibs(DEFAULT_LDLIBS)
-  default_opts.addCFlags(DEFAULT_CFLAGS)
-  default_opts.setPedantic(options.pedantic)
-
-  if options.compiler is not None:
-    default_opts.setCompiler(options.compiler)
-
-  if options.release:
-    default_opts.addCFlags(DEFAULT_RELEASE_CFLAGS)
-  else:
-    default_opts.addCFlags(DEFAULT_DEBUG_CFLAGS)
-
-  if options.pedantic:
-    default_opts.addCFlags(['-pedantic', '-Wignored-qualifiers',
-                            '-Wsign-compare', '-Wtype-limits',
-                            '-Wuninitialized', '-Winline', '-Wpacked',
-                            '-Wcast-align', '-Wconversion', '-Wuseless-cast',
-                            '-Wsign-conversion'])
-  else:
-    default_opts.addCFlags(['-Werror'])
-
-  # Default Library Build Options
-  default_lib_opts = default_opts.clone()
-  default_lib_opts.addCFlags(['-fPIC', '-fno-strict-aliasing'])
-
-  # Update current LD_LIBRARY_PATH
-  ldLibraryPathUpdate(['%s/%s/libs' % (Build.DEFAULT_BUILD_DIR, lib)
-                       for lib in ('zcl', 'raleighfs')])
-
-  # Compute ld libs/includes path
-  _ldlib = lambda name: '-L%s/%s/libs -l%s' % (Build.DEFAULT_BUILD_DIR, name, name)
-  _inclib = lambda name: '-I%s/%s/include' % (Build.DEFAULT_BUILD_DIR, name)
-  zcl_ldlibs = [_ldlib('zcl')]
-  zcl_includes = [_inclib('zcl')]
-  raleighfs_ldlibs = [_ldlib('raleighfs')]
-  raleighfs_includes = [_inclib('raleighfs')]
-
-  # Remove everything during build_all
-  if options.xcode or (options.build_zcl and options.build_fs and options.build_server):
+  if options.clean:
     removeDirectoryContents(Build.DEFAULT_BUILD_DIR)
+    sys.exit(0)
 
-  def buildZcl():
-    if options.build_config:
-      build_opts = default_opts.clone()
-      build_opts.addCFlags(['-Werror'])
-      build = BuildConfig('zcl-config', ['build.config'], options=build_opts)
-      build.build('src/zcl/config.h', 'Z', debug=not options.release, dump_error=options.verbose)
-      build.cleanup()
+  try:
+    with bench('[T] Build Time'):
+      main(options)
+  except Exception as e:
+    print e
+    sys.exit(1)
 
-    build = BuildLibrary('zcl', '0.5.0', ['src/zcl'], options=default_lib_opts)
-    if options.xcode:
-      build.copyHeaders()
-    else:
-      build.build()
-
-    if not options.xcode and options.build_tests:
-      build_opts = default_opts.clone()
-      build_opts.addLdLibs(zcl_ldlibs)
-      build_opts.addIncludePaths(zcl_includes)
-
-      build = BuildMiniTools('zcl-test', ['tests/zcl'], options=build_opts)
-      tools = build.build()
-      tools = [t for t in tools if os.path.basename(t).startswith('test-')]
-      build.runTools('LibZCL Test', tools, verbose=options.verbose)
-
-  def buildFs():
-    build_opts = default_lib_opts.clone()
-    build_opts.addLdLibs(zcl_ldlibs)
-    build_opts.addIncludePaths(zcl_includes)
-
-    copy_dirs = [
-                 ('devices', ['src/raleighfs/devices']),
-                 #('key', ['src/raleighfs/plugins/key']),
-                 #('objcache', ['src/raleighfs/plugins/objcache']),
-                 ('objects', ['src/raleighfs/objects']),
-                 #('oid', ['src/raleighfs/plugins/oid']),
-                 ('semantics', ['src/raleighfs/semantics']),
-                 #('space', ['src/raleighfs/plugins/space']),
-                ]
-
-    build = BuildLibrary('raleighfs', '0.5.0',
-                         ['src/raleighfs/core'] + list(chain(*[x for _, x in copy_dirs])),
-                         copy_dirs=copy_dirs, options=build_opts)
-
-    if options.xcode:
-      build.copyHeaders()
-    else:
-      build.build()
-
-    # Tools
-    build_opts = default_opts.clone()
-    build_opts.addLdLibs(zcl_ldlibs)
-    build_opts.addLdLibs(raleighfs_ldlibs)
-    build_opts.addIncludePaths(zcl_includes)
-    build_opts.addIncludePaths(raleighfs_includes)
-    build = BuildMiniTools('raleighfs-tools', ['src/raleighfs/tools'], options=build_opts)
-    tools = build.build()
-
-    if not options.xcode and options.build_tests:
-      build_opts = default_opts.clone()
-      build_opts.addLdLibs(zcl_ldlibs)
-      build_opts.addLdLibs(raleighfs_ldlibs)
-      build_opts.addIncludePaths(zcl_includes)
-      build_opts.addIncludePaths(raleighfs_includes)
-
-      build = BuildMiniTools('raleighfs-test', ['tests/raleighfs'], options=build_opts)
-      tools = build.build()
-      tools = [t for t in tools if os.path.basename(t).startswith('test-')]
-      build.runTools('RaleighFS Test', tools, verbose=options.verbose)
-
-  def buildServer():
-    build_opts = default_opts.clone()
-    build_opts.addLdLibs(zcl_ldlibs)
-    build_opts.addLdLibs(raleighfs_ldlibs)
-    build_opts.addIncludePaths(zcl_includes)
-    build_opts.addIncludePaths(raleighfs_includes)
-
-    build = BuildApp('raleigh-server', ['src/raleigh-server/'], options=build_opts)
-    build.compileZclStructs('src/raleigh-server/rpc', 'src/raleigh-server/rpc/generated', dump_error=options.verbose)
-    if not options.xcode:
-      build.build()
-
-  with bench('[T] Build Time'):
-    if options.build_zcl: buildZcl()
-    if options.build_fs: buildFs()
-    if options.build_server: buildServer()
-
+  sys.exit(0)

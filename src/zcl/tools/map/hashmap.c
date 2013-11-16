@@ -29,7 +29,7 @@ void z_hash_map_clear (z_hash_map_t *self) {
 }
 
 int z_hash_map_put (z_hash_map_t *self, void *key_value) {
-  uint32_t hash = __entry_hash(self, key_value);
+  uint64_t hash = __entry_hash(self, key_value);
   if (self->plug->put(self, hash, key_value)) {
     if (self->plug->resize(self, self->size << 1))
       return(1);
@@ -44,7 +44,7 @@ void *z_hash_map_get (z_hash_map_t *self, const void *key) {
 
 void *z_hash_map_get_custom (z_hash_map_t *self,
                              z_compare_t key_compare,
-                             uint32_t hash,
+                             uint64_t hash,
                              const void *key)
 {
   return(self->plug->get(self, key_compare, hash, key));
@@ -56,7 +56,7 @@ void *z_hash_map_pop (z_hash_map_t *self, const void *key) {
 
 void *z_hash_map_pop_custom (z_hash_map_t *self,
                              z_compare_t key_compare,
-                             uint32_t hash,
+                             uint64_t hash,
                              const void *key)
 {
   return(self->plug->pop(self, key_compare, hash, key));
@@ -68,7 +68,7 @@ int z_hash_map_remove (z_hash_map_t *self, const void *key) {
 
 int z_hash_map_remove_custom (z_hash_map_t *self,
                               z_compare_t key_compare,
-                              uint32_t hash,
+                              uint64_t hash,
                               const void *key)
 {
   void *data;

@@ -1,4 +1,7 @@
 #include <zcl/queue.h>
+#include <zcl/bytes.h>
+#include <zcl/bytesref.h>
+#include <zcl/byteslice.h>
 #include <zcl/compression.h>
 #include <zcl/allocator.h>
 #include <zcl/freelist.h>
@@ -26,6 +29,7 @@ int main (int argc, char **argv) {
   printf("core/memory\n");
   __print_size(z_free_list_t);
   __print_size(z_allocator_t);
+  __print_size(z_memory_t);
   printf("core/global\n");
   __print_size(z_task_t);
   __print_size(z_task_rwcsem_t);
@@ -33,6 +37,11 @@ int main (int argc, char **argv) {
   __print_size(z_task_tree_t);
   printf("core/types\n");
   __print_size(z_object_t);
+  printf("io/buffers\n");
+  __print_size(z_buffer_t);
+  __print_size(z_bytes_t);
+  __print_size(z_byte_slice_t);
+  __print_size(z_bytes_ref_t);
   printf("io/buffers\n");
   __print_size(z_ringbuf_t);
   printf("io/compression\n");

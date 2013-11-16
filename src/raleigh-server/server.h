@@ -17,7 +17,7 @@
 #ifndef _RALEIGH_SERVER_H_
 #define _RALEIGH_SERVER_H_
 
-#include <raleighfs/raleighfs.h>
+#include <raleighsl/raleighsl.h>
 
 #include <zcl/ringbuf.h>
 #include <zcl/ipc.h>
@@ -25,12 +25,12 @@
 #define SERVER_CONTEXT(x)           Z_CAST(struct server_context, x)
 #define ECHO_CLIENT(x)              Z_CAST(struct echo_client, x)
 #define REDIS_CLIENT(x)             Z_CAST(struct redis_client, x)
-#define RALEIGHFS_CLIENT(x)         Z_CAST(struct raleighfs_client, x)
+#define RALEIGHSL_CLIENT(x)         Z_CAST(struct raleighsl_client, x)
 #define STATS_CLIENT(x)             Z_CAST(struct stats_client, x)
 
 struct server_context {
   int is_running;
-  raleighfs_t fs;
+  raleighsl_t fs;
   z_allocator_t allocator;
   z_iopoll_t iopoll;
 };
@@ -46,7 +46,7 @@ struct redis_client {
   z_ringbuf_t obuffer;
 };
 
-struct raleighfs_client {
+struct raleighsl_client {
   __Z_IPC_CLIENT__
   z_ipc_msgbuf_t msgbuf;
 };
@@ -60,7 +60,7 @@ struct stats_client {
 extern const z_ipc_protocol_t echo_protocol;
 extern const z_ipc_protocol_t redis_protocol;
 extern const z_ipc_protocol_t stats_protocol;
-extern const z_ipc_protocol_t raleighfs_protocol;
+extern const z_ipc_protocol_t raleighsl_protocol;
 
 #define z_ipc_echo_plug(iopoll, address, service, udata)              \
   z_ipc_plug(iopoll, &echo_protocol, struct echo_client,              \
@@ -74,8 +74,8 @@ extern const z_ipc_protocol_t raleighfs_protocol;
   z_ipc_plug(iopoll, &stats_protocol, struct stats_client,            \
              address, service, udata)
 
-#define z_ipc_raleighfs_plug(iopoll, address, service, udata)         \
-  z_ipc_plug(iopoll, &raleighfs_protocol, struct raleighfs_client,    \
+#define z_ipc_raleighsl_plug(iopoll, address, service, udata)         \
+  z_ipc_plug(iopoll, &raleighsl_protocol, struct raleighsl_client,    \
              address, service, udata)
 
 

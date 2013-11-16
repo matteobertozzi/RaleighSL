@@ -13,8 +13,8 @@
  */
 
 #include <zcl/byteslice.h>
-#include <zcl/debug.h>
 #include <zcl/string.h>
+#include <zcl/debug.h>
 #include <zcl/map.h>
 
 void z_map_merger_open (z_map_merger_t *self) {
@@ -46,7 +46,7 @@ const z_map_entry_t *z_map_merger_next (z_map_merger_t *self) {
   }
 
   /* TODO: Optimize me */
-  z_dlink_for_each_safe_entry(&(self->merge_list), iter, z_map_iterator_t, head.merge_list, {
+  z_dlink_for_each_entry(&(self->merge_list), iter, z_map_iterator_t, head.merge_list, {
     const z_map_entry_t *entry = z_map_iterator_current(iter);
     Z_ASSERT(entry != NULL, "NULL Entry for iterator %p", iter);
     if (smallest_entry == NULL || z_byte_slice_compare(&(entry->key), &(smallest_entry->key)) < 0) {

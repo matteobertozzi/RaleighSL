@@ -28,38 +28,39 @@ static void __signal_handler (int signum) {
   __global_ctx.is_running = 0;
 }
 
-static int __raleighfs_open (void) {
-  raleighfs_t *fs = &(__global_ctx.fs);
-  raleighfs_errno_t errno;
+static int __raleighsl_open (void) {
+  raleighsl_t *fs = &(__global_ctx.fs);
+  raleighsl_errno_t errno;
 
-  if (raleighfs_alloc(fs) == NULL) {
-    fprintf(stderr, "raleighfs: allocatin failed\n");
+  if (raleighsl_alloc(fs) == NULL) {
+    fprintf(stderr, "raleighsl: allocatin failed\n");
     return(1);
   }
 
   /* Plug objects */
-  raleighfs_plug_object(fs, &raleighfs_object_counter);
-  raleighfs_plug_object(fs, &raleighfs_object_deque);
-  raleighfs_plug_object(fs, &raleighfs_object_sset);
+  raleighsl_plug_object(fs, &raleighsl_object_number);
+  raleighsl_plug_object(fs, &raleighsl_object_deque);
+  raleighsl_plug_object(fs, &raleighsl_object_sset);
+  raleighsl_plug_object(fs, &raleighsl_object_flow);
 
   /* TODO */
-  const raleighfs_semantic_plug_t *semantic = &raleighfs_semantic_flat;
-  const raleighfs_format_plug_t *format = NULL;
-  const raleighfs_space_plug_t *space = NULL;
-  raleighfs_device_t *device = NULL;
+  const raleighsl_semantic_plug_t *semantic = &raleighsl_semantic_flat;
+  const raleighsl_format_plug_t *format = NULL;
+  const raleighsl_space_plug_t *space = NULL;
+  raleighsl_device_t *device = NULL;
 
-  if ((errno = raleighfs_create(fs, device, format, space, semantic))) {
-    fprintf(stderr, "raleighfs: %s\n", raleighfs_errno_string(errno));
-    raleighfs_free(fs);
+  if ((errno = raleighsl_create(fs, device, format, space, semantic))) {
+    fprintf(stderr, "raleighsl: %s\n", raleighsl_errno_string(errno));
+    raleighsl_free(fs);
     return(2);
   }
 
   return(0);
 }
 
-static void __raleighfs_close (void) {
-  raleighfs_close(&(__global_ctx.fs));
-  raleighfs_free(&(__global_ctx.fs));
+static void __raleighsl_close (void) {
+  raleighsl_close(&(__global_ctx.fs));
+  raleighsl_free(&(__global_ctx.fs));
 }
 
 int main (int argc, char **argv) {
@@ -80,15 +81,15 @@ int main (int argc, char **argv) {
   }
 
   /* Initialize I/O Poll */
-  if (z_iopoll_open(&(__global_ctx.iopoll), NULL)) {
+  if (z_iopoll_open(&(__global_ctx.iopoll), NULL, 0)) {
     fprintf(stderr, "z_iopoll_open(): failed\n");
     z_global_context_close();
     z_allocator_close(&(__global_ctx.allocator));
     return(1);
   }
 
-  /* Initialize RaleighFS */
-  if (__raleighfs_open()) {
+  /* Initialize RaleighSL */
+  if (__raleighsl_open()) {
     z_iopoll_close(&(__global_ctx.iopoll));
     z_global_context_close();
     z_allocator_close(&(__global_ctx.allocator));
@@ -99,10 +100,10 @@ int main (int argc, char **argv) {
   server[0] = z_ipc_echo_plug(&(__global_ctx.iopoll),  NULL, "11212", &__global_ctx);
   server[1] = z_ipc_redis_plug(&(__global_ctx.iopoll), NULL, "11213", &__global_ctx);
   server[2] = z_ipc_stats_plug(&(__global_ctx.iopoll), NULL, "11217", &__global_ctx);
-  server[3] = z_ipc_raleighfs_plug(&(__global_ctx.iopoll), NULL, "11215", &__global_ctx);
+  server[3] = z_ipc_raleighsl_plug(&(__global_ctx.iopoll), NULL, "11215", &__global_ctx);
 
   /* Start spinning... */
-  z_iopoll_poll(&(__global_ctx.iopoll), &(__global_ctx.is_running), 1000);
+  z_iopoll_poll(&(__global_ctx.iopoll), 0, &(__global_ctx.is_running), 2000);
 
   /* ...and we're done */
   z_ipc_unplug(&(__global_ctx.iopoll), server[3]);
@@ -110,7 +111,7 @@ int main (int argc, char **argv) {
   z_ipc_unplug(&(__global_ctx.iopoll), server[1]);
   z_ipc_unplug(&(__global_ctx.iopoll), server[0]);
 
-  __raleighfs_close();
+  __raleighsl_close();
   z_iopoll_close(&(__global_ctx.iopoll));
   z_global_context_close();
   z_allocator_close(&(__global_ctx.allocator));

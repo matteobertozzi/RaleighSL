@@ -19,24 +19,24 @@
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
+#include <zcl/threading.h>
 #include <zcl/histogram.h>
 #include <zcl/macros.h>
 #include <zcl/opaque.h>
 
 #define Z_IOPOLL_ENGINES            1
-#if (Z_IOPOLL_ENGINES > 1)
-  #include <zcl/threading.h>
-#endif /* Z_IOPOLL_ENGINES > 1 */
 
 #define Z_IOPOLL_WATCH              0
 #define Z_IOPOLL_READ               1
 #define Z_IOPOLL_WRITE              2
 #define Z_IOPOLL_HANG               3
+#define Z_IOPOLL_DATA               4
 
 #define Z_IOPOLL_WATCHED            (1U << Z_IOPOLL_WATCH)
 #define Z_IOPOLL_READABLE           (1U << Z_IOPOLL_READ)
 #define Z_IOPOLL_WRITABLE           (1U << Z_IOPOLL_WRITE)
 #define Z_IOPOLL_HANGUP             (1U << Z_IOPOLL_HANG)
+#define Z_IOPOLL_HAS_DATA           (1U << Z_IOPOLL_DATA)
 
 #define Z_IOPOLL_ENTITY_FD(x)       (Z_IOPOLL_ENTITY(x)->fd)
 #define Z_IOPOLL_ENTITY(x)          Z_CAST(z_iopoll_entity_t, x)
@@ -74,7 +74,9 @@ struct z_vtable_iopoll {
 
 struct z_iopoll_entity {
   const z_vtable_iopoll_entity_t *vtable;
+  uint64_t last_wavail;
   unsigned int flags;
+  z_spinlock_t lock;
   int fd;
 };
 
@@ -83,26 +85,28 @@ struct z_iopoll_stats {
   z_histogram_t ioread;
   z_histogram_t iowrite;
   uint32_t max_events;
+  uint64_t iowait_events[24];
+  uint64_t ioread_events[24];
+  uint64_t iowrite_events[24];
 };
 
 struct z_iopoll_engine {
   z_iopoll_stats_t stats;
   z_opaque_t data;
-
-#if (Z_IOPOLL_ENGINES > 1)
   z_thread_t thread;
-#endif /* Z_IOPOLL_ENGINES > 1 */
 };
 
 struct z_iopoll {
   const z_vtable_iopoll_t *vtable;
   const int *is_looping;
   int timeout;
-  z_iopoll_engine_t engines[Z_IOPOLL_ENGINES];
 
 #if (Z_IOPOLL_ENGINES > 1)
+  unsigned int nengines;
   unsigned int balancer;
 #endif /* Z_IOPOLL_ENGINES > 1 */
+
+  z_iopoll_engine_t engines[Z_IOPOLL_ENGINES];
 };
 
 #ifdef Z_IOPOLL_HAS_EPOLL
@@ -117,24 +121,28 @@ struct z_iopoll {
   ((iopoll)->is_looping != NULL && *((iopoll)->is_looping))
 
 int   z_iopoll_open         (z_iopoll_t *iopoll,
-                             const z_vtable_iopoll_t *vtable);
+                             const z_vtable_iopoll_t *vtable,
+                             unsigned int nengines);
 void  z_iopoll_close        (z_iopoll_t *iopoll);
 int   z_iopoll_add          (z_iopoll_t *iopoll,
                              z_iopoll_entity_t *entity);
 int   z_iopoll_remove       (z_iopoll_t *iopoll,
                              z_iopoll_entity_t *entity);
 int   z_iopoll_poll         (z_iopoll_t *iopoll,
+                             int detach,
                              const int *is_looping,
                              int timeout);
+void  z_iopoll_wait         (z_iopoll_t *iopoll);
 
 void  z_iopoll_process      (z_iopoll_t *iopoll,
                              z_iopoll_engine_t *engine,
                              z_iopoll_entity_t *entity,
                              uint32_t events);
 
-void  z_iopoll_entity_init  (z_iopoll_entity_t *entity,
+void  z_iopoll_entity_open  (z_iopoll_entity_t *entity,
                              const z_vtable_iopoll_entity_t *vtable,
                              int fd);
+void z_iopoll_entity_close  (z_iopoll_entity_t *entity);
 void z_iopoll_set_writable  (z_iopoll_t *iopoll,
                              z_iopoll_entity_t *entity,
                              int writable);

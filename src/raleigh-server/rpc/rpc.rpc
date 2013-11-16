@@ -68,60 +68,72 @@ response transaction_rollback {
 }
 
 /* ==================================================
- *  Counter
+ *  Number
  */
-request counter_get {
+request number_get {
   0: uint64 txn_id [default=0];
   1: uint64 oid;
 }
 
-response counter_get {
+response number_get {
   0: status status;
   1: int64 value;
 }
 
-request counter_set {
+request number_set {
   0: uint64 txn_id [default=0];
   1: uint64 oid;
   2: int64 value;
 }
 
-response counter_set {
+response number_set {
   0: status status;
 }
 
-request counter_cas {
+request number_cas {
   0: uint64 txn_id [default=0];
   1: uint64 oid;
   2: int64 old_value;
   3: int64 new_value;
 }
 
-response counter_cas {
+response number_cas {
   0: status status;
   1: int64 value;
 }
 
-request counter_add {
+request number_add {
   0: uint64 txn_id [default=0];
   1: uint64 oid;
   2: int64 value;
 }
 
-response counter_add {
+response number_add {
   0: status status;
   1: int64 value;
 }
 
-request counter_mul {
+request number_mul {
   0: uint64 txn_id [default=0];
   1: uint64 oid;
   2: int64 value;
 }
 
-response counter_mul {
+response number_mul {
   0: status status;
   1: int64 value;
+}
+
+request number_div {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: int64 value;
+}
+
+response number_div {
+  0: status status;
+  1: int64 mod;
+  2: int64 value;
 }
 
 /* ==================================================
@@ -188,6 +200,79 @@ response sset_scan {
 }
 
 /* ==================================================
+ *  Flow
+ */
+request flow_append {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: bytes data;
+}
+
+response flow_append {
+  0: status status;
+  1: uint64 size;
+}
+
+request flow_inject {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: uint64 offset;
+  3: bytes  data;
+}
+
+response flow_inject {
+  0: status status;
+  1: uint64 size;
+}
+
+request flow_write {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: uint64 offset;
+  3: bytes  data;
+}
+
+response flow_write {
+  0: status status;
+  1: uint64 size;
+}
+
+request flow_remove {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: uint64 offset;
+  3: uint64 size;
+}
+
+response flow_remove {
+  0: status status;
+  1: uint64 size;
+}
+
+request flow_truncate {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: uint64 size;
+}
+
+response flow_truncate {
+  0: status status;
+  1: uint64 size;
+}
+
+request flow_read {
+  0: uint64 txn_id [default=0];
+  1: uint64 oid;
+  2: uint64 offset;
+  3: uint64 size;
+}
+
+response flow_read {
+  0: status status;
+  1: bytes data;
+}
+
+/* ==================================================
  *  Deque
  */
 request deque_push {
@@ -224,10 +309,17 @@ response server_info { }
 request server_quit { }
 response server_quit { }
 
+request server_debug {
+  1: uint8 log_level;
+}
+
+response server_debug {
+}
+
 /* ==================================================
  *  RPCs
  */
-rpc raleighfs_rpc {
+rpc raleighsl_rpc {
   /* Semantic */
   10: semantic_open;
   11: semantic_create;
@@ -239,12 +331,13 @@ rpc raleighfs_rpc {
   21: transaction_commit;
   22: transaction_rollback;
 
-  /* Counter */
-  30: counter_get;
-  31: counter_set;
-  32: counter_cas;
-  33: counter_add;
-  34: counter_mul;
+  /* Number */
+  30: number_get;
+  31: number_set;
+  32: number_cas;
+  33: number_add;
+  34: number_mul;
+  35: number_div;
 
   /* Sorted Set */
   40: sset_insert;
@@ -253,12 +346,21 @@ rpc raleighfs_rpc {
   45: sset_get;
   46: sset_scan;
 
+  /* Flow */
+  50: flow_append;
+  51: flow_inject;
+  52: flow_write;
+  53: flow_remove;
+  54: flow_truncate;
+  55: flow_read;
+
   /* Deque */
-  50: deque_push;
-  51: deque_pop;
+  60: deque_push;
+  61: deque_pop;
 
   /* Server */
   90: server_ping;
   91: server_info;
   92: server_quit;
+  93: server_debug;
 }

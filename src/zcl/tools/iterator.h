@@ -44,12 +44,20 @@ typedef struct z_iterator {
   uint8_t data[512];
 } z_iterator_t;
 
+typedef enum z_iterator_seek {
+  Z_ITERATOR_SEEK_EQ,
+  Z_ITERATOR_SEEK_LT,
+  Z_ITERATOR_SEEK_LE,
+  Z_ITERATOR_SEEK_GT,
+} z_iterator_seek_t;
+
 struct z_vtable_iterator {
   int     (*open)             (void *self, const void *object);
   void    (*close)            (void *self);
   void *  (*begin)            (void *self);
   void *  (*end)              (void *self);
-  void *  (*seek)             (void *self, z_compare_t key_compare, const void *key);
+  void *  (*seek)             (void *self, z_iterator_seek_t seek,
+                               z_compare_t key_compare, const void *key);
   void *  (*skip)             (void *self, long n);
   void *  (*next)             (void *self);
   void *  (*prev)             (void *self);
@@ -82,11 +90,25 @@ struct z_iterator_interfaces {
 
 #define z_iterator_begin(self)              z_iterator_call(self, begin)
 #define z_iterator_end(self)                z_iterator_call(self, end)
-#define z_iterator_seek(self, cmpf, key)    z_iterator_call(self, seek, cmpf, key)
 #define z_iterator_skip(self, n)            z_iterator_call(self, skip, n)
 #define z_iterator_next(self)               z_iterator_call(self, next)
 #define z_iterator_prev(self)               z_iterator_call(self, prev)
 #define z_iterator_current(self)            z_iterator_call(self, current)
+
+#define z_iterator_seek(self, seek_flag, cmpf, key)                           \
+  z_iterator_call(self, seek, seek_flag, cmpf, key)
+
+#define z_iterator_seek_lt(self, cmpf, key)                                   \
+  z_iterator_seek(self, Z_ITERATOR_SEEK_LT, cmpf, key)
+
+#define z_iterator_seek_le(self, cmpf, key)                                   \
+  z_iterator_seek(self, Z_ITERATOR_SEEK_LE, cmpf, key)
+
+#define z_iterator_seek_eq(self, cmpf, key)                                   \
+  z_iterator_seek(self, Z_ITERATOR_SEEK_EQ, cmpf, key)
+
+#define z_iterator_seek_gt(self, cmpf, key)                                   \
+  z_iterator_seek(self, Z_ITERATOR_SEEK_GT, cmpf, key)
 
 __Z_END_DECLS__
 

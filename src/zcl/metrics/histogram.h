@@ -20,6 +20,9 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 #include <zcl/object.h>
+#include <zcl/humans.h>
+
+#include <stdio.h>
 
 Z_TYPEDEF_STRUCT(z_histogram_interfaces)
 Z_TYPEDEF_STRUCT(z_histogram)
@@ -40,16 +43,18 @@ struct z_histogram {
   uint64_t sum;
 };
 
-int     z_histogram_open          (z_histogram_t *self,
+void    z_histogram_open          (z_histogram_t *self,
                                    const uint64_t *bounds,
+                                   uint64_t *events,
                                    unsigned int nbounds);
 void    z_histogram_close         (z_histogram_t *self);
 void    z_histogram_clear         (z_histogram_t *self);
 void    z_histogram_add           (z_histogram_t *self, uint64_t value);
 double  z_histogram_average       (z_histogram_t *self);
 double  z_histogram_percentile    (z_histogram_t *self, double p);
+#define z_histogram_median(self)  z_histogram_percentile(self, 50.0)
+void    z_histogram_dump          (z_histogram_t *self, FILE *stream, z_human_u64_t key);
 
-#define z_histogram_median(self)   z_histogram_percentile(self, 50.0)
 
 __Z_END_DECLS__
 

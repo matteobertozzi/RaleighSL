@@ -174,58 +174,7 @@ static z_skip_list_node_t *__skip_node_max (const z_skip_list_t *self) {
 
   return((p == self->head) ? NULL : p);
 }
-#if 0
-static z_skip_list_node_t *__skip_node_lookup (const z_skip_list_t *self,
-                                               z_compare_t key_compare,
-                                               const void *key)
-{
-  z_skip_list_node_t *next;
-  z_skip_list_node_t *p;
-  unsigned int level;
-  int cmp;
 
-  p = self->head;
-  level = self->levels;
-  while (level--) {
-    while ((next = p->next[level]) != NULL) {
-      if (!(cmp = key_compare(self->user_data, next->data, key)))
-        return(next);
-
-      if (cmp > 0)
-        break;
-
-      p = next;
-    }
-  }
-
-  return(NULL);
-}
-
-static z_skip_list_node_t *__skip_node_less (const z_skip_list_t *self,
-                                             z_compare_t key_compare,
-                                             const void *key)
-{
-  z_skip_list_node_t *next;
-  z_skip_list_node_t *p;
-  unsigned int level;
-
-  p = self->head;
-  level = self->levels;
-  while (level--) {
-    while ((next = p->next[level]) != NULL) {
-      if (key_compare(self->user_data, next->data, key) >= 0) {
-        if (level == 0)
-          return(p);
-        break;
-      }
-
-      p = next;
-    }
-  }
-
-  return(p);
-}
-#endif
 enum {
   ITEM_CMP_EQ   = 1,
   ITEM_CMP_LESS = 2,
@@ -246,9 +195,9 @@ static z_skip_list_node_t *__skip_node_lookup (const z_skip_list_t *self,
   if (found == NULL)
     found = &_found;
 
+  *found = 0;
   p = self->head;
   level = self->levels;
-  *found = 0;
   while (level--) {
     while ((next = p->next[level]) != NULL) {
       cmp = key_compare(self->user_data, next->data, key);
@@ -315,24 +264,57 @@ static z_skip_list_node_t *__skip_node_find (const z_skip_list_t *self,
   return(p);
 }
 
-
 /* ===========================================================================
- *  PUBLIC Skip-List WRITE methods
+ *  PUBLIC Skip-List WRITE methods helpers
  */
-int z_skip_list_put (z_skip_list_t *self, void *key_value) {
-  struct mutation *mut;
+static void __skip_list_commit (z_skip_list_t *self, struct mutation *mut) {
+  z_skip_list_node_t **prev = mut->prev;
+  z_skip_list_node_t *p = mut->p;
+  unsigned int i;
+
+  switch (mut->type) {
+    case SKIP_LIST_REPLACE:
+      if (self->data_free != NULL && mut->key_value != p->data)
+        self->data_free(self->user_data, p->data);
+      p->data = mut->key_value;
+      break;
+    case SKIP_LIST_INSERT:
+      if (mut->levels > self->levels) {
+        for (i = self->levels; i < mut->levels; ++i) {
+          mut->prev[i] = self->head;
+        }
+        self->levels = mut->levels;
+      }
+      for (i = 0; i < mut->levels; ++i) {
+        prev[i]->next[i] = p;
+      }
+      self->size++;
+      break;
+    case SKIP_LIST_DELETE:
+      for (i = 0; i < self->levels; ++i) {
+        if (prev[i]->next[i] == p) {
+          prev[i]->next[i] = p->next[i];
+        }
+      }
+      while (self->levels > 1 && self->head->next[self->levels - 1] == NULL)
+        self->levels--;
+      self->size--;
+      __skip_node_free(self, p);
+      break;
+    case SKIP_LIST_CLEAR:
+      /* TODO */
+      break;
+  }
+}
+
+static int __skip_list_put (z_skip_list_t *self, struct mutation *mut, void *key_value) {
   unsigned int i;
   int equals;
-
-  mut = __mutation_alloc(self);
-  if (Z_MALLOC_IS_NULL(mut))
-    return(1);
 
   mut->key_value = key_value;
   mut->p = __skip_node_find(self, self->key_compare, key_value, mut->prev, &equals);
   if (mut->p != NULL && equals) {
     mut->type = SKIP_LIST_REPLACE;
-    __mutation_add(self, mut);
     return(0);
   }
 
@@ -345,7 +327,6 @@ int z_skip_list_put (z_skip_list_t *self, void *key_value) {
 
   mut->p = __skip_node_alloc(self, mut->levels, key_value);
   if (Z_MALLOC_IS_NULL(mut->p)) {
-    __mutation_free(self, mut);
     return(1);
   }
 
@@ -353,7 +334,46 @@ int z_skip_list_put (z_skip_list_t *self, void *key_value) {
     mut->p->next[i] = __apply_mutation(self, i, mut->prev[i]);
   }
 
+  return(0);
+}
+
+static void *__skip_list_remove (z_skip_list_t *self,
+                                 struct mutation *mut,
+                                 z_compare_t key_compare,
+                                 const void *key)
+{
+  int equals;
+  mut->type = SKIP_LIST_DELETE;
+  mut->key_value = (void *)key;
+  mut->p = __skip_node_find(self, key_compare, key, mut->prev, &equals);
+  return((mut->p == NULL || !equals) ? NULL : mut->p->data);
+}
+
+/* ===========================================================================
+ *  PUBLIC Skip-List WRITE methods
+ */
+int z_skip_list_put (z_skip_list_t *self, void *key_value) {
+  struct mutation *mut;
+
+  mut = __mutation_alloc(self);
+  if (Z_MALLOC_IS_NULL(mut))
+    return(1);
+
+  if (__skip_list_put(self, mut, key_value)) {
+    __mutation_free(self, mut);
+    return(2);
+  }
+
   __mutation_add(self, mut);
+  return(0);
+}
+
+int z_skip_list_put_direct (z_skip_list_t *self, void *key_value) {
+  struct mutation mut;
+  z_memzero(&mut, sizeof(struct mutation));
+  if (__skip_list_put(self, &mut, key_value))
+    return(1);
+  __skip_list_commit(self, &mut);
   return(0);
 }
 
@@ -363,22 +383,29 @@ void *z_skip_list_remove (z_skip_list_t *self, const void *key) {
 
 void *z_skip_list_remove_custom (z_skip_list_t *self, z_compare_t key_compare, const void *key) {
   struct mutation *mut;
-  int equals;
+  void *data;
 
   mut = __mutation_alloc(self);
   if (Z_MALLOC_IS_NULL(mut))
     return(NULL);
 
-  mut->type = SKIP_LIST_DELETE;
-  mut->key_value = (void *)key;
-  mut->p = __skip_node_find(self, key_compare, key, mut->prev, &equals);
-  if (mut->p == NULL || !equals) {
+  if ((data = __skip_list_remove(self, mut, key_compare, key)) == NULL) {
     __mutation_free(self, mut);
     return(NULL);
   }
 
   __mutation_add(self, mut);
-  return(mut->p->data);
+  return(data);
+}
+
+void *z_skip_list_remove_direct (z_skip_list_t *self, z_compare_t key_compare, const void *key) {
+  struct mutation mut;
+  void *data;
+  z_memzero(&mut, sizeof(struct mutation));
+  if ((data = __skip_list_remove(self, &mut, key_compare, key)) == NULL)
+    return(NULL);
+  __skip_list_commit(self, &mut);
+  return(data);
 }
 
 void z_skip_list_clear (z_skip_list_t *self) {
@@ -402,47 +429,10 @@ void z_skip_list_clear (z_skip_list_t *self) {
 
 void z_skip_list_commit (z_skip_list_t *self) {
   struct mutation *mut = (struct mutation *)self->mutations;
-  unsigned int i;
 
   while (mut != NULL) {
     struct mutation *next = mut->next;
-    z_skip_list_node_t **prev = mut->prev;
-    z_skip_list_node_t *p = mut->p;
-
-    switch (mut->type) {
-      case SKIP_LIST_REPLACE:
-        if (self->data_free != NULL && mut->key_value != p->data)
-          self->data_free(self->user_data, p->data);
-        p->data = mut->key_value;
-        break;
-      case SKIP_LIST_INSERT:
-        if (mut->levels > self->levels) {
-          for (i = self->levels; i < mut->levels; ++i) {
-            mut->prev[i] = self->head;
-          }
-          self->levels = mut->levels;
-        }
-        for (i = 0; i < mut->levels; ++i) {
-          prev[i]->next[i] = p;
-        }
-        self->size++;
-        break;
-      case SKIP_LIST_DELETE:
-        for (i = 0; i < self->levels; ++i) {
-          if (prev[i]->next[i] == p) {
-            prev[i]->next[i] = p->next[i];
-          }
-        }
-        while (self->levels > 1 && self->head->next[self->levels - 1] == NULL)
-          self->levels--;
-        self->size--;
-        __skip_node_free(self, p);
-        break;
-      case SKIP_LIST_CLEAR:
-        /* TODO */
-        break;
-    }
-
+    __skip_list_commit(self, mut);
     __mutation_free(self, mut);
     mut = next;
   }
@@ -575,12 +565,29 @@ static void *__skip_list_prev (void *self) {
   return((iter->current != NULL) ? iter->current->data : NULL);
 }
 
-static void *__skip_list_seek (void *self, z_compare_t key_compare, const void *key) {
+static void *__skip_list_seek (void *self, z_iterator_seek_t seek,
+                               z_compare_t key_compare, const void *key)
+{
   z_skip_list_iterator_t *iter = Z_SKIP_LIST_ITERATOR(self);
   const z_skip_list_t *skip = Z_CONST_SKIP_LIST(z_iterator_object(iter));
-  if ((iter->current = __skip_node_eq(skip, key_compare, key)) != NULL)
-    return(iter->current->data);
-  return(NULL);
+  switch (seek) {
+    case Z_ITERATOR_SEEK_EQ:
+      iter->current = __skip_node_eq(skip, key_compare, key);
+      break;
+    case Z_ITERATOR_SEEK_LT:
+      iter->current = __skip_node_less(skip, key_compare, key);
+      break;
+    case Z_ITERATOR_SEEK_LE:
+      iter->current = __skip_node_less_eq(skip, key_compare, key, NULL);
+      break;
+    case Z_ITERATOR_SEEK_GT:
+      iter->current = __skip_node_less_eq(skip, key_compare, key, NULL);
+      if (iter->current != NULL) {
+        iter->current = iter->current->next[0];
+      }
+      break;
+  }
+  return(iter->current != NULL ? iter->current->data : NULL);
 }
 
 static void *__skip_list_skip (void *self, long n) {

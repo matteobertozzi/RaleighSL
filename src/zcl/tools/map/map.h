@@ -19,10 +19,11 @@
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
-#include <zcl/byteslice.h>
+#include <zcl/bytesref.h>
 #include <zcl/comparer.h>
 #include <zcl/iterator.h>
 #include <zcl/dlink.h>
+#include <zcl/debug.h>
 #include <zcl/type.h>
 
 Z_TYPEDEF_STRUCT(z_sorted_map_interfaces)
@@ -43,8 +44,8 @@ Z_TYPEDEF_STRUCT(z_map_entry)
 
 #define __Z_MAP_ITERABLE__                 z_map_iterator_head_t __iter__;
 #define Z_MAP_ITERATOR(x)                  Z_CAST(z_map_iterator_t, x)
-#define Z_MAP_ITERATOR_HEAD(x)             Z_MAP_ITERATOR(x)->head
-#define Z_MAP_ITERATOR_VTABLE(x)           Z_MAP_ITERATOR_HEAD(x).vtable
+#define Z_MAP_ITERATOR_HEAD(x)             (Z_MAP_ITERATOR(x)->head)
+#define Z_MAP_ITERATOR_VTABLE(x)           (Z_MAP_ITERATOR_HEAD(x).vtable)
 #define Z_MAP_ITERATOR_ITERABLE(type, x)   Z_CONST_CAST(type, Z_MAP_ITERATOR_HEAD(x).iterable)
 
 struct z_vtable_map {
@@ -72,7 +73,10 @@ struct z_vtable_map_iterator {
   int   (*next)     (void *self);
   int   (*seek)     (void *self, const z_byte_slice_t *key);
 
-  const z_map_entry_t *  (*current)  (void *self);
+  const z_map_entry_t *  (*current)  (const void *self);
+  void (*get_refs)  (const void *self,
+                     z_bytes_ref_t *key,
+                     z_bytes_ref_t *value);
 };
 
 struct z_map_interfaces {
@@ -100,13 +104,14 @@ struct z_map_merger {
 
 struct z_map_iterator_head {
   const z_vtable_map_iterator_t *vtable;
-  const void *iterable;
+  const z_vtable_refs_t *vrefs;
   z_dlink_node_t merge_list;
+  void *object;
 };
 
 struct z_map_iterator {
   z_map_iterator_head_t head;
-  uint8_t data[512];
+  uint8_t data[256];
 };
 
 #define z_map_call(self, method, ...)                            \
@@ -129,23 +134,32 @@ struct z_map_iterator {
 #define z_sorted_map_ceil(self, key)       z_sorted_map_call(self, ceil, key)
 #define z_sorted_map_floor(self, key)      z_sorted_map_call(self, floor, key)
 
-#define Z_MAP_ITERATOR_INIT(self, vtable_)                                    \
+#define Z_MAP_ITERATOR_INIT(self, vtable_, vrefs_, object_)                   \
   do {                                                                        \
     Z_MAP_ITERATOR_HEAD(self).vtable = (vtable_);                             \
+    Z_MAP_ITERATOR_HEAD(self).vrefs  = (vrefs_);                              \
     z_dlink_init(&(Z_MAP_ITERATOR_HEAD(self).merge_list));                    \
+    Z_MAP_ITERATOR_HEAD(self).object = (object_);                             \
   } while (0)
 
 #define z_map_iterator_call(self, method, ...)                                \
   Z_MAP_ITERATOR_VTABLE(self)->method(self, ##__VA_ARGS__)
 
-#define z_map_iterator_begin(self)          z_map_iterator_call(self, begin)
-#define z_map_iterator_next(self)           z_map_iterator_call(self, next)
-#define z_map_iterator_current(self)        z_map_iterator_call(self, current)
-#define z_map_iterator_seek(self, key)      z_map_iterator_call(self, seek)
+#define z_map_iterator_begin(self)            z_map_iterator_call(self, begin)
+#define z_map_iterator_next(self)             z_map_iterator_call(self, next)
+#define z_map_iterator_current(self)          z_map_iterator_call(self, current)
+#define z_map_iterator_get_refs(self, k, v)   z_map_iterator_call(self, get_refs, k, v)
+#define z_map_iterator_seek(self, key)        z_map_iterator_call(self, seek, key)
+
+void z_map_iterator_seek_to (z_map_iterator_t *self,
+                             const z_byte_slice_t *key,
+                             int include_key);
 
 void z_map_merger_open (z_map_merger_t *self);
 int  z_map_merger_add  (z_map_merger_t *self, z_map_iterator_t *iter);
 const z_map_entry_t *z_map_merger_next (z_map_merger_t *self);
+
+void z_dump_map_entry (FILE *stream, const z_map_entry_t *entry);
 
 __Z_END_DECLS__
 

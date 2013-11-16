@@ -82,21 +82,21 @@ int z_bitmap_find_first (const uint8_t *bitmap,
       num_bits--;
     }
 
-    p++;
+    ++p;
   }
 
   // check 64bit at the time for a 'value' bit
   const uint64_t *u64 = (const uint64_t *)p;
   while (num_bits >= 64 && *u64 == pattern64[value]) {
     num_bits -= 64;
-    u64++;
+    ++u64;
   }
 
   // check 8bit at the time for a 'value' bit
   p = (const uint8_t *)u64;
   while (num_bits >= 8 && *p == pattern8[value]) {
     num_bits -= 8;
-    p++;
+    ++p;
   }
 
   // Find a 'value' bit at the beginning of the last byte
@@ -114,11 +114,12 @@ int z_bitmap_find_first (const uint8_t *bitmap,
 void z_bitmap_dump(FILE *stream, const uint8_t *bitmap, size_t num_bits) {
   size_t index = 0;
   while (index < num_bits) {
+    int i, j;
     fprintf(stream, "%4zu: ", index);
-    for (int i = 0; i < 8 && index < num_bits; ++i) {
-      for (int j = 0; j < 8 && index < num_bits; ++j) {
+    for (i = 0; i < 8 && index < num_bits; ++i) {
+      for (j = 0; j < 8 && index < num_bits; ++j) {
         fprintf(stream, "%d", z_bitmap_test(bitmap, index));
-        index++;
+        ++index;
       }
       fputc(' ', stream);
     }

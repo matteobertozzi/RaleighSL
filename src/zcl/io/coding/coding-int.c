@@ -62,7 +62,7 @@ int z_encode_vint (uint8_t *buf, uint64_t value) {
   while (value >= 128) {
     *buf++ = (value & 0x7f) | 128;
     value >>= 7;
-    size++;
+    ++size;
   }
   *buf = value & 0x7f;
   return(size);
@@ -94,6 +94,7 @@ int z_decode_vint (const uint8_t *buf,
 /* ============================================================================
  *  Encode/Decode unsigned integer
  */
+#if Z_CPU_IS_BIG_ENDIAN
 void z_encode_uint (uint8_t *buf, unsigned int length, uint64_t value) {
   switch (length) {
     case 8: buf[7] = (value >> 56) & 0xff;
@@ -127,7 +128,7 @@ void z_decode_uint32 (const uint8_t *buffer,
   uint32_t result = 0;
 
   switch (length) {
-    case 4: result += ((uint64_t)buffer[3]) << 24;
+    case 4: result  = ((uint64_t)buffer[3]) << 24;
     case 3: result += buffer[2] << 16;
     case 2: result += buffer[1] <<  8;
     case 1: result += buffer[0];
@@ -155,3 +156,4 @@ void z_decode_uint64 (const uint8_t *buffer,
 
   *value = result;
 }
+#endif /* Z_CPU_IS_BIG_ENDIAN */

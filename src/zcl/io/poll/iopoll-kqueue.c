@@ -25,6 +25,8 @@
 #include <fcntl.h>
 #include <stdio.h>
 
+#define __KQUEUE_QSIZE           256
+
 static int __kqueue_open (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
   if ((engine->data.fd = kqueue()) < 0) {
     perror("kqueue()");
@@ -90,11 +92,9 @@ static int __kqueue_remove (z_iopoll_t *iopoll,
 }
 
 static void __kqueue_poll (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
-  struct kevent events[512];
+  struct kevent events[__KQUEUE_QSIZE];
   struct timespec timeout;
-  struct kevent *e;
   z_timer_t timer;
-  int n;
 
   if (iopoll->timeout > 0) {
     timeout.tv_sec = iopoll->timeout / 1000;
@@ -105,15 +105,17 @@ static void __kqueue_poll (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
   }
 
   while (z_iopoll_is_looping(iopoll)) {
-    z_timer_start(&timer);
-    n = kevent(engine->data.fd, NULL, 0, events, 512, &timeout);
-    z_timer_stop(&timer);
-    z_iopoll_stats_add_events(engine, n, z_timer_micros(&timer));
+    struct kevent *e;
+    int n;
 
+    z_timer_start(&timer);
+    n = kevent(engine->data.fd, NULL, 0, events, __KQUEUE_QSIZE, &timeout);
     if (Z_UNLIKELY(n < 0)) {
       perror("kevent()");
       continue;
     }
+    z_timer_stop(&timer);
+    z_iopoll_stats_add_events(engine, n, z_timer_micros(&timer));
 
     for (e = events; n--; ++e) {
       uint32_t eflags = (e->filter == EVFILT_READ) << Z_IOPOLL_READ |
@@ -122,6 +124,8 @@ static void __kqueue_poll (z_iopoll_t *iopoll, z_iopoll_engine_t *engine) {
       z_iopoll_process(iopoll, engine, Z_IOPOLL_ENTITY(e->udata), eflags);
     }
   }
+
+  z_iopoll_stats_dump(engine);
 }
 
 const z_vtable_iopoll_t z_iopoll_kqueue = {

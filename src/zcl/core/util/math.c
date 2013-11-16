@@ -57,3 +57,11 @@ unsigned int z_rand (unsigned int *seed) {
   *seed = next;
   return(result);
 }
+
+int z_fequals (double a, double b) {
+  return(fabs(a - b) < 0.00001);
+}
+
+int z_fsimilar (double a, double b, double eps) {
+  return(fabs(a - b) < eps);
+}

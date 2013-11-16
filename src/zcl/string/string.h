@@ -42,6 +42,15 @@ __Z_BEGIN_DECLS__
   size_t  z_strlcpy (char *dst, const char *src, size_t size);
 #endif
 
+char *z_strupper    (char *str);
+char *z_strnupper   (char *str, size_t n);
+
+char *z_strlower    (char *str);
+char *z_strnlower   (char *str, size_t n);
+
+int   z_strcasecmp  (const char *s1, const char *s2);
+int   z_strncasecmp (const char *s1, const char *s2, size_t n);
+
 #define z_memsearch(src, src_len, needle, needle_len, extent)               \
   z_memsearch_u8(Z_CONST_UINT8(src), src_len,                               \
                  Z_CONST_UINT8(needle), needle_len, extent)
@@ -52,14 +61,14 @@ int z_memsearch_u8 (const uint8_t *src,
                     size_t needle_len,
                     z_extent_t *extent);
 
-unsigned int      z_memshared     (const void *a,
-                                   unsigned int alen,
-                                   const void *b,
-                                   unsigned int blen);
-unsigned int      z_memrshared    (const void *a,
-                                   unsigned int alen,
-                                   const void *b,
-                                   unsigned int blen);
+size_t      z_memshared     (const void *a,
+                             size_t alen,
+                             const void *b,
+                             size_t blen);
+size_t      z_memrshared    (const void *a,
+                             size_t alen,
+                             const void *b,
+                             size_t blen);
 
 __Z_END_DECLS__
 

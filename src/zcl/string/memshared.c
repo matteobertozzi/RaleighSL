@@ -12,60 +12,68 @@
  *   limitations under the License.
  */
 
-unsigned int z_memshared (const void *a,
-                          unsigned int alen,
-                          const void *b,
-                          unsigned int blen)
+#include <zcl/string.h>
+
+size_t z_memshared (const void *a, size_t alen,
+                    const void *b, size_t blen)
 {
   const unsigned long *ia = (const unsigned long *)a;
   const unsigned long *ib = (const unsigned long *)b;
-  const unsigned char *ca;
-  const unsigned char *cb;
-  unsigned int n, min_length;
+  register const unsigned char *ca;
+  register const unsigned char *cb;
+  register size_t n;
+  size_t min_length;
 
-  n = min_length = (alen < blen) ? alen : blen;
-  while (n >= sizeof(unsigned long)) {
-    if (*ia != *ib)
-      break;
-
+  n = min_length = z_min(alen, blen);
+  while (n >= sizeof(unsigned long) && *ia != *ib) {
     n -= sizeof(unsigned long);
-    ia++;
-    ib++;
+    ++ia;
+    ++ib;
   }
 
   ca = (const unsigned char *)ia;
   cb = (const unsigned char *)ib;
-  while (n > 0 && *ca++ == *cb++)
-    n--;
+  switch (n) {
+    case 7: if (*ca++ != *cb++) break; --n;
+    case 6: if (*ca++ != *cb++) break; --n;
+    case 5: if (*ca++ != *cb++) break; --n;
+    case 4: if (*ca++ != *cb++) break; --n;
+    case 3: if (*ca++ != *cb++) break; --n;
+    case 2: if (*ca++ != *cb++) break; --n;
+    case 1: if (*ca++ != *cb++) break; --n;
+    case 0: break;
+    default:
+      while (n > 0 && *ca++ == *cb++)
+        --n;
+      break;
+  }
 
   return(min_length - n);
 }
 
-unsigned int z_memrshared (const void *a,
-                           unsigned int alen,
-                           const void *b,
-                           unsigned int blen)
+size_t z_memrshared (const void *a, size_t alen,
+                     const void *b, size_t blen)
 {
   const unsigned long *ia = (const unsigned long *)(((char *)a) + alen);
   const unsigned long *ib = (const unsigned long *)(((char *)b) + blen);
   const unsigned char *ca;
   const unsigned char *cb;
-  unsigned int n, min_length;
+  size_t n, min_length;
 
-  n = min_length = (alen < blen) ? alen : blen;
+  n = min_length = z_min(alen, blen);
   while (n >= sizeof(unsigned long)) {
     if (*(ia - 1) != *(ib - 1))
       break;
 
     n -= sizeof(unsigned long);
-    ia--;
-    ib--;
+    --ia;
+    --ib;
   }
 
   ca = (const unsigned char *)ia;
   cb = (const unsigned char *)ib;
   while (n > 0 && *--ca == *--cb)
-    n--;
+    --n;
 
   return(min_length - n);
 }

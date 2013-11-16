@@ -1,4 +1,4 @@
-request rusage { }
+request rusage {}
 response rusage {
    1: uint64 utime;         /* user CPU time used */
    2: uint64 stime;         /* system CPU time used */
@@ -25,6 +25,31 @@ struct rpc_histogram {
   6: list[uint64] events;
 };
 
+request memusage {}
+response memusage {
+  0: uint32 arena;        /* Non-mmapped space allocated (bytes) */
+  1: uint32 ordblks;      /* Number of free chunks */
+  2: uint32 smblks;       /* Number of free fastbin blocks */
+  3: uint32 hblks;        /* Number of mmapped regions */
+  4: uint32 hblkhd;       /* Space allocated in mmapped regions (bytes) */
+  5: uint32 usmblks;      /* Maximum total allocated space (bytes) */
+  6: uint32 fsmblks;      /* Space in freed fastbin blocks (bytes) */
+  7: uint32 uordblks;     /* Total allocated space (bytes) */
+  8: uint32 fordblks;     /* Total free space (bytes) */
+  9: uint32 keepcost;     /* Top-most, releasable space (bytes) */
+ 10: uint64 sysused;
+ 11: uint64 sysfree;
+}
+
+request iopoll {}
+response iopoll {
+  0: list[uint64] waits;
+  1: list[uint64] reads;
+  2: list[uint64] writes;
+}
+
 rpc stats_rpc {
   0: rusage;
+  1: memusage;
+  2: iopoll;
 }

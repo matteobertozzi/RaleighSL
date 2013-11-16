@@ -23,7 +23,7 @@ import coding
 import re
 
 class IpcFramedClient(NetIOClient):
-  REPLY_MAX_WAIT = 10
+  REPLY_MAX_WAIT = 5
 
   def __init__(self):
     super(IpcFramedClient, self).__init__()
@@ -50,7 +50,7 @@ class IpcFramedClient(NetIOClient):
         yield r
 
       if loop and time() - st > self.REPLY_MAX_WAIT:
-        raise Exception("Waited too long")
+        raise Exception("Waited too long %.2fsec" % (time() - st))
 
   def _encode_head(self, data):
     head = bytearray(8)
@@ -99,21 +99,27 @@ class IpcRpcClient(IpcFramedClient):
         yield r
 
       if loop and time() - st > self.REPLY_MAX_WAIT:
-        raise Exception("Waited too long")
+        raise Exception("Waited too long %.2fsec" % (time() - st))
 
   def _encode_rpc_head(self, req_id, msg_type):
-    head  = z_encode_uint(8, msg_type)
-    head += z_encode_uint(8, req_id)
+    len_a = z_uint_bytes(msg_type);
+    len_b = z_uint_bytes(req_id);
+    head  = bytearray(1)
+    head[0] = ((len_a - 1) << 5) | ((len_b - 1) << 2) | (1 << 1)
+    head += z_encode_uint(len_a, msg_type)
+    head += z_encode_uint(len_b, req_id)
+    assert len(head) == (1 + len_a + len_b)
     return head
 
   def _decode_rpc_head(self, data):
-    msg_type = z_decode_uint(data, 8)
-    req_id = z_decode_uint(data[8:], 8)
-    return req_id, msg_type, data[16:]
+    len_a = 1 + z_fetch_3bit(data[0], 5)
+    len_b = 1 + z_fetch_3bit(data[0], 2)
+    msg_type = z_decode_uint(data[1:], len_a)
+    req_id = z_decode_uint(data[1 + len_a:], len_b)
+    return req_id, msg_type, data[1 + len_a + len_b:]
 
 class FieldStruct(object):
   _UNKNOWN_FIELD = (None, None, None)
-  _FIELDS = {}
 
   def __init__(self):
     self._values = {}
@@ -129,12 +135,6 @@ class FieldStruct(object):
     if value is None:
       raise AttributeError(name)
     return value
-
-  @classmethod
-  def parse(cls, data):
-    self = cls()
-    self._values = cls.parse(data, self._FIELDS)
-    return self
 
   @staticmethod
   def parse(data, fields):

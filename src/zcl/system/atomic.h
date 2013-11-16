@@ -19,14 +19,13 @@
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
-#include <zcl/memory.h>
 
 Z_TYPEDEF_STRUCT(z_atomic_stack)
 Z_TYPEDEF_STRUCT(z_atomic_queue)
 
 #if defined(Z_SYS_HAS_ATOMIC_GCC)
   #define z_atomic_set(ptr, v)           (*(ptr)) = (v)
-  #define z_atomic_load(ptr)             __sync_fetch_and_add(ptr, 0)
+  #define z_atomic_load(ptr)             (*(ptr))
   #define z_atomic_add_and_fetch(ptr, v) __sync_add_and_fetch(ptr, v)
   #define z_atomic_sub_and_fetch(ptr, v) __sync_sub_and_fetch(ptr, v)
   #define z_atomic_fetch_and_add(ptr, v) __sync_fetch_and_add(ptr, v)

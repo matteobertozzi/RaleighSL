@@ -59,7 +59,6 @@ struct z_hash32_plug {
 
 struct z_hash {
   const z_hash_plug_t *plug;
-  z_memory_t *   memory;
   z_opaque_t     plug_data;
 };
 
@@ -77,7 +76,6 @@ extern const z_hash_plug_t z_hash256_plug_sha;
 extern const z_hash32_plug_t z_hash32_plug_murmur3;
 
 int             z_hash_alloc            (z_hash_t *hash,
-                                         z_memory_t *memory,
                                          const z_hash_plug_t *plug);
 void            z_hash_free             (z_hash_t *hash);
 void            z_hash_update           (z_hash_t *hash,

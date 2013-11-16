@@ -1,5 +1,41 @@
 #include <zcl/checksum.h>
 
+#ifdef Z_CPU_HAS_CRC32C
+uint32_t z_csum32_crcc (uint32_t csum, const void *data, size_t length) {
+  const uint64_t *p64 = (const uint64_t *)data;
+  const uint8_t *p;
+
+  while (length >= 8) {
+    csum = __builtin_ia32_crc32di(csum, *p64++);
+    length -= 8;
+  }
+
+  p = (const uint8_t *)p64;
+  switch (length) {
+    case 7:
+      csum = __builtin_ia32_crc32qi(csum, *p++);
+    case 6:
+      csum = __builtin_ia32_crc32hi(csum, *((const uint16_t *)p));
+      p += 2;
+    case 4:
+      csum = __builtin_ia32_crc32si(csum, *((const uint32_t *)p));
+      break;
+    case 3:
+      csum = __builtin_ia32_crc32qi(csum, *p++);
+    case 2:
+      csum = __builtin_ia32_crc32hi(csum, *((const uint16_t *)p));
+      break;
+    case 5:
+      csum = __builtin_ia32_crc32si(csum, *((const uint32_t *)p));
+      p += 4;
+    case 1:
+      csum = __builtin_ia32_crc32qi(csum, *p);
+      break;
+  }
+
+  return(csum);
+}
+#else /* !Z_CPU_HAS_CRC32C */
 static const uint32_t __crc32c_table[256] = {
   0x00000000L, 0xF26B8303L, 0xE13B70F7L, 0x1350F3F4L,
   0xC79A971FL, 0x35F1141CL, 0x26A1E7E8L, 0xD4CA64EBL,
@@ -75,3 +111,4 @@ uint32_t z_csum32_crcc (uint32_t csum, const void *data, size_t n) {
 
   return(csum);
 }
+#endif

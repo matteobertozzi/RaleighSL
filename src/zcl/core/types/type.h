@@ -26,12 +26,15 @@ Z_TYPEDEF_STRUCT(z_vtable_type);
 #define Z_IMPLEMENT(name)                   const z_vtable_ ## name ## _t *name;
 #define Z_IMPLEMENT_TYPE                    Z_IMPLEMENT(type)
 
-struct z_vtable_type {
-  const char * name;
-  unsigned int size;
+typedef int  (*z_type_ctor_t) (void *self, va_list args);
+typedef void (*z_type_dtor_t) (void *self);
 
-  int   (*ctor)   (void *self, va_list args);
-  void  (*dtor)   (void *self);
+struct z_vtable_type {
+  const char *  name;
+  unsigned int  size;
+
+  z_type_ctor_t ctor;
+  z_type_dtor_t dtor;
 };
 
 struct z_type_interfaces {

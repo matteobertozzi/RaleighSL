@@ -12,7 +12,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from raleigh.objects import RaleighCounter
+from raleigh.objects import RaleighNumber
 from raleigh.client import RaleighException
 from raleigh.test import RaleighTestCase
 
@@ -21,7 +21,7 @@ class TestSemantic(RaleighTestCase):
     name_1 = self.generateName()
     name_2 = self.generateName()
 
-    data = self.client.semantic_create(name_1, RaleighCounter.TYPE)
+    data = self.client.semantic_create(name_1, RaleighNumber.TYPE)
     oid = data['oid']
 
     data = self.client.semantic_open(name_1)

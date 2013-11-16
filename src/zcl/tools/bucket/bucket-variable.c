@@ -90,14 +90,14 @@ static int __node_open (const uint8_t *node, uint32_t size) {
   uint32_t crc;
 
   if (head->nh_size != size) {
-    Z_LOG_WARN("Failed size verification - Expected %u got %u",
+    Z_LOG_WARN("Failed size verification - Expected %"PRIu32" got %"PRIu32,
                head->nh_size, size);
     return(1);
   }
 
   crc = __node_checksum(node, size);
   if (head->nh_crc != crc) {
-    Z_LOG_WARN("Failed checksum verification - Expected %u got %u",
+    Z_LOG_WARN("Failed checksum verification - Expected %"PRIu32" got %"PRIu32,
                head->nh_crc, crc);
     return(2);
   }
@@ -107,7 +107,7 @@ static int __node_open (const uint8_t *node, uint32_t size) {
 static void __node_finalize (uint8_t *node) {
   struct node_head *head = (struct node_head *)node;
   head->nh_crc = __node_checksum(node, head->nh_size);
-  Z_LOG_TRACE("Node Finalized with nh_items=%u", head->nh_items);
+  Z_LOG_TRACE("Node Finalized with nh_items=%"PRIu32, head->nh_items);
 }
 
 static int __node_item_fetch (const uint8_t *node,
@@ -124,30 +124,34 @@ static int __node_item_fetch (const uint8_t *node,
   length[1] = 1 + z_fetch_2bit(*pkey, 3);       /* key size   */
   length[2] = 1 + z_fetch_2bit(*pkey, 1);       /* value size */
   item->is_deleted = z_fetch_1bit(*pkey, 0);    /* is deleted */
-  pkey++;
+  ++pkey;
 
   /* Decode key prefix, key size, value size */
-  z_decode_uint32(pkey, length[0], &(item->kprefix));      pkey += length[0];
-  z_decode_uint32(pkey, length[1], &(item->key.length));   pkey += length[1];
-  z_decode_uint32(pkey, length[2], &(item->value.length)); pkey += length[2];
+  z_decode_uint32(pkey, length[0], &(item->kprefix));    pkey += length[0];
+  z_decode_uint32(pkey, length[1], &(item->key.size));   pkey += length[1];
+  z_decode_uint32(pkey, length[2], &(item->value.size)); pkey += length[2];
 
   item->key.data = (uint8_t *)pkey;
-  item->value.data -= item->value.length;
-  item->index++;
+  item->value.data -= item->value.size;
+  ++(item->index);
   return(1);
 }
 
 static uint32_t __node_calc_khead (const z_bucket_entry_t *item, uint8_t head[3]) {
   head[0] = (item->kprefix > 0) ? z_uint32_size(item->kprefix) : 0;
-  head[1] = z_uint32_size(item->key.length);
-  head[2] = z_uint32_size(item->value.length);
+  head[1] = z_uint32_size(item->key.size);
+  head[2] = z_uint32_size(item->value.size);
   return(1 + head[0] + head[1] + head[2]);
+}
+
+static uint32_t __node_available (const uint8_t *node) {
+  return(__node_space_avail(node));
 }
 
 static int __node_has_space (const uint8_t *node, const z_bucket_entry_t *item) {
   uint8_t length[3];
   size_t required;
-  required = __node_calc_khead(item, length) + item->key.length + item->value.length;
+  required = __node_calc_khead(item, length) + item->key.size + item->value.size;
   return(__node_space_avail(node) >= required);
 }
 
@@ -158,23 +162,23 @@ static int __node_append (uint8_t *node, const z_bucket_entry_t *item) {
 
   uint32_t ksize;
 
-  ksize = item->key.length + __node_calc_khead(item, length);
-  if (Z_UNLIKELY((ksize + item->value.length) > __node_space_avail(node)))
+  ksize = item->key.size + __node_calc_khead(item, length);
+  if (Z_UNLIKELY((ksize + item->value.size) > __node_space_avail(node)))
     return(1);
 
   head->nh_last_key += ksize;
-  head->nh_last_value -= item->value.length;
-  head->nh_items++;
+  head->nh_last_value -= item->value.size;
+  ++(head->nh_items);
 
   /* Write value */
-  z_memcpy(node + head->nh_last_value, item->value.data, item->value.length);
+  z_memcpy(node + head->nh_last_value, item->value.data, item->value.size);
 
   /* Write key */
   *pkey++ = (length[0] << 5) | ((length[1] - 1) << 3) | ((length[2] - 1) << 1);
-  z_encode_uint(pkey, length[0], item->kprefix);      pkey += length[0];
-  z_encode_uint(pkey, length[1], item->key.length);   pkey += length[1];
-  z_encode_uint(pkey, length[2], item->value.length); pkey += length[2];
-  z_memcpy(pkey, item->key.data, item->key.length);
+  z_encode_uint(pkey, length[0], item->kprefix);    pkey += length[0];
+  z_encode_uint(pkey, length[1], item->key.size);   pkey += length[1];
+  z_encode_uint(pkey, length[2], item->value.size); pkey += length[2];
+  z_memcpy(pkey, item->key.data, item->key.size);
   return(0);
 }
 
@@ -193,7 +197,7 @@ static int __node_fetch_first (const uint8_t *node, z_bucket_entry_t *item) {
 }
 
 static int __node_fetch_next (const uint8_t *node, z_bucket_entry_t *item) {
-  return(__node_item_fetch(node, item->key.data + item->key.length, item));
+  return(__node_item_fetch(node, item->key.data + item->key.size, item));
 }
 
 const z_vtable_bucket_t z_bucket_variable = {
@@ -201,6 +205,7 @@ const z_vtable_bucket_t z_bucket_variable = {
   .open         = __node_open,
   .finalize     = __node_finalize,
 
+  .available    = __node_available,
   .has_space    = __node_has_space,
   .append       = __node_append,
   .remove       = __node_remove,

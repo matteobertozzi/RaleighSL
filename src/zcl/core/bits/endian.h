@@ -40,7 +40,7 @@ __Z_BEGIN_DECLS__
   ((((uint64_t)(x)) & (uint64_t)0x00ff000000000000ULL) >> 40) |   \
   ((((uint64_t)(x)) & (uint64_t)0xff00000000000000ULL) >> 56)))
 
-#ifdef __BIG_ENDIAN__
+#ifdef Z_CPU_IS_BIG_ENDIAN
   #define z_cpu_to_le16(x)        z_bswap16(x)
   #define z_cpu_to_be16(x)        (x)
   #define z_cpu_to_le32(x)        z_bswap32(x)

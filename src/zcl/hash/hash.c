@@ -14,10 +14,8 @@
 
 #include <zcl/hash.h>
 
-int z_hash_alloc (z_hash_t *hash, z_memory_t *memory, const z_hash_plug_t *plug)
-{
+int z_hash_alloc (z_hash_t *hash, const z_hash_plug_t *plug) {
   hash->plug = plug;
-  hash->memory = memory;
   if (plug->init != NULL) {
     if (plug->init(hash)) {
       return(1);
@@ -96,7 +94,7 @@ char *z_hash_to_string (char *buffer, const void *hash, unsigned int n) {
     c = ((*hp) & 15);
     *bp++ = (c > 9) ? ((c - 10) + 'a') : (c + '0');
 
-    hp++;
+    ++hp;
   }
   *bp = '\0';
 
