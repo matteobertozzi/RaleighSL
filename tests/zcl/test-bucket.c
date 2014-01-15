@@ -35,7 +35,7 @@ static int __node_debug (void *udata, z_bucket_entry_t *item) {
   return(0);
 }
 #endif
-#define __node_vtable       z_bucket_variable
+#define __node_vtable       z_bucket_vprefix
 
 #define __node_open(node, size)                               \
   __node_vtable.open(node, size)
@@ -78,7 +78,7 @@ static void __test_iter_node (const uint8_t *block) {
   const z_map_entry_t *entry;
   z_bucket_iterator_t iter;
 
-  z_bucket_iterator_open(&iter, &z_bucket_variable, block, NULL, NULL);
+  z_bucket_iterator_open(&iter, &__node_vtable, block, NULL, NULL);
   z_map_iterator_begin(&iter);
   while ((entry = z_map_iterator_current(&iter)) != NULL) {
     fprintf(stderr, "ITER - key=");
@@ -245,12 +245,12 @@ static int __test_merge (void) {
 
   z_map_merger_open(&merger);
 
-  z_bucket_iterator_open(&iter_a, &z_bucket_variable, block_a, NULL, NULL);
+  z_bucket_iterator_open(&iter_a, &__node_vtable, block_a, NULL, NULL);
   z_map_iterator_begin(&iter_a);
   z_map_merger_add(&merger, Z_MAP_ITERATOR(&iter_a));
   Z_LOG_TRACE("Add Iterator %p", &iter_a);
 
-  z_bucket_iterator_open(&iter_b, &z_bucket_variable, block_b, NULL, NULL);
+  z_bucket_iterator_open(&iter_b, &__node_vtable, block_b, NULL, NULL);
   z_map_iterator_begin(&iter_b);
   z_map_merger_add(&merger, Z_MAP_ITERATOR(&iter_b));
   Z_LOG_TRACE("Add Iterator %p", &iter_b);

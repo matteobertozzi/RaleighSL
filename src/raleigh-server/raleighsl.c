@@ -707,10 +707,26 @@ static int __client_write (z_ipc_client_t *ipc_client) {
   return(z_ipc_msgbuf_flush(&(client->msgbuf), z_ipc_client_iopoll(client), Z_IOPOLL_ENTITY(ipc_client)));
 }
 
-const z_ipc_protocol_t raleighsl_protocol = {
+const z_ipc_protocol_t raleighsl_tcp_protocol = {
   /* server protocol */
   .bind         = z_ipc_bind_tcp,
+  .unbind       = NULL,
   .accept       = z_ipc_accept_tcp,
+  .setup        = NULL,
+
+  /* client protocol */
+  .connected    = __client_connected,
+  .disconnected = __client_disconnected,
+  .read         = __client_read,
+  .write        = __client_write,
+};
+
+
+const z_ipc_protocol_t raleighsl_unix_protocol = {
+  /* server protocol */
+  .bind         = z_ipc_bind_unix,
+  .unbind       = z_ipc_unbind_unix,
+  .accept       = z_ipc_accept_unix,
   .setup        = NULL,
 
   /* client protocol */

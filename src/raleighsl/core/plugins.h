@@ -31,8 +31,6 @@
 #define RALEIGHSL_KEY_PLUG(x)           RALEIGHSL_PLUGIN_CAST(key, x)
 
 #define RALEIGHSL_TRANSACTION(x)        Z_CAST(raleighsl_transaction_t, x)
-#define RALEIGHSL_TXN_MGR(x)                 Z_CAST(raleighsl_txn_mgr_t, x)
-#define RALEIGHSL_OBJDATA(x)            Z_CAST(raleighsl_objdata_t, x)
 #define RALEIGHSL_OBJECT(x)             Z_CAST(raleighsl_object_t, x)
 #define RALEIGHSL_DEVICE(x)             Z_CAST(raleighsl_device_t, x)
 #define RALEIGHSL_PLUG(x)               Z_CAST(raleighsl_plug_t, x)
@@ -54,13 +52,14 @@ Z_TYPEDEF_STRUCT(raleighsl_key_plug)
 Z_TYPEDEF_STRUCT(raleighsl_plug)
 
 Z_TYPEDEF_STRUCT(raleighsl_transaction)
+Z_TYPEDEF_STRUCT(raleighsl_txn_atom)
 Z_TYPEDEF_STRUCT(raleighsl_journal)
 Z_TYPEDEF_STRUCT(raleighsl_semantic)
 Z_TYPEDEF_STRUCT(raleighsl_txn_mgr)
 Z_TYPEDEF_STRUCT(raleighsl_object)
 Z_TYPEDEF_STRUCT(raleighsl_master)
 Z_TYPEDEF_STRUCT(raleighsl_device)
-Z_TYPEDEF_STRUCT(raleighsl_rwlock)
+Z_TYPEDEF_STRUCT(raleighsl_block)
 Z_TYPEDEF_STRUCT(raleighsl_key)
 Z_TYPEDEF_STRUCT(raleighsl)
 
@@ -84,7 +83,6 @@ typedef enum raleighsl_key_type {
 struct raleighsl_plug {
   const char *          label;            /* Plugin label */
   const char *          description;      /* Short plugin description */
-  const uint8_t *       uuid;             /* Plugin Unique-ID */
   raleighsl_plug_type_t type;             /* Plugin type */
 };
 
@@ -96,7 +94,6 @@ struct raleighsl_semantic_plug {
   raleighsl_errno_t   (*unload)       (raleighsl_t *fs);
   raleighsl_errno_t   (*sync)         (raleighsl_t *fs);
   raleighsl_errno_t   (*commit)       (raleighsl_t *fs);
-  raleighsl_errno_t   (*rollback)     (raleighsl_t *fs);
 
   raleighsl_errno_t   (*create)       (raleighsl_t *fs,
                                        const z_bytes_ref_t *name,
@@ -118,20 +115,22 @@ struct raleighsl_object_plug {
                                        raleighsl_object_t *object);
   raleighsl_errno_t   (*close)        (raleighsl_t *fs,
                                        raleighsl_object_t *object);
-  raleighsl_errno_t   (*sync)         (raleighsl_t *fs,
-                                       raleighsl_object_t *object);
-  raleighsl_errno_t   (*commit)       (raleighsl_t *fs,
-                                       raleighsl_object_t *object);
-  raleighsl_errno_t   (*rollback)     (raleighsl_t *fs,
-                                       raleighsl_object_t *object);
   raleighsl_errno_t   (*unlink)       (raleighsl_t *fs,
                                        raleighsl_object_t *object);
-  raleighsl_errno_t   (*apply)        (raleighsl_t *fs,
+
+  void                (*apply)        (raleighsl_t *fs,
                                        raleighsl_object_t *object,
-                                       void *mutation);
-  raleighsl_errno_t   (*revert)       (raleighsl_t *fs,
+                                       raleighsl_txn_atom_t *atom);
+  void                (*revert)       (raleighsl_t *fs,
                                        raleighsl_object_t *object,
-                                       void *mutation);
+                                       raleighsl_txn_atom_t *atom);
+  raleighsl_errno_t   (*commit)       (raleighsl_t *fs,
+                                       raleighsl_object_t *object);
+
+  raleighsl_errno_t   (*balance)      (raleighsl_t *fs,
+                                       raleighsl_object_t *object);
+  raleighsl_errno_t   (*sync)         (raleighsl_t *fs,
+                                       raleighsl_object_t *object);
 };
 
 struct raleighsl_key_plug {

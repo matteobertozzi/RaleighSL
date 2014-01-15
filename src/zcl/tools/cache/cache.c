@@ -60,8 +60,8 @@ struct hnode {
 };
 
 struct htable {
-  z_rwlock_t lock;
   struct hnode *buckets;
+  z_rwlock_t lock;
   uint32_t size;
   uint32_t mask;
   uint32_t used;
@@ -282,7 +282,6 @@ void z_cache_entry_init (z_cache_entry_t *entry, uint64_t oid) {
   z_dlink_init(&(entry->cache));
 
   entry->oid = oid;
-
   entry->refs = 1;
   entry->state = CACHED_ENTRY_IS_NEW;
 }
@@ -485,8 +484,9 @@ static void __q2_init (z_cache_t *cache, struct q2_cache *q2) {
 static void __policy_2q_update (z_cache_t *cache, z_cache_entry_t *entry) {
   struct q2_cache *q2 = &(cache->dpolicy.q2);
   z_lock(&(q2->lock), z_spin, {
-    if (entry->state != CACHED_ENTRY_IS_EVICTED)
+    if (entry->state != CACHED_ENTRY_IS_EVICTED) {
       __q2_insert(cache, q2, entry);
+    }
   });
 }
 
@@ -655,6 +655,11 @@ z_cache_entry_t *z_cache_remove (z_cache_t *cache, uint64_t oid) {
     entry->state = CACHED_ENTRY_IS_EVICTED;
   }
   return(entry);
+}
+
+void z_cache_reclaim (z_cache_t *cache, unsigned int capacity) {
+  cache->capacity = capacity;
+  cache->vpolicy->reclaim(cache);
 }
 
 void z_cache_dump (FILE *stream, z_cache_t *cache) {

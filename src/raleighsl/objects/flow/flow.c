@@ -56,30 +56,30 @@ static struct flow_node *__flow_node_alloc (raleighsl_flow_t *flow,
 }
 
 static void __flow_node_free (void *udata, void *obj) {
-  struct flow_node *node = __FLOW_NODE(obj);
+  struct flow_node *node = z_container_of(obj, struct flow_node, __node__);
   z_bytes_ref_release(&(node->data));
   z_memory_struct_free(z_global_memory(), struct flow_node, node);
 }
 
 static int __flow_node_compare (void *udata, const void *a, const void *b) {
-  const struct flow_node *ea = (const struct flow_node *)a;
-  const struct flow_node *eb = (const struct flow_node *)b;
-  return(z_cmp(ea->offset, eb->offset));
+  const struct flow_node *ea = z_container_of(a, const struct flow_node, __node__);
+  const struct flow_node *eb = z_container_of(b, const struct flow_node, __node__);
+  return((ea == eb) ? 0 : z_cmp(ea->offset, eb->offset));
 }
 
 static int __flow_node_key_compare (void *udata, const void *a, const void *key) {
-  const struct flow_node *node = (const struct flow_node *)a;
-  return(z_cmp(node->offset, Z_UINT64_PTR_VALUE(key)));
+  const struct flow_node *ea = z_container_of(a, const struct flow_node, __node__);
+  return(z_cmp(ea->offset, Z_UINT64_PTR_VALUE(key)));
 }
 
 /* ============================================================================
  *  PRIVATE Flow Tree methods
  */
 static struct z_tree_info __flow_tree_info = {
-  .plug        = &z_tree_avl,
-  .key_compare = __flow_node_compare,
-  .data_free   = __flow_node_free,
-  .user_data   = NULL,
+  .plug         = &z_tree_avl,
+  .node_compare = __flow_node_compare,
+  .key_compare  = __flow_node_key_compare,
+  .node_free    = __flow_node_free,
 };
 
 /* ============================================================================
@@ -99,7 +99,7 @@ raleighsl_errno_t raleighsl_flow_append (raleighsl_t *fs,
     return(RALEIGHSL_ERRNO_NO_MEMORY);
 
   /* TODO: Add to staging */
-  z_tree_node_attach(&__flow_tree_info, &(flow->root), Z_TREE_NODE(node));
+  z_tree_node_attach(&__flow_tree_info, &(flow->root), &(node->__node__), NULL);
   return(RALEIGHSL_ERRNO_NONE);
 }
 
@@ -184,28 +184,20 @@ static raleighsl_errno_t __object_close (raleighsl_t *fs,
   return(RALEIGHSL_ERRNO_NONE);
 }
 
+static void __object_apply (raleighsl_t *fs,
+                            raleighsl_object_t *object,
+                            raleighsl_txn_atom_t *atom)
+{
+}
+
+static void __object_revert (raleighsl_t *fs,
+                             raleighsl_object_t *object,
+                             raleighsl_txn_atom_t *atom)
+{
+}
+
 static raleighsl_errno_t __object_commit (raleighsl_t *fs,
                                           raleighsl_object_t *object)
-{
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __object_rollback (raleighsl_t *fs,
-                                            raleighsl_object_t *object)
-{
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __object_apply (raleighsl_t *fs,
-                                         raleighsl_object_t *object,
-                                         void *mutation)
-{
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __object_revert (raleighsl_t *fs,
-                                          raleighsl_object_t *object,
-                                          void *mutation)
 {
   return(RALEIGHSL_ERRNO_NONE);
 }
@@ -220,10 +212,12 @@ const raleighsl_object_plug_t raleighsl_object_flow = {
   .create   = __object_create,
   .open     = NULL,
   .close    = __object_close,
-  .commit   = __object_commit,
-  .rollback = __object_rollback,
-  .sync     = NULL,
   .unlink   = NULL,
+
   .apply    = __object_apply,
   .revert   = __object_revert,
+  .commit   = __object_commit,
+
+  .balance  = NULL,
+  .sync     = NULL,
 };

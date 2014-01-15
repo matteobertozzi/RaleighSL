@@ -51,7 +51,7 @@
  *  PRIVATE node structs
  */
 
-/* Node Header - 28 byte */
+/* Node Header - 32 byte */
 struct node_head {
   uint32_t nh_crc;          /* Node CRC - This entry must be the first one */
   uint32_t nh_size;
@@ -60,9 +60,10 @@ struct node_head {
   uint32_t nh_last_value;   /* Offset to the begin of the last value */
 
   uint16_t nh_items;
-  uint16_t nh_level;
+  uint8_t  nh_level;
+  uint8_t  nh_prefix;
 
-  uint64_t nh_owner;
+  uint32_t nh_ptrs[3];      /* 0 |   I   I   I   | N */
 } __attribute__((packed));
 
 /* ============================================================================
@@ -107,7 +108,8 @@ static int __node_open (const uint8_t *node, uint32_t size) {
 static void __node_finalize (uint8_t *node) {
   struct node_head *head = (struct node_head *)node;
   head->nh_crc = __node_checksum(node, head->nh_size);
-  Z_LOG_TRACE("Node Finalized with nh_items=%"PRIu32, head->nh_items);
+  Z_LOG_TRACE("Node Finalized size=%"PRIu32" with nh_items=%"PRIu32" use-prefix %d\n",
+              head->nh_size, head->nh_items, head->nh_prefix);
 }
 
 static int __node_item_fetch (const uint8_t *node,
@@ -168,6 +170,7 @@ static int __node_append (uint8_t *node, const z_bucket_entry_t *item) {
 
   head->nh_last_key += ksize;
   head->nh_last_value -= item->value.size;
+  head->nh_prefix |= (item->kprefix > 0);
   ++(head->nh_items);
 
   /* Write value */
@@ -200,16 +203,29 @@ static int __node_fetch_next (const uint8_t *node, z_bucket_entry_t *item) {
   return(__node_item_fetch(node, item->key.data + item->key.size, item));
 }
 
-const z_vtable_bucket_t z_bucket_variable = {
-  .create       = __node_create,
-  .open         = __node_open,
-  .finalize     = __node_finalize,
+static void __node_fetch_first_key (const uint8_t *node, z_byte_slice_t *key) {
+  z_bucket_entry_t entry;
+  __node_fetch_first(node, &entry);
+  z_byte_slice_copy(key, &(entry.key));
+}
 
-  .available    = __node_available,
-  .has_space    = __node_has_space,
-  .append       = __node_append,
-  .remove       = __node_remove,
+static int __node_is_prefix_encoded (const uint8_t *node) {
+  return(__CONST_NODE_HEAD(node)->nh_prefix);
+}
 
-  .fetch_first  = __node_fetch_first,
-  .fetch_next   = __node_fetch_next,
+const z_vtable_bucket_t z_bucket_vprefix = {
+  .create         = __node_create,
+  .open           = __node_open,
+  .finalize       = __node_finalize,
+
+  .available      = __node_available,
+  .has_space      = __node_has_space,
+  .append         = __node_append,
+  .remove         = __node_remove,
+
+  .first_key      = __node_fetch_first_key,
+  .fetch_first    = __node_fetch_first,
+  .fetch_next     = __node_fetch_next,
+
+  .prefix_encoded = __node_is_prefix_encoded,
 };

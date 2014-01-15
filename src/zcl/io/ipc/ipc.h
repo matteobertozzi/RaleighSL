@@ -43,6 +43,7 @@ typedef int (*z_ipc_msg_parse_t)     (z_iopoll_entity_t *client,
 struct z_ipc_protocol {
   /* server protocol */
   int    (*bind)          (const void *host, const void *service);
+  void   (*unbind)        (z_ipc_server_t *server);
   int    (*accept)        (z_ipc_server_t *server);
   int    (*setup)         (z_ipc_server_t *server);
   /* client protocol */
@@ -106,6 +107,7 @@ int             z_ipc_accept_tcp    (z_ipc_server_t *server);
 #ifdef Z_SOCKET_HAS_UNIX
 int             z_ipc_bind_unix     (const void *path,
                                      const void *service);
+void            z_ipc_unbind_unix   (z_ipc_server_t *server);
 int             z_ipc_accept_unix   (z_ipc_server_t *server);
 #endif /* Z_SOCKET_HAS_UNIX */
 

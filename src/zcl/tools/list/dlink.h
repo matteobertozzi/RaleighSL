@@ -29,11 +29,8 @@ struct z_dlink_node {
   z_dlink_node_t *prev;
 };
 
-#define z_dlink_node(entry, type, member)                               \
-  (&(((type *)(entry))->member))
-
-#define z_dlink_entry(node, type, member)                               \
-  ((type *)((char *)(node)-(unsigned long)(&((type *)0)->member)))
+#define z_dlink_node(entry, type, member)     (&(((type *)(entry))->member))
+#define z_dlink_entry(node, type, member)     z_container_of(node, type, member)
 
 #define z_dlink_front(head)                   ((head)->next)
 #define z_dlink_back(head)                    ((head)->prev)

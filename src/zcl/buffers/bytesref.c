@@ -13,11 +13,27 @@
  */
 
 #include <zcl/bytesref.h>
+#include <zcl/debug.h>
 
 void z_bytes_ref_reset (z_bytes_ref_t *self) {
   z_byte_slice_clear(&(self->slice));
   self->vtable = NULL;
   self->object = NULL;
+}
+
+void z_bytes_ref_set_data (z_bytes_ref_t *self,
+                           const void *data,
+                           unsigned int size,
+                           const z_vtable_refs_t *vtable,
+                           void *object)
+{
+  if (Z_UNLIKELY(self == NULL)) return;
+
+  Z_ASSERT((object == NULL && vtable == NULL) || (object != NULL && vtable != NULL),
+           "vtable must be specified if the object is NOT NULL");
+  z_byte_slice_set(&(self->slice), data, size);
+  self->vtable = vtable;
+  self->object = object;
 }
 
 void z_bytes_ref_set (z_bytes_ref_t *self,
@@ -27,6 +43,8 @@ void z_bytes_ref_set (z_bytes_ref_t *self,
 {
   if (Z_UNLIKELY(self == NULL)) return;
 
+  Z_ASSERT((object == NULL && vtable == NULL) || (object != NULL && vtable != NULL),
+           "vtable must be specified if the object is NOT NULL");
   z_byte_slice_copy(&(self->slice), slice);
   self->vtable = vtable;
   self->object = object;
@@ -35,6 +53,7 @@ void z_bytes_ref_set (z_bytes_ref_t *self,
 void z_bytes_ref_acquire (z_bytes_ref_t *self, const z_bytes_ref_t *other) {
   if (Z_UNLIKELY(self == NULL)) return;
 
+  Z_ASSERT(other != NULL, "the ref to acquire must be NOT NULL");
   z_bytes_ref_set(self, &(other->slice), other->vtable, other->object);
   if (self->object != NULL) {
     self->vtable->inc_ref(self->object);

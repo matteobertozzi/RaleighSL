@@ -12,10 +12,18 @@
  *   limitations under the License.
  */
 
+#include <raleighsl/object.h>
+
 #include <zcl/global.h>
 #include <zcl/debug.h>
 
 #include "private.h"
+
+/* ============================================================================
+ *  PRIVATE Object macros
+ */
+#define __obj_from_cache_entry(entry)                         \
+  z_container_of(entry, raleighsl_object_t, cache_entry)
 
 /* ============================================================================
  *  PRIVATE Object methods
@@ -28,7 +36,7 @@ raleighsl_object_t *raleighsl_object_alloc (raleighsl_t *fs, uint64_t oid) {
     return(NULL);
 
   /* Initialize cache-entry attributes */
-  z_cache_entry_init(Z_CACHE_ENTRY(object), oid);
+  z_cache_entry_init(&(object->cache_entry), oid);
 
   /* Initialize object attributes */
   z_task_rwcsem_open(&(object->rwcsem));
@@ -50,10 +58,12 @@ void raleighsl_object_free (raleighsl_t *fs, raleighsl_object_t *object) {
 /* ============================================================================
  *  PRIVATE Object-Cache methods
  */
-static void __obj_cache_entry_free (void *fs, void *object) {
-  raleighsl_object_sync(RALEIGHSL(fs), RALEIGHSL_OBJECT(object));
-  raleighsl_object_close(RALEIGHSL(fs), RALEIGHSL_OBJECT(object));
-  raleighsl_object_free(RALEIGHSL(fs), RALEIGHSL_OBJECT(object));
+static void __obj_cache_entry_free (void *udata, void *entry) {
+  raleighsl_object_t *object = __obj_from_cache_entry(entry);
+  raleighsl_t *fs = RALEIGHSL(udata);
+  raleighsl_object_sync(fs, object);
+  raleighsl_object_close(fs, object);
+  raleighsl_object_free(fs, object);
 }
 
 int raleighsl_obj_cache_alloc (raleighsl_t *fs) {
@@ -70,28 +80,28 @@ void raleighsl_obj_cache_free (raleighsl_t *fs) {
 }
 
 raleighsl_object_t *raleighsl_obj_cache_get (raleighsl_t *fs, uint64_t oid) {
-  raleighsl_object_t *obj;
+  z_cache_entry_t *entry;
 
-  obj = RALEIGHSL_OBJECT(z_cache_lookup(fs->obj_cache, oid));
-  if (obj == NULL) {
-    raleighsl_object_t *other_obj;
+  entry = z_cache_lookup(fs->obj_cache, oid);
+  if (entry == NULL) {
+    raleighsl_object_t *obj;
 
     /* Allocate the new object */
     obj = raleighsl_object_alloc(fs, oid);
     if (Z_MALLOC_IS_NULL(obj))
       return(NULL);
 
-    other_obj = RALEIGHSL_OBJECT(z_cache_try_insert(fs->obj_cache, Z_CACHE_ENTRY(obj)));
-    if (other_obj != NULL) {
-      /* The object was already inserted */
-      raleighsl_object_free(fs, obj);
-      return(other_obj);
-    }
+    entry = z_cache_try_insert(fs->obj_cache, &(obj->cache_entry));
+    if (entry == NULL)
+      return(obj);
+
+    /* The object was already inserted */
+    raleighsl_object_free(fs, obj);
   }
 
-  return(obj);
+  return(__obj_from_cache_entry(entry));
 }
 
 void raleighsl_obj_cache_release (raleighsl_t *fs, raleighsl_object_t *object) {
-  z_cache_release(fs->obj_cache, Z_CACHE_ENTRY(object));
+  z_cache_release(fs->obj_cache, &(object->cache_entry));
 }

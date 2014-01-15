@@ -14,10 +14,15 @@ struct item {
   uint64_t key;
 };
 
+static int __item_compare (void *udata, const void *a, const void *b) {
+  const struct item *ea = z_container_of(a, const struct item, __node__);
+  const struct item *eb = z_container_of(b, const struct item, __node__);
+  return(z_cmp(ea->key, eb->key));
+}
+
 static int __item_key_compare (void *udata, const void *a, const void *b) {
-  uint64_t akey = Z_UINT64_PTR_VALUE(a);
-  uint64_t bkey = Z_UINT64_PTR_VALUE(b);
-  return(z_cmp(akey, bkey));
+  const struct item *ea = z_container_of(a, const struct item, __node__);
+  return(z_cmp(ea->key, Z_UINT64_PTR_VALUE(b)));
 }
 
 static struct item *__items_alloc (size_t num_items) {
@@ -29,7 +34,6 @@ static struct item *__items_alloc (size_t num_items) {
 
   for (i = 0; i < num_items; ++i) {
     items[i].key = i;
-    items[i].__node__.data = &(items[i].key)  ;
   }
   return(items);
 }
@@ -44,41 +48,43 @@ static void __bench_tree (const z_tree_plug_t *plug, struct item *items, size_t 
   size_t i;
 
   tree_info.plug = plug;
+  tree_info.node_compare = __item_compare;
   tree_info.key_compare = __item_key_compare;
-  tree_info.data_free = NULL;
-  tree_info.user_data = NULL;
+  tree_info.node_free = NULL;
 
-Z_TRACE_TIME(insert_a, {
-  for (i = 0; i < nitems; ++i) {
-    z_tree_node_attach(&tree_info, &root, Z_TREE_NODE(&(items[i])));
-  }
-});
-Z_LOG_TRACE("Tree Levels: %d (nitems %zu)", z_tree_node_levels(root), i);
+  Z_TRACE_TIME(insert_a, {
+    for (i = 0; i < nitems; ++i) {
+      z_tree_node_attach(&tree_info, &root, &(items[i].__node__), NULL);
+    }
+  });
+  Z_LOG_TRACE("Tree Levels: %d (nitems %zu)", z_tree_node_levels(root), i);
 
-Z_TRACE_TIME(detach_min, {
-  for (i = 0; i < nitems; ++i) {
-    z_tree_node_t *node = z_tree_node_detach_min(&tree_info, &root);
-    Z_ASSERT(node == Z_TREE_NODE(&(items[i])),
-             "Detach min has detached the wrong node: %p\n", node);
-  }
-  Z_ASSERT(root == NULL, "Expected an empty tree after items detach-min");
-});
+  Z_TRACE_TIME(detach_min, {
+    for (i = 0; i < nitems; ++i) {
+      z_tree_node_t *node = z_tree_node_detach_min(&tree_info, &root);
+      Z_ASSERT(node == &(items[i].__node__),
+               "Detach min has detached the wrong node: %p\n", node);
+      (void)node;
+    }
+    Z_ASSERT(root == NULL, "Expected an empty tree after items detach-min");
+  });
 
-Z_TRACE_TIME(insert_b, {
-  for (i = 0; i < nitems; ++i) {
-    z_tree_node_attach(&tree_info, &root, Z_TREE_NODE(&(items[i])));
-  }
-});
+  Z_TRACE_TIME(insert_b, {
+    for (i = 0; i < nitems; ++i) {
+      z_tree_node_attach(&tree_info, &root, &(items[i].__node__), NULL);
+    }
+  });
 
-Z_TRACE_TIME(detach, {
-  for (i = 0; i < nitems; ++i) {
-    uint64_t key = i;
-    z_tree_node_t *node = z_tree_node_detach(&tree_info, &root, &key);
-    Z_ASSERT(node == Z_TREE_NODE(&(items[i])),
-             "Detach has detached the wrong node: %p\n", node);
-  }
-  Z_ASSERT(root == NULL, "Expected an empty tree after items detach");
-});
+  Z_TRACE_TIME(detach, {
+    for (i = 0; i < nitems; ++i) {
+      uint64_t key = i;
+      z_tree_node_t *node = z_tree_node_detach(&tree_info, &root, &key, NULL);
+      Z_ASSERT(node == &(items[i].__node__),
+               "Detach has detached the wrong node: %p\n", node);
+      (void)node;
+    }
+    Z_ASSERT(root == NULL, "Expected an empty tree after items detach");
+  });
 }
 
 int main (int argc, char **argv) {
@@ -104,10 +110,6 @@ int main (int argc, char **argv) {
     Z_LOG_TRACE("AVL");
     Z_LOG_TRACE("------------------------------------------------------------");
     __bench_tree(&z_tree_avl, items, NUM_ITEMS);
-
-    Z_LOG_TRACE("Red-Black");
-    Z_LOG_TRACE("------------------------------------------------------------");
-    __bench_tree(&z_tree_red_black, items, NUM_ITEMS);
   }
 
   __items_free(items, NUM_ITEMS);

@@ -23,7 +23,6 @@ __Z_BEGIN_DECLS__
 #include <zcl/opaque.h>
 #include <zcl/tree.h>
 
-#define __Z_TASK__                z_task_t __task__;
 #define Z_TASK(x)                 Z_CAST(z_task_t, x)
 
 Z_TYPEDEF_STRUCT(z_task_rwcsem)
@@ -34,7 +33,7 @@ Z_TYPEDEF_STRUCT(z_task)
 typedef void (*z_task_func_t) (z_task_t *task);
 
 struct z_task {
-  __Z_TREE_NODE__
+  z_tree_node_t __node__;
 
   uint64_t itime;
   z_task_func_t func;
@@ -66,20 +65,20 @@ struct z_task_rwcsem {
   z_task_queue_t lockq;                   /* Object task-write wait queue */
 };
 
-z_task_t *z_task_alloc       (z_task_func_t func);
-void      z_task_free        (z_task_t *task);
-void      z_task_reset_time  (z_task_t *task);
-#define   z_task_exec(task)  Z_TASK(task)->func(task)
+z_task_t *z_task_alloc          (z_task_func_t func);
+void      z_task_free           (z_task_t *task);
+void      z_task_reset_time     (z_task_t *task);
+#define   z_task_exec(task)     Z_TASK(task)->func(task)
 
-void      z_task_queue_open  (z_task_queue_t *self);
-void      z_task_queue_close (z_task_queue_t *self);
-void      z_task_queue_push  (z_task_queue_t *self, z_task_t *task);
-z_task_t *z_task_queue_pop   (z_task_queue_t *self);
+void      z_task_queue_open     (z_task_queue_t *self);
+void      z_task_queue_close    (z_task_queue_t *self);
+void      z_task_queue_push     (z_task_queue_t *self, z_task_t *task);
+z_task_t *z_task_queue_pop      (z_task_queue_t *self);
 
-void      z_task_tree_open   (z_task_tree_t *self);
-void      z_task_tree_close  (z_task_tree_t *self);
-void      z_task_tree_push   (z_task_tree_t *self, z_task_t *task);
-z_task_t *z_task_tree_pop    (z_task_tree_t *self);
+void      z_task_tree_open      (z_task_tree_t *self);
+void      z_task_tree_close     (z_task_tree_t *self);
+void      z_task_tree_push      (z_task_tree_t *self, z_task_t *task);
+z_task_t *z_task_tree_pop       (z_task_tree_t *self);
 
 int       z_task_rwcsem_open    (z_task_rwcsem_t *self);
 void      z_task_rwcsem_close   (z_task_rwcsem_t *self);

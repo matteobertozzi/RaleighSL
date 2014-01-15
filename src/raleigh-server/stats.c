@@ -173,9 +173,10 @@ static int __client_write (z_ipc_client_t *ipc_client) {
   return(z_ipc_msgbuf_flush(&(client->msgbuf), z_ipc_client_iopoll(client), Z_IOPOLL_ENTITY(ipc_client)));
 }
 
-const z_ipc_protocol_t stats_protocol = {
+const z_ipc_protocol_t stats_tcp_protocol = {
   /* server protocol */
   .bind         = z_ipc_bind_tcp,
+  .unbind       = NULL,
   .accept       = z_ipc_accept_tcp,
   .setup        = NULL,
 

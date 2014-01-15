@@ -26,7 +26,7 @@ struct debug_conf {
   int log_level;
 };
 
-#define __DEFAULT_LOG_LEVEL       4
+#define __DEFAULT_LOG_LEVEL       5
 static struct debug_conf __current_debug_conf;
 
 static const char __weekday_name[7][3] = {

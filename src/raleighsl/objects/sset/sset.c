@@ -12,7 +12,6 @@
  *   limitations under the License.
  */
 
-#include <zcl/skiplist.h>
 #include <zcl/global.h>
 #include <zcl/bucket.h>
 #include <zcl/debug.h>
@@ -23,41 +22,20 @@
 #include "sset.h"
 
 #define RALEIGHSL_SSET(x)                 Z_CAST(raleighsl_sset_t, x)
-#define __SSET_ENTRY(x)                   Z_CAST(struct sset_entry, x)
-#define __SSET_NODE(x)                    Z_CAST(struct sset_node, x)
+#define __CONST_SSET_BLOCK(x)             Z_CONST_CAST(struct sset_block, x)
+#define __CONST_SSET_ENTRY(x)             Z_CONST_CAST(struct sset_entry, x)
+#define __CONST_SSET_ITEM(x)              Z_CONST_CAST(struct sset_item, x)
+#define __CONST_SSET_TXN(x)               Z_CONST_CAST(struct sset_txn, x)
 #define __SSET_BLOCK(x)                   Z_CAST(struct sset_block, x)
+#define __SSET_ENTRY(x)                   Z_CAST(struct sset_entry, x)
+#define __SSET_ITEM(x)                    Z_CAST(struct sset_item, x)
+#define __SSET_TXN(x)                     Z_CAST(struct sset_txn, x)
 
-/* TODO: REPLACE: Test Values */
-#define __SSET_BLOCK_SIZE                 (8 << 10)
-#define __SSET_BLOCK_MERGE_SIZE           (__SSET_BLOCK_SIZE - (__SSET_BLOCK_SIZE >> 2))
-#define __SSET_SYNC_SIZE                  (1 << 10)
+struct sset_item {
+  z_tree_node_t __node__;
 
-typedef struct raleighsl_sset {
-  z_skip_list_t skip_list;
-  z_skip_list_t txn_locks;
-  z_dlink_node_t dirtyq;
-} raleighsl_sset_t;
-
-struct sset_block {
-  z_dlink_node_t blkseq;
-  z_bytes_ref_t first_key;
-  z_bytes_ref_t last_key;
-  uint32_t refs;
-  uint8_t data[__SSET_BLOCK_SIZE];
-};
-
-struct sset_node {
-  z_bytes_ref_t key;
-  z_skip_list_t skip_list;
-  struct sset_block *block;
-  unsigned int bufsize;
-  z_dlink_node_t dirtyq;
-};
-
-struct sset_entry {
   z_bytes_ref_t key;
   z_bytes_ref_t value;
-  struct sset_node *node;
 };
 
 enum sset_txn_type {
@@ -67,143 +45,410 @@ enum sset_txn_type {
 };
 
 struct sset_txn {
-  struct sset_entry *entry;
+  raleighsl_txn_atom_t __txn_atom__;
+  z_tree_node_t __node__;
+
   uint64_t txn_id;
+  z_dlink_node_t commitq;
+
+  struct sset_node *node;
+  struct sset_item *item;
+  struct sset_txn *parent;
+
   enum sset_txn_type type;
 };
 
-/* ============================================================================
- *  PRIVATE  SSet Entry methods
- */
-static int __sset_entry_compare (void *udata, const void *a, const void *b) {
-  const struct sset_entry *ea = (const struct sset_entry *)a;
-  const struct sset_entry *eb = (const struct sset_entry *)b;
-  return(z_bytes_ref_compare(&(ea->key), &(eb->key)));
-}
+/* TODO: REPLACE: Test Values */
+#define __SSET_BLOCK_SIZE         (8 << 10)
+#define __SSET_SYNC_SIZE          (4 << 10)
+#define __SSET_BLOCK_MERGE_SIZE   (__SSET_BLOCK_SIZE - (__SSET_BLOCK_SIZE >> 2))
 
-static int __sset_entry_key_compare (void *udata, const void *a, const void *key) {
-  const struct sset_entry *entry = (const struct sset_entry *)a;
-  return(z_bytes_ref_compare(&(entry->key), Z_CONST_BYTES_REF(key)));
-}
+struct sset_block {
+  z_dlink_node_t blkseq;
 
-static void __sset_entry_free (void *udata, void *obj) {
-  struct sset_entry *entry = __SSET_ENTRY(obj);
-  z_bytes_ref_release(&(entry->key));
-  z_bytes_ref_release(&(entry->value));
-  z_memory_struct_free(z_global_memory(), struct sset_entry, entry);
-}
-
-static struct sset_entry *__sset_entry_alloc (raleighsl_sset_t *sset,
-                                              const z_bytes_ref_t *key,
-                                              const z_bytes_ref_t *value,
-                                              struct sset_node *node)
-{
-  z_memory_t *memory = z_global_memory();
-  struct sset_entry *entry;
-
-  entry = z_memory_struct_alloc(memory, struct sset_entry);
-  if (Z_MALLOC_IS_NULL(entry))
-    return(NULL);
-
-  z_bytes_ref_acquire(&(entry->key), key);
-  z_bytes_ref_acquire(&(entry->value), value);
-  entry->node = node;
-  return(entry);
-}
-
-static void __sset_entry_set_value (raleighsl_sset_t *sset,
-                                    struct sset_entry *entry,
-                                    const z_bytes_ref_t *value)
-{
-  z_bytes_ref_release(&(entry->value));
-  z_bytes_ref_acquire(&(entry->value), value);
-}
-
-/* ============================================================================
- *  SSet Entry Skip-List Iterator
- */
-struct sset_entry_map_iterator {
-  __Z_MAP_ITERABLE__
-  z_skip_list_iterator_t iter;
-  z_map_entry_t entry;
+  uint32_t refs;
+  uint8_t data[__SSET_BLOCK_SIZE];
 };
 
-static const z_vtable_map_iterator_t __sset_entry_map_iterator;
+struct sset_node {
+  z_tree_node_t __node__;
 
-static void __sset_entry_to_map (struct sset_entry *entry, z_map_entry_t *map) {
-  if (Z_LIKELY(entry != NULL)) {
-    z_byte_slice_copy(&(map->key), &(entry->key.slice));
-    z_byte_slice_copy(&(map->value), &(entry->value.slice));
-  }
+  z_dlink_node_t dirtyq;
+  z_dlink_node_t commitq;
+
+  z_tree_node_t *mem_data;
+  z_tree_node_t *txn_locks;
+  struct sset_block *block;
+
+  /* Node Stats */
+  unsigned int bufsize;
+  unsigned int min_ksize;
+  unsigned int max_ksize;
+  unsigned int min_vsize;
+  unsigned int max_vsize;
+};
+
+struct sset_entry {
+  struct sset_txn *txn;
+  struct sset_item *item;
+  struct sset_block *block;
+  z_bytes_ref_t blk_value;
+  z_bytes_ref_t *value;
+};
+
+typedef struct raleighsl_sset {
+  z_tree_node_t *root;            /* sset-node */
+  z_dlink_node_t txnq;            /* Pending txn-add   (txn->commitq) */
+  z_dlink_node_t dirtyq;          /* Pending txn-apply (node->dirtyq) */
+  z_dlink_node_t rm_nodes;
+  z_dlink_node_t add_nodes;
+} raleighsl_sset_t;
+
+struct sset_txn_iter {
+  __Z_MAP_ITERABLE__
+  z_map_entry_t entry;
+  z_tree_iter_t iter;
+  uint64_t txn_id;
+};
+
+struct sset_mem_iter {
+  __Z_MAP_ITERABLE__
+  z_map_entry_t entry;
+  z_tree_iter_t iter;
+};
+
+/*
+ * [WRITE] -> __sset_txn_add() -> [COMMIT]
+ * [TXN-WRITE] -> __sset_txn_add() -> [COMMIT] -> ... -> [TXN-APPLY] -> [COMMIT]
+ */
+
+/* ============================================================================
+ *  PRIVATE SSet Item methods
+ */
+#define __sset_item_size(item)                                                \
+  ((item)->key.slice.size + (item)->value.slice.size)
+
+#define __sset_item_is_delete_marker(item)                                    \
+  ((item)->__node__.udata)
+
+#define __sset_item_attach(tree_root, item)                                   \
+  z_tree_node_attach(&__sset_item_tree_info, tree_root,                       \
+                     &((item)->__node__), NULL)
+
+#define __sset_item_detach(tree_root, key)                                    \
+  z_tree_node_detach(&__sset_item_tree_info, tree_root, key, NULL)
+
+#define __sset_item_node_get(item_tree, key)                                  \
+  z_tree_node_lookup(item_tree, __sset_item_node_key_compare, key, NULL)
+
+static int __sset_item_node_compare (void *udata, const void *a, const void *b) {
+  const struct sset_item *ea = z_container_of(a, const struct sset_item, __node__);
+  const struct sset_item *eb = z_container_of(b, const struct sset_item, __node__);
+  return((ea == eb) ? 0 : z_bytes_ref_compare(&(ea->key), &(eb->key)));
 }
 
-static int __sset_entry_map_open (void *self, z_skip_list_t *skip_list) {
-  struct sset_entry_map_iterator *iter = (struct sset_entry_map_iterator *)self;
-  Z_MAP_ITERATOR_INIT(self, &__sset_entry_map_iterator, &z_vtable_bytes_refs, NULL);
-  z_iterator_open(&(iter->iter), skip_list);
+static int __sset_item_node_key_compare (void *udata, const void *a, const void *key) {
+  const struct sset_item *ea = z_container_of(a, const struct sset_item, __node__);
+  Z_ASSERT(a == &(ea->__node__), "container resolve failed");
+  return(z_bytes_ref_compare(&(ea->key), Z_CONST_BYTES_REF(key)));
+}
+
+static void __sset_item_free (struct sset_item *item) {
+  z_bytes_ref_release(&(item->key));
+  z_bytes_ref_release(&(item->value));
+  z_memory_struct_free(z_global_memory(), struct sset_item, item);
+}
+
+static void __sset_item_node_free (void *udata, void *obj) {
+  struct sset_item *item = z_container_of(obj, struct sset_item, __node__);
+  Z_ASSERT(obj == &(item->__node__), "container resolve failed");
+  __sset_item_free(item);
+}
+
+static struct sset_item *__sset_item_alloc (const z_bytes_ref_t *key,
+                                            const z_bytes_ref_t *value,
+                                            int is_delete_marker)
+{
+  struct sset_item *item;
+
+  item = z_memory_struct_alloc(z_global_memory(), struct sset_item);
+  if (Z_MALLOC_IS_NULL(item))
+    return(NULL);
+
+  item->__node__.udata = !!is_delete_marker;
+
+  Z_ASSERT(key != NULL, "Must have a key");
+  z_bytes_ref_acquire(&(item->key), key);
+  if (value != NULL) {
+    z_bytes_ref_acquire(&(item->value), value);
+  } else {
+    z_bytes_ref_reset(&(item->value));
+  }
+  return(item);
+}
+
+static const z_tree_info_t __sset_item_tree_info = {
+  .plug         = &z_tree_avl,
+  .node_compare = __sset_item_node_compare,
+  .key_compare  = __sset_item_node_key_compare,
+  .node_free    = __sset_item_node_free,
+};
+
+/* ============================================================================
+ *  PRIVATE SSet Items Mem-Map methods
+ */
+static const z_vtable_map_iterator_t __sset_mem_iterator;
+
+static int __sset_item_node_to_map (struct sset_mem_iter *self,
+                                    const z_tree_node_t *node,
+                                    z_map_entry_t *map)
+{
+  if (Z_LIKELY(node != NULL)) {
+    struct sset_item *item = z_container_of(node, struct sset_item, __node__);
+    z_byte_slice_copy(&(map->key), &(item->key.slice));
+    z_byte_slice_copy(&(map->value), &(item->value.slice));
+    map->is_delete_marker = __sset_item_is_delete_marker(item);
+    Z_MAP_ITERATOR_HEAD(self).object = item;
+    return(1);
+  }
+
+  Z_MAP_ITERATOR_HEAD(self).object = NULL;
   return(0);
 }
 
-static int __sset_entry_map_begin (void *self) {
-  struct sset_entry_map_iterator *iter = (struct sset_entry_map_iterator *)self;
-  struct sset_entry *entry = __SSET_ENTRY(z_iterator_begin(&(iter->iter)));
-  __sset_entry_to_map(entry, &(iter->entry));
-  Z_MAP_ITERATOR_HEAD(self).object = entry;
-  return(entry != NULL);
+static int __sset_mem_iter_open (void *self, z_tree_node_t *root) {
+  struct sset_mem_iter *iter = (struct sset_mem_iter *)self;
+  Z_MAP_ITERATOR_INIT(self, &__sset_mem_iterator, &z_vtable_bytes_refs, NULL);
+  z_tree_iter_open(&(iter->iter), root);
+  return(0);
 }
 
-static int __sset_entry_map_next (void *self) {
-  struct sset_entry_map_iterator *iter = (struct sset_entry_map_iterator *)self;
-  struct sset_entry *entry = __SSET_ENTRY(z_iterator_next(&(iter->iter)));
-  __sset_entry_to_map(entry, &(iter->entry));
-  Z_MAP_ITERATOR_HEAD(self).object = entry;
-  return(entry != NULL);
+static int __sset_mem_iter_begin (void *self) {
+  struct sset_mem_iter *iter = (struct sset_mem_iter *)self;
+  const z_tree_node_t *node = z_tree_iter_begin(&(iter->iter));
+  return(__sset_item_node_to_map(self, node, &(iter->entry)));
 }
 
-static int __sset_entry_map_seek (void *self, const z_byte_slice_t *key) {
-  struct sset_entry_map_iterator *iter = (struct sset_entry_map_iterator *)self;
-  struct sset_entry *entry = __SSET_ENTRY(z_iterator_seek_le(&(iter->iter), __sset_entry_key_compare, key));
-  __sset_entry_to_map(entry, &(iter->entry));
-  Z_MAP_ITERATOR_HEAD(self).object = entry;
-  return(entry != NULL);
+static int __sset_mem_iter_next (void *self) {
+  struct sset_mem_iter *iter = (struct sset_mem_iter *)self;
+  const z_tree_node_t *node = z_tree_iter_next(&(iter->iter));
+  return(__sset_item_node_to_map(self, node, &(iter->entry)));
 }
 
-const z_map_entry_t *__sset_entry_map_current (const void *self) {
-  const struct sset_entry_map_iterator *iter = (const struct sset_entry_map_iterator *)self;
-  struct sset_entry *entry = __SSET_ENTRY(Z_MAP_ITERATOR_HEAD(iter).object);
-  return((entry != NULL) ? &(iter->entry) : NULL);
+static int __sset_mem_iter_seek (void *self, const z_byte_slice_t *key) {
+  struct sset_mem_iter *iter = (struct sset_mem_iter *)self;
+  const z_tree_node_t *node = z_tree_iter_seek_le(&(iter->iter),
+                                                  __sset_item_node_key_compare,
+                                                  key, NULL);
+  __sset_item_node_to_map(self, node, &(iter->entry));
+  return(0);
 }
 
-static void __sset_entry_map_get_refs (const void *self,
-                                       z_bytes_ref_t *key,
-                                       z_bytes_ref_t *value)
-{
-  const struct sset_entry_map_iterator *iter = (const struct sset_entry_map_iterator *)self;
-  struct sset_entry *entry = __SSET_ENTRY(Z_MAP_ITERATOR_HEAD(iter).object);
+const z_map_entry_t *__sset_mem_iter_current (const void *self) {
+  const struct sset_mem_iter *iter = (const struct sset_mem_iter *)self;
+  void *item = Z_MAP_ITERATOR_HEAD(iter).object;
+  return((item != NULL) ? &(iter->entry) : NULL);
+}
 
-  if (Z_UNLIKELY(entry == NULL))
-    return;
-
-  if (key != NULL) {
-    z_bytes_ref_acquire(key, &(entry->key));
-  }
-
-  if (value != NULL) {
-    z_bytes_ref_acquire(value, &(entry->value));
+static void __sset_mem_iter_get_refs (const void *self, z_bytes_ref_t *key, z_bytes_ref_t *value) {
+  const struct sset_mem_iter *iter = (const struct sset_mem_iter *)self;
+  struct sset_item *item = __SSET_ITEM(Z_MAP_ITERATOR_HEAD(iter).object);
+  if (Z_LIKELY(item != NULL)) {
+    z_bytes_ref_acquire(key, &(item->key));
+    z_bytes_ref_acquire(value, &(item->value));
   }
 }
 
-static const z_vtable_map_iterator_t __sset_entry_map_iterator = {
-  .begin    = __sset_entry_map_begin,
-  .next     = __sset_entry_map_next,
-  .seek     = __sset_entry_map_seek,
-  .current  = __sset_entry_map_current,
-  .get_refs = __sset_entry_map_get_refs,
+static const z_vtable_map_iterator_t __sset_mem_iterator = {
+  .begin    = __sset_mem_iter_begin,
+  .next     = __sset_mem_iter_next,
+  .seek     = __sset_mem_iter_seek,
+  .current  = __sset_mem_iter_current,
+  .get_refs = __sset_mem_iter_get_refs,
 };
 
 /* ============================================================================
- *  SSet Block
+ *  PRIVATE SSet TXN methods
  */
+#define __sset_txn_id(user_txn)                                               \
+  ((user_txn != NULL) ? raleighsl_txn_id(user_txn) : 0)
+
+#define __sset_txn_attach(txn)                                                \
+  z_tree_node_attach(&__sset_txn_tree_info, &((txn)->node->txn_locks),        \
+                     &((txn)->__node__), NULL)
+
+#define __sset_txn_detach(txn)                                                \
+  z_tree_node_detach(&__sset_txn_tree_info, &((txn)->node->txn_locks),        \
+                     &((txn)->__node__), NULL)
+
+#define __sset_txn_node_get(txn_tree, key)                                    \
+  z_tree_node_lookup(txn_tree, __sset_txn_node_key_compare, key, NULL)
+
+#define __sset_txn_key_locked(entry_txn, user_txn)                            \
+  ((entry_txn) != NULL && (entry_txn)->txn_id != __sset_txn_id(user_txn))
+
+#define __sset_txn_is_current(entry_txn, user_txn)                            \
+  ((entry_txn) != NULL && (entry_txn)->txn_id == __sset_txn_id(user_txn))
+
+static struct sset_node *__sset_node_from_tree (const z_tree_node_t *tree_node) {
+  return(tree_node ? z_container_of(tree_node, struct sset_node, __node__) : NULL);
+}
+
+static int __sset_txn_node_compare (void *udata, const void *a, const void *b) {
+  const struct sset_txn *ea = z_container_of(a, const struct sset_txn, __node__);
+  const struct sset_txn *eb = z_container_of(b, const struct sset_txn, __node__);
+  return((ea == eb) ? 0 : z_bytes_ref_compare(&(ea->item->key), &(eb->item->key)));
+}
+
+static int __sset_txn_node_key_compare (void *udata, const void *a, const void *key) {
+  const struct sset_txn *ea = z_container_of(a, const struct sset_txn, __node__);
+  return(z_bytes_ref_compare(&(ea->item->key), Z_CONST_BYTES_REF(key)));
+}
+
+static void __sset_txn_free (struct sset_txn *txn) {
+  z_memory_struct_free(z_global_memory(), struct sset_txn, txn);
+}
+
+static void __sset_txn_node_free (void *udata, void *obj) {
+  struct sset_txn *txn = z_container_of(obj, struct sset_txn, __node__);
+  __sset_txn_free(txn);
+}
+
+static struct sset_txn *__sset_txn_alloc (uint64_t txn_id,
+                                          struct sset_node *node,
+                                          enum sset_txn_type type,
+                                          struct sset_item *item)
+{
+  struct sset_txn *txn;
+
+  txn = z_memory_struct_alloc(z_global_memory(), struct sset_txn);
+  if (Z_MALLOC_IS_NULL(txn))
+    return(NULL);
+
+  txn->txn_id = txn_id;
+  z_dlink_init(&(txn->commitq));
+
+  txn->node = node;
+  txn->item = item;
+  txn->parent = NULL;
+  txn->type = type;
+  return(txn);
+}
+
+static const z_tree_info_t __sset_txn_tree_info = {
+  .plug         = &z_tree_avl,
+  .node_compare = __sset_txn_node_compare,
+  .key_compare  = __sset_txn_node_compare,
+  .node_free    = __sset_txn_node_free,
+};
+
+/* ============================================================================
+ *  PRIVATE SSet Items TXN-Map methods
+ */
+static const z_vtable_map_iterator_t __sset_txn_iterator;
+
+static int __sset_txn_node_to_map (struct sset_txn_iter *self,
+                                   const z_tree_node_t *node,
+                                   z_map_entry_t *map)
+{
+  if (Z_LIKELY(node != NULL)) {
+    struct sset_txn *txn = z_container_of(node, struct sset_txn, __node__);
+    z_byte_slice_copy(&(map->key), &(txn->item->key.slice));
+    z_byte_slice_copy(&(map->value), &(txn->item->value.slice));
+    map->is_delete_marker = txn->type == SSET_TXN_REMOVE;
+    Z_MAP_ITERATOR_HEAD(self).object = txn;
+    return(1);
+  }
+
+  Z_MAP_ITERATOR_HEAD(self).object = NULL;
+  return(0);
+}
+
+static const z_tree_node_t *__sset_txn_iter_skip_txns (struct sset_txn_iter *iter,
+                                                       const z_tree_node_t *node)
+{
+  while (node != NULL) {
+    struct sset_txn *txn = z_container_of(node, struct sset_txn, __node__);
+
+    /* TODO: Add support for "read-uncommitted" */
+    if (txn->txn_id == iter->txn_id)
+      return(node);
+
+    node = z_tree_iter_next(&(iter->iter));
+  }
+  return(node);
+}
+
+static int __sset_txn_iter_open (void *self, z_tree_node_t *root, uint64_t txn_id) {
+  struct sset_txn_iter *iter = (struct sset_txn_iter *)self;
+  Z_MAP_ITERATOR_INIT(self, &__sset_txn_iterator, &z_vtable_bytes_refs, NULL);
+  iter->txn_id = txn_id;
+  z_tree_iter_open(&(iter->iter), root);
+  return(0);
+}
+
+static int __sset_txn_iter_begin (void *self) {
+  struct sset_txn_iter *iter = (struct sset_txn_iter *)self;
+  const z_tree_node_t *node = z_tree_iter_begin(&(iter->iter));
+  node = __sset_txn_iter_skip_txns(iter, node);
+  return(__sset_txn_node_to_map(self, node, &(iter->entry)));
+}
+
+static int __sset_txn_iter_next (void *self) {
+  struct sset_txn_iter *iter = (struct sset_txn_iter *)self;
+  const z_tree_node_t *node = z_tree_iter_next(&(iter->iter));
+  node = __sset_txn_iter_skip_txns(iter, node);
+  return(__sset_txn_node_to_map(self, node, &(iter->entry)));
+}
+
+static int __sset_txn_iter_seek (void *self, const z_byte_slice_t *key) {
+  struct sset_txn_iter *iter = (struct sset_txn_iter *)self;
+  const z_tree_node_t *node = z_tree_iter_seek_le(&(iter->iter),
+                                                  __sset_item_node_key_compare,
+                                                  key, NULL);
+  node = __sset_txn_iter_skip_txns(iter, node);
+  __sset_txn_node_to_map(self, node, &(iter->entry));
+  return(0);
+}
+
+const z_map_entry_t *__sset_txn_iter_current (const void *self) {
+  const struct sset_txn_iter *iter = (const struct sset_txn_iter *)self;
+  void *item = Z_MAP_ITERATOR_HEAD(iter).object;
+  return((item != NULL) ? &(iter->entry) : NULL);
+}
+
+static void __sset_txn_iter_get_refs (const void *self, z_bytes_ref_t *key, z_bytes_ref_t *value) {
+  const struct sset_txn_iter *iter = (const struct sset_txn_iter *)self;
+  struct sset_txn *txn = __SSET_TXN(Z_MAP_ITERATOR_HEAD(iter).object);
+  if (Z_LIKELY(txn != NULL)) {
+    z_bytes_ref_acquire(key, &(txn->item->key));
+    z_bytes_ref_acquire(value, &(txn->item->value));
+  }
+}
+
+static const z_vtable_map_iterator_t __sset_txn_iterator = {
+  .begin    = __sset_txn_iter_begin,
+  .next     = __sset_txn_iter_next,
+  .seek     = __sset_txn_iter_seek,
+  .current  = __sset_txn_iter_current,
+  .get_refs = __sset_txn_iter_get_refs,
+};
+
+/* ============================================================================
+ *  PRIVATE SSet Block methods
+ */
+#define __sset_block_type(block)                                    \
+  (&z_bucket_vprefix)
+
+#define __sset_block_first_key(block, key)                          \
+  do {                                                              \
+    if ((block) != NULL) {                                          \
+      __sset_block_type(block)->first_key((block)->data, key);      \
+    } else {                                                        \
+      z_byte_slice_clear(key);                                      \
+    }                                                               \
+  } while (0)
+
 static struct sset_block *__sset_block_alloc (void) {
   struct sset_block *block;
 
@@ -212,8 +457,6 @@ static struct sset_block *__sset_block_alloc (void) {
     return(NULL);
 
   z_dlink_init(&(block->blkseq));
-  z_bytes_ref_reset(&(block->first_key));
-  z_bytes_ref_reset(&(block->last_key));
   block->refs = 1;
   return(block);
 }
@@ -221,8 +464,6 @@ static struct sset_block *__sset_block_alloc (void) {
 static void __sset_block_free (struct sset_block *self) {
   if (self == NULL || z_atomic_dec(&(self->refs)) > 0)
     return;
-  z_bytes_ref_release(&(self->first_key));
-  z_bytes_ref_release(&(self->last_key));
   z_memory_struct_free(z_global_memory(), struct sset_block, self);
 }
 
@@ -239,427 +480,487 @@ static const z_vtable_refs_t __sset_block_vtable_refs = {
   .dec_ref = __sset_block_dec_ref,
 };
 
-static struct sset_block *__sset_block_create (const z_byte_slice_t *key) {
+static struct sset_block *__sset_block_create (void) {
   struct sset_block *block;
-  z_bytes_t *first_key;
 
   block = __sset_block_alloc();
   if (Z_MALLOC_IS_NULL(block))
     return(NULL);
 
-  first_key = z_bytes_from_byte_slice(key);
-  z_bytes_ref_set(&(block->first_key), &(first_key->slice), &z_vtable_bytes_refs, first_key);
-  z_bucket_variable.create(block->data, sizeof(block->data));
+  __sset_block_type(block)->create(block->data, __SSET_BLOCK_SIZE);
   return(block);
 }
 
-static void __sset_block_finalize (struct sset_block *self, const z_byte_slice_t *key) {
-  z_bytes_t *last_key;
-
-  last_key = z_bytes_from_byte_slice(key);
-  z_bytes_ref_set(&(self->last_key), &(last_key->slice), &z_vtable_bytes_refs, last_key);
-
-  z_bucket_variable.finalize(self->data);
-}
-
-static void __sset_fill_bucket_entry (z_bucket_entry_t *item,
-                                      const z_byte_slice_t *key,
-                                      const z_byte_slice_t *value,
-                                      const z_byte_slice_t *kprev)
-{
-  item->kprefix = z_memshared(kprev->data, kprev->size,
-                              key->data, key->size);
-  z_byte_slice_set(&(item->key),
-                   key->data + item->kprefix,
-                   key->size - item->kprefix);
-  z_byte_slice_copy(&(item->value), value);
+static void __sset_block_finalize (struct sset_block *self) {
+  __sset_block_type(self)->finalize(self->data);
 }
 
 static int __sset_block_add (struct sset_block *self,
+                             size_t kprefix,
                              const z_byte_slice_t *key,
-                             const z_byte_slice_t *value,
-                             const z_byte_slice_t *kprev)
+                             const z_byte_slice_t *value)
 {
   z_bucket_entry_t item;
-  __sset_fill_bucket_entry(&item, key, value, kprev);
-  return(z_bucket_variable.append(self->data, &item));
+  item.kprefix = kprefix;
+  z_byte_slice_copy(&(item.key), key);
+  z_byte_slice_copy(&(item.value), value);
+  return(__sset_block_type(self)->append(self->data, &item));
 }
-
-#define __sset_block_add_entry(self, entry, kprev)                            \
-  __sset_block_add(self, z_bytes_slice(&(entry->key)),                        \
-                   z_bytes_slice(&(entry->value)), kprev)
 
 static int __sset_block_lookup (struct sset_block *self,
                                 const z_bytes_ref_t *key,
                                 z_bytes_ref_t *value)
 {
   z_byte_slice_t val;
-  int cmp = z_bucket_search(&z_bucket_variable, self->data,
-                            z_bytes_slice(key), &val);
+  int cmp = z_bucket_search(__sset_block_type(self), self->data, z_bytes_ref_slice(key), &val);
   if (!cmp && value != NULL) {
-    z_atomic_inc(&(self->refs));
     z_bytes_ref_set(value, &val, &__sset_block_vtable_refs, self);
   }
   return(cmp);
 }
 
 /* ============================================================================
- *  SSet Node
+ *  PRIVATE SSet Node methods
  */
-static struct sset_node *__sset_node_alloc (raleighsl_sset_t *sset,
-                                            struct sset_block *block)
-{
+#define __sset_node_attach(sset, node)                            \
+  z_tree_node_attach(&__sset_node_tree_info, &((sset)->root),     \
+                     &((node)->__node__), NULL)
+
+#define __sset_node_detach(sset, node)                            \
+  z_tree_node_detach(&__sset_node_tree_info, &((sset)->root),     \
+                     &((node)->__node__), NULL)
+
+#define __sset_node_lookup(sset, key)                             \
+  z_container_of(z_tree_node_floor((sset)->root,                  \
+                                   __sset_node_key_compare,       \
+                                   key, NULL),                    \
+                 struct sset_node, __node__)
+
+static int __sset_node_compare (void *udata, const void *a, const void *b) {
+  const struct sset_node *ea = z_container_of(a, const struct sset_node, __node__);
+  const struct sset_node *eb = z_container_of(b, const struct sset_node, __node__);
+  Z_ASSERT(a == &(ea->__node__), "container resolve failed");
+  Z_ASSERT(b == &(eb->__node__), "container resolve failed");
+  if (ea != eb) {
+    z_byte_slice_t ea_key;
+    z_byte_slice_t eb_key;
+    __sset_block_first_key(ea->block, &ea_key);
+    __sset_block_first_key(eb->block, &eb_key);
+    return(z_byte_slice_compare(&ea_key, &eb_key));
+  }
+  return(0);
+}
+
+static int __sset_node_key_compare (void *udata, const void *a, const void *key) {
+  const struct sset_node *ea = z_container_of(a, const struct sset_node, __node__);
+  z_byte_slice_t ea_key;
+  __sset_block_first_key(ea->block, &ea_key);
+  return(z_byte_slice_compare(&ea_key, z_bytes_ref_slice(Z_CONST_BYTES_REF(key))));
+}
+
+static void __sset_node_free (void *udata, void *obj) {
+  struct sset_node *node = z_container_of(obj, struct sset_node, __node__);
+  Z_ASSERT(obj == &(node->__node__), "container resolve failed");
+
+  z_tree_node_clear(&__sset_item_tree_info, node->mem_data, udata);
+  z_tree_node_clear(&__sset_txn_tree_info, node->txn_locks, udata);
+  __sset_block_free(node->block);
+  z_memory_struct_free(z_global_memory(), struct sset_node, node);
+}
+
+static const z_tree_info_t __sset_node_tree_info = {
+  .plug         = &z_tree_avl,
+  .node_compare = __sset_node_compare,
+  .key_compare  = __sset_node_compare,
+  .node_free    = __sset_node_free,
+};
+
+static struct sset_node *__sset_node_alloc (struct sset_block *block) {
   struct sset_node *node;
 
   node = z_memory_struct_alloc(z_global_memory(), struct sset_node);
   if (Z_MALLOC_IS_NULL(node))
     return(NULL);
 
-  if (z_skip_list_alloc(&(node->skip_list),
-                        __sset_entry_compare, __sset_entry_free,
-                        sset, (size_t)node) == NULL)
-  {
+  z_dlink_init(&(node->dirtyq));
+  z_dlink_init(&(node->commitq));
 
-    z_memory_struct_free(z_global_memory(), struct sset_node, node);
-    return(NULL);
-  }
-
-  if (block == NULL) {
-    z_bytes_ref_reset(&(node->key));
-    node->block = NULL;
-  } else {
-    z_bytes_ref_acquire(&(node->key), &(block->first_key));
-    node->block = block;
-  }
+  node->mem_data = NULL;
+  node->txn_locks = NULL;
+  node->block = block;
 
   node->bufsize = 0;
-  z_dlink_init(&(node->dirtyq));
+  node->min_ksize = ~0;
+  node->max_ksize = 0;
+  node->min_vsize = ~0;
+  node->max_vsize = 0;
   return(node);
 }
 
-static void __sset_node_free (void *udata, void *obj) {
-  struct sset_node *node = __SSET_NODE(obj);
-  z_bytes_ref_release(&(node->key));
-  __sset_block_free(node->block);
-  z_skip_list_free(&(node->skip_list));
-  z_memory_struct_free(z_global_memory(), struct sset_node, node);
-}
+#define __sset_node_requires_balance(node)  \
+  ((node)->bufsize >= __SSET_SYNC_SIZE)
 
-static int __sset_node_compare (void *udata, const void *a, const void *b) {
-  const struct sset_node *ea = (const struct sset_node *)a;
-  const struct sset_node *eb = (const struct sset_node *)b;
-  return(z_bytes_ref_compare(&(ea->key), &(eb->key)));
-}
-
-static int __sset_node_key_compare (void *udata, const void *a, const void *key) {
-  const struct sset_node *node = (const struct sset_node *)a;
-  return(z_bytes_ref_compare(&(node->key), Z_CONST_BYTES_REF(key)));
-}
-
-#define __sset_node_lookup(sset, key)                                          \
-  __SSET_NODE(z_skip_list_less_eq_custom(&((sset)->skip_list),                 \
-                                         __sset_node_key_compare, key, NULL))
-
-static int __sset_node_search (struct sset_node *node,
-                               const z_bytes_ref_t *key,
-                               z_bytes_ref_t *value)
+#include <zcl/writer.h>
+static int __sset_node_mem_search (struct sset_node *node,
+                                   const z_bytes_ref_t *key,
+                                   int stop_if_has_txn,
+                                   struct sset_entry *entry)
 {
-  struct sset_entry *entry;
+  z_tree_node_t *tree_node;
 
-  /* Try to lookup the key in the In-Memory buffer */
-  entry = __SSET_ENTRY(z_skip_list_get_custom(&(node->skip_list),
-                                              __sset_entry_key_compare, key));
-  if (entry != NULL) {
-    if (value != NULL)
-      z_bytes_ref_acquire(value, &(entry->value));
-    return(1);
+  entry->txn = NULL;
+  entry->item = NULL;
+  entry->block = NULL;
+
+  /* Try to lookup in the Txn-Buffer */
+  if ((tree_node = __sset_txn_node_get(node->txn_locks, key)) != NULL) {
+    entry->txn = z_container_of(tree_node, struct sset_txn, __node__);
+    entry->item = entry->txn->item;
+    entry->value = &(entry->item->value);
+    if (stop_if_has_txn) return(1);
+  }
+
+  /* Try to lookup in the In-Memory Buffer */
+  tree_node = __sset_item_node_get(node->mem_data, key);
+  if (tree_node != NULL) {
+    entry->item = z_container_of(tree_node, struct sset_item, __node__);
+    entry->value = &(entry->item->value);
+    return(!__sset_item_is_delete_marker(entry->item) || entry->txn != NULL);
   }
 
   /* Try to lookup in the block */
-  if (node->block != NULL)
-    return(!__sset_block_lookup(node->block, key, value));
+  if (node->block != NULL && !__sset_block_lookup(node->block, key, &(entry->blk_value))) {
+    entry->block = node->block;
+    entry->value = &(entry->blk_value);
+    return(3);
+  }
 
   /* Not found */
-  return(0);
+  return(entry->txn != NULL);
 }
 
-#if 1
-static void __sset_block_debug (struct sset_block *block) {
-  char first_key[128];
-  char last_key[128];
+/* ============================================================================
+ *  PRIVATE SSet Node Iter methods
+ */
+struct sset_node_iter {
+  struct sset_txn_iter iter_txn;
+  struct sset_mem_iter iter_mem;
+  z_bucket_iterator_t  iter_blk;
+  z_map_merger_t merger;
+};
 
-  z_byte_slice_memcpy(first_key, z_bytes_ref_slice(&(block->first_key)));
-  first_key[z_bytes_ref_size(&(block->first_key))] = 0;
+#define __sset_node_iter_get_refs(iter, key_ref, value_ref)                   \
+  z_map_iterator_get_refs((iter)->merger.smallest_iter, key_ref, value_ref)
 
-  z_byte_slice_memcpy(last_key, z_bytes_ref_slice(&(block->last_key)));
-  last_key[z_bytes_ref_size(&(block->last_key))] = 0;
-
-  Z_LOG_TRACE("Block First-Key %s Last-Key %s Refs %"PRIu32" Avail %"PRIu32,
-              first_key, last_key, block->refs,
-              z_bucket_variable.available(block->data));
-}
-#endif
-static void __sset_node_sync_merge (raleighsl_sset_t *sset,
-                                    struct sset_node *node,
-                                    z_dlink_node_t *node_blkseq,
-                                    z_dlink_node_t *blkseq)
+static void __sset_node_iter_open (struct sset_node_iter *iter,
+                                   const struct sset_node *node,
+                                   uint64_t txn_id,
+                                   const z_byte_slice_t *key,
+                                   int include_key)
 {
-  struct sset_block *block;
+  z_map_merger_open(&(iter->merger));
+  iter->merger.skip_equals = 1;
 
-  /* If the last-key < first-key or first-key > last-key don't merge */
-  z_dlink_for_each_safe_entry(node_blkseq, block, struct sset_block, blkseq, {
-    if (z_bucket_variable.available(block->data) < __SSET_BLOCK_MERGE_SIZE &&
-        (z_bytes_ref_compare(&(block->last_key), &(node->block->first_key)) < 0 ||
-         z_bytes_ref_compare(&(block->first_key), &(node->block->last_key)) > 0))
-    {
-      z_dlink_move_tail(blkseq, &(block->blkseq));
-    }
-  });
-
-  if (z_dlink_is_empty(node_blkseq)) {
-    z_dlink_move_tail(blkseq, &(node->block->blkseq));
-  } else {
-    z_bucket_iterator_t iters[16];
-    const z_map_entry_t *entry;
-    uint8_t last_key_buf[128];
-    z_byte_slice_t last_key;
-    z_map_merger_t merger;
-    uint8_t niters = 0;
-
-    z_map_merger_open(&merger);
-
-    z_dlink_add(node_blkseq, &(node->block->blkseq));
-    z_dlink_for_each_entry(node_blkseq, block, struct sset_block, blkseq, {
-      Z_ASSERT(niters < 16, "Max number of merge-nodes is 16 got %"PRIu8, niters);
-      z_bucket_iterator_open(&(iters[niters]), &z_bucket_variable, block->data,
-                             &__sset_block_vtable_refs, block);
-      z_map_iterator_begin(&(iters[niters]));
-      z_map_merger_add(&merger, Z_MAP_ITERATOR(&(iters[niters])));
-      niters++;
-    });
-
-    entry = z_map_merger_next(&merger);
-    z_byte_slice_clear(&last_key);
-    while (entry != NULL) {
-      struct sset_block *block;
-      z_bucket_entry_t item;
-
-      block = __sset_block_create(&(entry->key));
-      Z_ASSERT(block != NULL, "TODO: Malloc failed, check me");
-      z_dlink_move_tail(blkseq, &(block->blkseq));
-
-      do {
-        __sset_fill_bucket_entry(&item, &(entry->key), &(entry->value), &last_key);
-        if (z_bucket_variable.append(block->data, &item))
-          break;
-
-        z_memcpy(last_key_buf + item.kprefix, item.key.data, item.key.size);
-        z_byte_slice_set(&last_key, last_key_buf, item.kprefix + item.key.size);
-      } while ((entry = z_map_merger_next(&merger)) != NULL);
-
-      __sset_block_finalize(block, &last_key);
-      z_byte_slice_clear(&last_key);
-    }
-
-    z_dlink_del_for_each_entry(node_blkseq, block, struct sset_block, blkseq, {
-      __sset_block_free(block);
-    });
+  if (node->txn_locks != NULL) {
+    z_map_iterator_t *map_iter = Z_MAP_ITERATOR(&(iter->iter_txn));
+    /* TODO: Add support for dirty-reads (not-committed txns) */
+    __sset_txn_iter_open(&(iter->iter_txn), node->txn_locks, txn_id);
+    z_map_iterator_seek_to(map_iter, key, include_key);
+    z_map_merger_add(&(iter->merger), map_iter);
   }
+
+  if (node->mem_data != NULL) {
+    z_map_iterator_t *map_iter = Z_MAP_ITERATOR(&(iter->iter_mem));
+    __sset_mem_iter_open(&(iter->iter_mem), node->mem_data);
+    z_map_iterator_seek_to(map_iter, key, include_key);
+    z_map_merger_add(&(iter->merger), map_iter);
+  }
+
+  if (node->block != NULL) {
+    z_map_iterator_t *map_iter = Z_MAP_ITERATOR(&(iter->iter_blk));
+    z_bucket_iterator_open(&(iter->iter_blk),
+                           __sset_block_type(node->block),
+                           node->block->data,
+                           &__sset_block_vtable_refs, node->block);
+    z_map_iterator_seek_to(map_iter, key, include_key);
+    z_map_merger_add(&(iter->merger), map_iter);
+  }
+}
+
+static void __sset_node_iter_close (struct sset_node_iter *iter) {
+  z_map_merger_close(&(iter->merger));
+}
+
+#define __has_delete_marker(current_iter, iter)                         \
+  ((current_iter) == Z_MAP_ITERATOR(iter) && (iter)->is_delete_marker)
+
+static const z_map_entry_t *__sset_node_iter_next (struct sset_node_iter *iter) {
+  z_map_merger_t *merger = &(iter->merger);
+  const z_map_entry_t *entry;
+  while ((entry = z_map_merger_next(merger)) != NULL) {
+    if (Z_UNLIKELY(entry->is_delete_marker))
+      continue;
+    return(entry);
+  }
+  return(NULL);
+}
+
+/* ============================================================================
+ *  PRIVATE SSet Node Balanceer/Merger methods
+ */
+
+struct kprefix {
+  uint8_t buffer[128];
+  size_t  size;
+};
+
+size_t __kprefix_shared (struct kprefix *self,
+                         const z_byte_slice_t *key,
+                         z_byte_slice_t *prefix_key)
+{
+  size_t shared = z_memshared(self->buffer, self->size, key->data, key->size);
+  Z_ASSERT(key->size <= 128, "Keys > 128 not supported yet");
+  z_byte_slice_set(prefix_key, key->data + shared, key->size - shared);
+  z_memcpy(self->buffer + shared, prefix_key->data, prefix_key->size);
+  self->size = key->size;
+  return(shared);
 }
 
 /*
  * A B C D [data] E F G
  */
-static void __sset_node_sync (raleighsl_sset_t *sset,
-                              z_dlink_node_t *blkseq,
-                              struct sset_node *node)
-{
-  z_skip_list_iterator_t iter;
+static int __sset_node_balance (struct sset_node *node, z_dlink_node_t *blkseq) {
+  struct sset_node_iter iter;
   z_dlink_node_t node_blkseq;
-  struct sset_entry *entry;
-  z_byte_slice_t empty;
+  const z_map_entry_t *entry;
+  struct sset_block *block;
+  struct kprefix kprefix;
 
   z_dlink_init(&node_blkseq);
-  z_byte_slice_clear(&empty);
 
-  // Generate the new blocks from the in-memory data
-  z_iterator_open(&iter, &(node->skip_list));
-  entry = __SSET_ENTRY(z_iterator_begin(&iter));
+  /*
+   * Generate the new blocks from the in-memory data
+   * TODO: Verify if the current block overlaps
+   */
+  __sset_node_iter_open(&iter, node, 0, NULL, 0);
+  entry = __sset_node_iter_next(&iter);
   while (entry != NULL) {
-    struct sset_block *block;
-    z_byte_slice_t *last_key;
+    z_byte_slice_t prefix_key;
+    kprefix.size = 0;
 
-    block = __sset_block_create(&(entry->key.slice));
+    block = __sset_block_create();
     if (Z_MALLOC_IS_NULL(block))
       break;
 
-    last_key = &empty;
     do {
-      if (__sset_block_add_entry(block, entry, last_key))
+      size_t shared = __kprefix_shared(&kprefix, &(entry->key), &prefix_key);
+      if (__sset_block_add(block, shared, &prefix_key, &(entry->value)))
         break;
 
-      last_key = &(entry->key.slice);
-      entry = __SSET_ENTRY(z_iterator_next(&iter));
+      entry = __sset_node_iter_next(&iter);
     } while (entry != NULL);
-    __sset_block_finalize(block, last_key);
+    __sset_block_finalize(block);
     z_dlink_add_tail(&node_blkseq, &(block->blkseq));
   }
-  z_iterator_close(&iter);
+  __sset_node_iter_close(&iter);
 
-  if (node->block != NULL) {
-    __sset_node_sync_merge(sset, node, &node_blkseq, blkseq);
-    node->block = NULL;
-  } else {
-    struct sset_block *block;
-    /* TODO: Dlink Concat? */
+  /* handle memory error during block creation */
+  if (Z_UNLIKELY(entry != NULL)) {
     z_dlink_for_each_safe_entry(&node_blkseq, block, struct sset_block, blkseq, {
-      z_dlink_move_tail(blkseq, &(block->blkseq));
+      __sset_block_free(block);
     });
+    return(0);
   }
+
+  /* Add blocks to the output list */
+  z_dlink_for_each_safe_entry(&node_blkseq, block, struct sset_block, blkseq, {
+    z_dlink_move_tail(blkseq, &(block->blkseq));
+  });
+  return(1);
 }
 
 /* ============================================================================
- *  PRIVATE  SSet Txn Locks methods
+ *  PRIVATE SSet WRITE methods
  */
-#define __sset_txn_get_func(func, sset, key)                                  \
-  (Z_CAST(struct sset_txn, func(&((sset)->txn_locks),                         \
-                                __sset_txn_key_compare, key)))
-
-#define __sset_txn_lookup(sset, key)                                          \
-  __sset_txn_get_func(z_skip_list_get_custom, sset, key)
-
-static int __sset_txn_compare (void *udata, const void *a, const void *b) {
-  struct sset_txn *txn_a = (struct sset_txn *)a;
-  struct sset_txn *txn_b = (struct sset_txn *)b;
-  return(z_bytes_ref_compare(&(txn_a->entry->key), &(txn_b->entry->key)));
-}
-
-static int __sset_txn_key_compare (void *udata, const void *a, const void *key) {
-  struct sset_txn *txn = (struct sset_txn *)a;
-  return(z_bytes_ref_compare(&(txn->entry->key), Z_CONST_BYTES_REF(key)));
-}
-
-static struct sset_txn *__sset_txn_alloc (uint64_t txn_id, enum sset_txn_type type, struct sset_entry *entry) {
-  struct sset_txn *txn;
-
-  txn = z_memory_struct_alloc(z_global_memory(), struct sset_txn);
-  if (Z_MALLOC_IS_NULL(txn)) {
-    return(NULL);
-  }
-
-  txn->entry = entry;
-  txn->txn_id = txn_id;
-  txn->type = type;
-  return(txn);
-}
-
-static void __sset_txn_free (void *udata, void *obj) {
-  struct sset_txn *txn = (struct sset_txn *)obj;
-  Z_ASSERT(txn->entry == NULL, "SSET-TXN entry must be released by apply/revert");
-  z_memory_struct_free(z_global_memory(), struct sset_txn, txn);
-}
-
-static struct sset_txn *__sset_txn_has_lock (raleighsl_sset_t *sset, const z_bytes_ref_t *key) {
-  return((sset->txn_locks.size > 0) ? __sset_txn_lookup(sset, key) : NULL);
-}
-
 static raleighsl_errno_t __sset_txn_add (raleighsl_t *fs,
-                                         raleighsl_object_t *object,
                                          raleighsl_transaction_t *transaction,
+                                         raleighsl_object_t *object,
+                                         struct sset_node *node,
                                          enum sset_txn_type type,
-                                         struct sset_entry *entry)
+                                         struct sset_item *item)
 {
   raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
   struct sset_txn *txn;
 
-  txn = __sset_txn_alloc(raleighsl_txn_id(transaction), type, entry);
+  /* Allocate Txn-Atom */
+  txn = __sset_txn_alloc(__sset_txn_id(transaction), node, type, item);
   if (Z_MALLOC_IS_NULL(txn)) {
-    __sset_entry_free(sset, entry);
+    __sset_item_free(item);
     return(RALEIGHSL_ERRNO_NO_MEMORY);
   }
 
-  if (z_skip_list_put(&(sset->txn_locks), txn)) {
-    __sset_txn_free(sset, txn);
-    __sset_entry_free(sset, entry);
-    return(RALEIGHSL_ERRNO_NO_MEMORY);
-  }
-
-  if (raleighsl_transaction_add(fs, transaction, object, txn)) {
-    z_skip_list_rollback(&(sset->txn_locks));
-    __sset_entry_free(sset, entry);
-    return(RALEIGHSL_ERRNO_NO_MEMORY);
-  }
-
-  z_skip_list_commit(&(sset->txn_locks));
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static void __sset_txn_remove (raleighsl_sset_t *sset,
-                               struct sset_txn *txn,
-                               int release_entity)
-{
-  __sset_txn_get_func(z_skip_list_remove_custom, sset, &(txn->entry->key));
-  if (release_entity)
-    __sset_entry_free(sset, txn->entry);
-  txn->entry = NULL;
-  z_skip_list_commit(&(sset->txn_locks));
-}
-
-/* ============================================================================
- *  PRIVATE  SSet Txn Apply methods
- */
-static raleighsl_errno_t __sset_apply_insert (raleighsl_sset_t *sset,
-                                              struct sset_node *node,
-                                              struct sset_entry *entry)
-{
-  /* Add directly to the table */
-  if (z_skip_list_put(&(node->skip_list), entry)) {
-    //__sset_entry_free(sset, entry);
-    return(RALEIGHSL_ERRNO_NO_MEMORY);
-  }
-  node->bufsize += (entry->key.slice.size + entry->value.slice.size);
-  z_dlink_move(&(sset->dirtyq), &(node->dirtyq));
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __sset_apply_remove (raleighsl_sset_t *sset,
-                                              struct sset_node *node,
-                                              const z_bytes_ref_t *key,
-                                              z_bytes_ref_t *value)
-{
-  struct sset_entry *entry;
-  z_byte_slice_t svalue;
-
-  if ((entry = __SSET_ENTRY(z_skip_list_remove_custom(&(node->skip_list),
-                            __sset_entry_key_compare, key))) != NULL)
-  {
-    node->bufsize -= (entry->key.slice.size + entry->value.slice.size);
-    z_bytes_ref_acquire(value, &(entry->value));
-  } else if (node->block != NULL &&
-             !z_bucket_search(&z_bucket_variable, node->block->data, &(key->slice), &svalue))
-  {
-    z_atomic_inc(&(node->block->refs));
-    z_bytes_ref_set(value, &(svalue), &__sset_block_vtable_refs, node->block);
+  if (transaction == NULL) {
+    /* Attach the txn to the commitq */
+    z_dlink_move(&(sset->dirtyq), &(node->dirtyq));
+    z_dlink_add_tail(&(node->commitq), &(txn->commitq));
   } else {
-    return(RALEIGHSL_ERRNO_DATA_KEY_NOT_FOUND);
+    int res;
+
+    /* Add Txn-Atom to the Transaction */
+    res = raleighsl_transaction_add(fs, transaction, object, &(txn->__txn_atom__));
+    if (Z_UNLIKELY(res)) {
+      __sset_txn_free(txn);
+      __sset_item_free(item);
+      return(RALEIGHSL_ERRNO_NO_MEMORY);
+    }
+
+    /* Attach the txn to the commitq */
+    z_dlink_add_tail(&(sset->txnq), &(txn->commitq));
   }
 
-  z_dlink_move(&(sset->dirtyq), &(node->dirtyq));
   return(RALEIGHSL_ERRNO_NONE);
 }
 
-static raleighsl_errno_t __sset_apply_update (raleighsl_sset_t *sset,
-                                              struct sset_node *node,
-                                              struct sset_entry *entry)
+static raleighsl_errno_t __sset_txn_update (raleighsl_t *fs,
+                                            raleighsl_transaction_t *transaction,
+                                            raleighsl_object_t *object,
+                                            struct sset_txn *txn,
+                                            enum sset_txn_type type,
+                                            const z_bytes_ref_t *key,
+                                            const z_bytes_ref_t *value)
 {
-  raleighsl_errno_t errno;
+  raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
+  struct sset_item *item = txn->item;
+  struct sset_txn *new_txn;
 
-  /* Remove the old value */
-  if ((errno = __sset_apply_remove(sset, node, &(entry->key), NULL)))
-    return(errno);
+  Z_ASSERT(type != SSET_TXN_UPDATE, "type must be INSERT or REMOVE");
 
-  /* Add directly to the table */
-  return(__sset_apply_insert(sset, node, entry));
+  /*
+   * +-----------+-----------+--------------------+
+   * | old state | new state | res state          |
+   * +-----------+-----------+--------------------+
+   * | INSERT    | INSERT    | INSERT             |
+   * | INSERT    | UPDATE    | INSERT             |
+   * | INSERT    | REMOVE    | REMOVE (del-apply) |
+   * +-----------+-----------+--------------------+
+   * | UPDATE    | INSERT    | throw key present  |
+   * | UPDATE    | UPDATE    | UPDATE             |
+   * | UPDATE    | REMOVE    | REMOVE             |
+   * +-----------+-----------+--------------------+
+   * | REMOVE    | INSERT    | UPDATE             |
+   * | REMOVE    | UPDATE    | UPDATE             |
+   * | REMOVE    | REMOVE    | throw not exists   |
+   * +-----------+-----------+--------------------+
+   */
+  switch (txn->type) {
+    case SSET_TXN_INSERT:
+      if (type != SSET_TXN_REMOVE) {
+        type = SSET_TXN_INSERT;
+        item = NULL;
+      }
+      break;
+    case SSET_TXN_UPDATE:
+      Z_ASSERT(type != SSET_TXN_INSERT, "key already present");
+      break;
+    case SSET_TXN_REMOVE:
+      if (type != SSET_TXN_REMOVE) {
+        type = SSET_TXN_UPDATE;
+        item = NULL;
+      }
+      break;
+  }
+
+  if (item == NULL) {
+    Z_ASSERT(type != SSET_TXN_REMOVE, "expected item to remove");
+
+    /* Allocate the new item */
+    item = __sset_item_alloc(key, value, 0);
+    if (Z_MALLOC_IS_NULL(item))
+      return(RALEIGHSL_ERRNO_NO_MEMORY);
+  }
+
+  /* Allocate Txn-Atom */
+  new_txn = __sset_txn_alloc(__sset_txn_id(transaction), txn->node, type, item);
+  if (Z_MALLOC_IS_NULL(new_txn)) {
+    if (type != SSET_TXN_REMOVE) {
+      __sset_item_free(item);
+    }
+    return(RALEIGHSL_ERRNO_NO_MEMORY);
+  }
+
+  /* Set the parent-txn */
+  new_txn->parent = txn;
+
+  /* Attach the new_txn to the commitq */
+  if (transaction == NULL) {
+    z_dlink_move(&(sset->dirtyq), &(txn->node->dirtyq));
+    z_dlink_add_tail(&(txn->node->commitq), &(new_txn->commitq));
+  } else {
+    if (type == SSET_TXN_REMOVE) {
+      raleighsl_transaction_remove(fs, transaction, object, &(txn->__txn_atom__));
+    } else {
+      raleighsl_transaction_replace(fs, transaction, object,
+                                    &(txn->__txn_atom__), &(new_txn->__txn_atom__));
+    }
+
+    z_dlink_add_tail(&(sset->txnq), &(new_txn->commitq));
+  }
+
+  return(RALEIGHSL_ERRNO_NONE);
+}
+
+static void __sset_txn_apply (raleighsl_sset_t *sset, struct sset_txn *txn) {
+  if (txn->txn_id > 0) {
+    __sset_txn_detach(txn);
+  }
+
+  switch (txn->type) {
+    case SSET_TXN_INSERT:
+    case SSET_TXN_UPDATE:
+      /* Update node stats */
+      txn->node->bufsize += __sset_item_size(txn->item);
+      z_min(txn->node->min_ksize, txn->item->key.slice.size);
+      z_max(txn->node->max_ksize, txn->item->key.slice.size);
+      z_min(txn->node->min_vsize, txn->item->value.slice.size);
+      z_max(txn->node->max_vsize, txn->item->value.slice.size);
+
+      /* Attach item */
+      __sset_item_attach(&(txn->node->mem_data), txn->item);
+      break;
+    case SSET_TXN_REMOVE: {
+      z_tree_node_t *node;
+      if ((node = __sset_item_detach(&(txn->node->mem_data), &(txn->item->key))) != NULL) {
+        __sset_item_node_free(sset, node);
+        __sset_item_free(txn->item);
+      } else {
+        /* Attach item (replaces the old one) */
+        __sset_item_attach(&(txn->node->mem_data), txn->item);
+      }
+      break;
+    }
+  }
+
+  __sset_txn_free(txn);
+}
+
+static void __sset_txn_revert (raleighsl_sset_t *sset, struct sset_txn *txn) {
+  /* Remove the TXN from the node */
+  __sset_txn_detach(txn);
+  __sset_item_free(txn->item);
+  __sset_txn_free(txn);
+}
+
+static void __sset_txn_commit (raleighsl_sset_t *sset, struct sset_txn *txn) {
+  Z_ASSERT(txn->txn_id > 0, "Default transaction are handld as committed apply");
+
+  if (txn->parent != NULL) {
+    __sset_txn_revert(sset, txn->parent);
+    if (txn->type == SSET_TXN_REMOVE) {
+      __sset_txn_free(txn);
+    }
+  } else {
+    __sset_txn_attach(txn);
+  }
 }
 
 /* ============================================================================
@@ -673,53 +974,36 @@ raleighsl_errno_t raleighsl_sset_insert (raleighsl_t *fs,
                                          const z_bytes_ref_t *value)
 {
   raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
-  struct sset_entry *entry;
+  struct sset_entry entry;
   struct sset_node *node;
-  struct sset_txn *txn;
 
-  /* Verify that no other transaction is holding the key-lock */
-  txn = __sset_txn_has_lock(sset, key);
-  if (txn != NULL && (transaction != NULL && raleighsl_txn_id(transaction) != txn->txn_id))
-    return(RALEIGHSL_ERRNO_TXN_LOCKED_KEY);
-
-  /* Update Transaction Value */
-  if (txn != NULL) {
-    Z_ASSERT(txn->txn_id == raleighsl_txn_id(transaction), "TXN-ID Mismatch");
-    switch (txn->type) {
-      case SSET_TXN_INSERT:
-        __sset_entry_set_value(sset, txn->entry, value);
-        break;
-      case SSET_TXN_UPDATE:
-        return(RALEIGHSL_ERRNO_DATA_KEY_EXISTS);
-        break;
-      case SSET_TXN_REMOVE:
-        __sset_entry_set_value(sset, txn->entry, value);
-        txn->type = SSET_TXN_UPDATE;
-        break;
-    }
-    return(RALEIGHSL_ERRNO_NONE);
-  }
-
-  /* Lookup Node */
+  /* Lookup key-node */
   node = __sset_node_lookup(sset, key);
   Z_ASSERT(node != NULL, "Unable to find a node");
 
-  if (!allow_update && __sset_node_search(node, key, NULL))
-    return(RALEIGHSL_ERRNO_DATA_KEY_EXISTS);
+  /* Lookup the key */
+  if (__sset_node_mem_search(node, key, 1, &entry)) {
+    /* if the item-txn is owned by someone else, fail the current-txn */
+    if (__sset_txn_key_locked(entry.txn, transaction))
+      return(RALEIGHSL_ERRNO_TXN_LOCKED_KEY);
 
-  /* Allocate the new entry */
-  entry = __sset_entry_alloc(sset, key, value, node);
-  if (Z_MALLOC_IS_NULL(entry)) {
-    return(RALEIGHSL_ERRNO_NO_MEMORY);
+    /* updates are not allowed, and the key is already in */
+    if (!allow_update)
+      return(RALEIGHSL_ERRNO_DATA_KEY_EXISTS);
+
+    /* if I'm the owner of the TXN, just replace the value */
+    if (Z_UNLIKELY(entry.txn != NULL))
+      return(__sset_txn_update(fs, transaction, object, entry.txn, SSET_TXN_INSERT, key, value));
   }
+
+  /* Allocate the new item */
+  entry.item = __sset_item_alloc(key, value, 0);
+  if (Z_MALLOC_IS_NULL(entry.item))
+    return(RALEIGHSL_ERRNO_NO_MEMORY);
 
   /* Add to the transaction */
-  if (transaction != NULL) {
-    return(__sset_txn_add(fs, object, transaction, SSET_TXN_INSERT, entry));
-  }
-
-  /* Add directly to the table */
-  return(__sset_apply_insert(sset, node, entry));
+  object->requires_balancing = __sset_node_requires_balance(node);
+  return(__sset_txn_add(fs, transaction, object, node, SSET_TXN_INSERT, entry.item));
 }
 
 raleighsl_errno_t raleighsl_sset_update (raleighsl_t *fs,
@@ -730,6 +1014,8 @@ raleighsl_errno_t raleighsl_sset_update (raleighsl_t *fs,
                                          z_bytes_ref_t *old_value)
 {
   raleighsl_errno_t errno;
+
+  /* TODO: Just add, the merge will take care of replacing the old item */
 
   if ((errno = raleighsl_sset_remove(fs, transaction, object, key, old_value)))
     return(errno);
@@ -747,41 +1033,41 @@ raleighsl_errno_t raleighsl_sset_remove (raleighsl_t *fs,
                                          z_bytes_ref_t *value)
 {
   raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
+  struct sset_entry entry;
   struct sset_node *node;
-  struct sset_txn *txn;
 
-  /* Verify that no other transaction is holding the key-lock */
-  txn = __sset_txn_has_lock(sset, key);
-  if (txn != NULL && (transaction != NULL && raleighsl_txn_id(transaction) != txn->txn_id))
-    return(RALEIGHSL_ERRNO_TXN_LOCKED_KEY);
-
-  if (txn != NULL) {
-    Z_ASSERT(txn->txn_id == raleighsl_txn_id(transaction), "TXN-ID Mismatch");
-    switch (txn->type) {
-      case SSET_TXN_INSERT:
-        __sset_txn_remove(sset, txn, 1);
-        break;
-      case SSET_TXN_UPDATE:
-      case SSET_TXN_REMOVE:
-        txn->type = SSET_TXN_REMOVE;
-        break;
-    }
-    return(RALEIGHSL_ERRNO_NONE);
-  }
-
-  /* Lookup Node */
+  /* Lookup key-node */
   node = __sset_node_lookup(sset, key);
   Z_ASSERT(node != NULL, "Unable to find a node");
-#if 0
-  /* Add to the transaction */
-  if (transaction != NULL) {
-    if (!__sset_node_search(node, key, value))
-      return(RALEIGHSL_ERRNO_DATA_KEY_NOT_FOUND);
-    return(__sset_txn_add(fs, object, transaction, SSET_TXN_REMOVE, entry));
+
+  /* Lookup the key - TODO: Search just in-memory */
+  if (!__sset_node_mem_search(node, key, 1, &entry)) {
+    /*
+     * TODO: May be on disk?
+     *       if we don't need to validate the key, just add it to the rm_keys
+     *       otherwise, send I/O Request and return an IO_RETRY.
+     */
+    return(RALEIGHSL_ERRNO_DATA_KEY_NOT_FOUND);
   }
-#endif
-  /* Apply directly to the table */
-  return(__sset_apply_remove(sset, node, key, value));
+
+  /* if the item-txn is owned by someone else, fail the current-txn */
+  if (__sset_txn_key_locked(entry.txn, transaction))
+    return(RALEIGHSL_ERRNO_TXN_LOCKED_KEY);
+
+  /* Acquire value for the user */
+  z_bytes_ref_acquire(value, entry.value);
+
+  /* if I'm the owner of the TXN, just replace the value */
+  if (Z_UNLIKELY(entry.txn != NULL))
+    return(__sset_txn_update(fs, transaction, object, entry.txn, SSET_TXN_REMOVE, NULL, NULL));
+
+  /* Allocate the new rm-key item */
+  entry.item = __sset_item_alloc(key, NULL, 1);
+  if (Z_MALLOC_IS_NULL(entry.item))
+    return(RALEIGHSL_ERRNO_NO_MEMORY);
+
+  /* Add to the transaction */
+  return(__sset_txn_add(fs, transaction, object, node, SSET_TXN_REMOVE, entry.item));
 }
 
 /* ============================================================================
@@ -794,26 +1080,31 @@ raleighsl_errno_t raleighsl_sset_get (raleighsl_t *fs,
                                       z_bytes_ref_t *value)
 {
   raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
+  struct sset_entry entry;
   struct sset_node *node;
 
-  if (transaction != NULL) {
-    struct sset_txn *txn;
-    txn = __sset_txn_has_lock(sset, key);
-    if (txn != NULL && txn->txn_id == raleighsl_txn_id(transaction)) {
-      if (txn->type == SSET_TXN_REMOVE)
-        return(RALEIGHSL_ERRNO_DATA_KEY_NOT_FOUND);
-
-      z_bytes_ref_acquire(value, &(txn->entry->value));
-      return(RALEIGHSL_ERRNO_NONE);
-    }
-  }
-
-  /* Lookup Node */
+  /* Lookup key-node */
   node = __sset_node_lookup(sset, key);
   Z_ASSERT(node != NULL, "Unable to find a node");
 
-  if (!__sset_node_search(node, key, value))
+  /* Lookup the key - TODO: Search just in-memory */
+  if (!__sset_node_mem_search(node, key, 0, &entry)) {
+    /* TODO: May be on disk? Send I/O Request and return an IO_RETRY */
     return(RALEIGHSL_ERRNO_DATA_KEY_NOT_FOUND);
+  }
+
+  if (__sset_txn_is_current(entry.txn, transaction)) {
+    /* Acquire value for the user */
+    z_bytes_ref_acquire(value, entry.value);
+    return(RALEIGHSL_ERRNO_NONE);
+  }
+
+  if (entry.txn != NULL && entry.item == entry.txn->item)
+    return(RALEIGHSL_ERRNO_DATA_KEY_NOT_FOUND);
+
+  /* Acquire value for the user */
+  z_bytes_ref_acquire(value, entry.value);
+
   return(RALEIGHSL_ERRNO_NONE);
 }
 
@@ -827,74 +1118,71 @@ raleighsl_errno_t raleighsl_sset_scan (raleighsl_t *fs,
                                        z_array_t *values)
 {
   raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
-  z_skip_list_iterator_t iter_node;
   const z_byte_slice_t *key_slice;
-  struct sset_node *node;
+  const struct sset_node *node;
+  z_tree_iter_t iter_node;
 
-Z_TRACE_TIME(sset_scan, {
-  z_iterator_open(&iter_node, &(sset->skip_list));
-  if (key == NULL) {
+  z_tree_iter_open(&iter_node, sset->root);
+  if (z_bytes_ref_is_empty(key)) {
     key_slice = NULL;
-    node = __SSET_NODE(z_iterator_begin(&iter_node));
+    node = __sset_node_from_tree(z_tree_iter_begin(&iter_node));
   } else {
     key_slice = z_bytes_slice(key);
-    node = __SSET_NODE(z_iterator_seek_le(&iter_node, __sset_node_compare, key));
+    node = __sset_node_from_tree(z_tree_iter_seek_le(&iter_node, __sset_node_key_compare, key, NULL));
   }
 
   while (node != NULL && count > 0) {
-    struct sset_entry_map_iterator iter_mem;
-    z_bucket_iterator_t iter_block;
-    const z_map_entry_t *entry;
-    z_map_merger_t merger;
+    struct sset_node_iter iter_data;
 
-    z_map_merger_open(&merger);
-
-    if (node->block != NULL) {
-      z_bucket_iterator_open(&iter_block, &z_bucket_variable, node->block->data,
-                             &__sset_block_vtable_refs, node->block);
-      z_map_iterator_seek_to(Z_MAP_ITERATOR(&iter_block), key_slice, include_key);
-      z_map_merger_add(&merger, Z_MAP_ITERATOR(&iter_block));
+    __sset_node_iter_open(&iter_data, node, __sset_txn_id(transaction), key_slice, include_key);
+    while (count > 0 && __sset_node_iter_next(&iter_data) != NULL) {
+      z_bytes_ref_t *value_ref = z_array_push_back(values);
+      z_bytes_ref_t *key_ref = z_array_push_back(keys);
+      __sset_node_iter_get_refs(&iter_data, key_ref, value_ref);
+      --count;
     }
-
-    if (node->skip_list.size > 0) {
-      __sset_entry_map_open(&iter_mem, &(node->skip_list));
-      z_map_iterator_seek_to(Z_MAP_ITERATOR(&iter_mem), key_slice, include_key);
-      z_map_merger_add(&merger, Z_MAP_ITERATOR(&iter_mem));
-    }
-
-    while (count > 0 && (entry = z_map_merger_next(&merger)) != NULL) {
-      z_bytes_ref_t *value_ref;
-      z_bytes_ref_t *key_ref;
-
-      if (transaction != NULL) {
-        struct sset_txn *txn = __sset_txn_has_lock(sset, key);
-        if (txn != NULL && raleighsl_txn_id(transaction) == txn->txn_id) {
-          if (txn->type == SSET_TXN_REMOVE)
-            continue;
-
-          key_ref = z_array_push_back(keys);
-          value_ref = z_array_push_back(values);
-          z_bytes_ref_acquire(key_ref, &(txn->entry->key));
-          z_bytes_ref_acquire(value_ref, &(txn->entry->value));
-          count--;
-          continue;
-        }
-      }
-
-      key_ref = z_array_push_back(keys);
-      value_ref = z_array_push_back(values);
-      z_map_iterator_get_refs(merger.smallest_iter, key_ref, value_ref);
-      count--;
-    }
-    /* TODO: Close iter_block and iter_mem */
+    __sset_node_iter_close(&iter_data);
 
     key_slice = NULL;
-    node = __SSET_NODE(z_iterator_next(&iter_node));
+    node = __sset_node_from_tree(z_tree_iter_next(&iter_node));
   }
-  z_iterator_close(&iter_node);
-});
+
+  z_tree_iter_close(&iter_node);
   return(RALEIGHSL_ERRNO_NONE);
 }
+
+#if 0
+#include <zcl/writer.h>
+void __sset_node_dump(raleighsl_sset_t *sset, const struct sset_node *node) {
+  struct sset_node_iter iter_data;
+  const z_map_entry_t *entry;
+
+  __sset_node_iter_open(&iter_data, node, 0, NULL, 0);
+  while ((entry = __sset_node_iter_next(&iter_data)) != NULL) {
+    fprintf(stderr, "key:");
+    z_dump_byte_slice(stderr, &(entry->key));
+    fprintf(stderr, " value:");
+    z_dump_byte_slice(stderr, &(entry->value));
+    fprintf(stderr, "\n");
+  }
+  __sset_node_iter_close(&iter_data);
+}
+
+void __sset_dump(raleighsl_sset_t *sset, const struct sset_node *node) {
+  const struct sset_node *node;
+  fprintf(stderr, "============================================================\n");
+  fprintf(stderr, " DUMP NODES\n");
+  fprintf(stderr, "============================================================\n");
+  z_tree_iter_t iter_node;
+  z_tree_iter_open(&iter_node, sset->root);
+  node = __sset_node_from_tree(z_tree_iter_begin(&iter_node));
+  while (node != NULL) {
+    fprintf(stderr, "=================== NODE %p ===================\n", node);
+    __sset_node_dump(sset, node);
+    node = __sset_node_from_tree(z_tree_iter_next(&iter_node));
+  }
+}
+#endif
 
 /* ============================================================================
  *  SSet Object Plugin
@@ -903,32 +1191,37 @@ static raleighsl_errno_t __object_create (raleighsl_t *fs,
                                           raleighsl_object_t *object)
 {
   raleighsl_sset_t *sset;
+  struct sset_node *node;
+
+  Z_LOG_INFO("sset-item  %ld", z_sizeof(struct sset_item));
+  Z_LOG_INFO("sset-txn   %ld", z_sizeof(struct sset_txn));
+  Z_LOG_INFO("sset-txn-t %ld", z_sizeof(enum sset_txn_type));
+  Z_LOG_INFO("sset-block %ld", z_sizeof(struct sset_block));
+  Z_LOG_INFO("sset-node  %ld", z_sizeof(struct sset_node));
+  Z_LOG_INFO("sset-entry %ld", z_sizeof(struct sset_entry));
+  Z_LOG_INFO("sset       %ld", z_sizeof(raleighsl_sset_t));
 
   sset = z_memory_struct_alloc(z_global_memory(), raleighsl_sset_t);
   if (Z_MALLOC_IS_NULL(sset))
     return(RALEIGHSL_ERRNO_NO_MEMORY);
 
-  if (z_skip_list_alloc(&(sset->skip_list),
-                        __sset_node_compare, __sset_node_free,
-                        sset, (size_t)object) == NULL)
-  {
+  /* Initialize Root Node */
+  node = __sset_node_alloc(NULL);
+  if (Z_MALLOC_IS_NULL(node)) {
     z_memory_struct_free(z_global_memory(), raleighsl_sset_t, sset);
     return(RALEIGHSL_ERRNO_NO_MEMORY);
   }
 
-  /* TODO */
-  z_skip_list_put_direct(&(sset->skip_list), __sset_node_alloc(sset, NULL));
+  /* Attach the Root node */
+  sset->root = NULL;
+  __sset_node_attach(sset, node);
 
-  if (z_skip_list_alloc(&(sset->txn_locks),
-                        __sset_txn_compare, __sset_txn_free,
-                        sset, (size_t)object) == NULL)
-  {
-    z_skip_list_free(&(sset->skip_list));
-    z_memory_struct_free(z_global_memory(), raleighsl_sset_t, sset);
-    return(RALEIGHSL_ERRNO_NO_MEMORY);
-  }
-
+  /* Initialize the dirty-queue */
+  z_dlink_init(&(sset->txnq));
   z_dlink_init(&(sset->dirtyq));
+
+  z_dlink_init(&(sset->rm_nodes));
+  z_dlink_init(&(sset->add_nodes));
 
   object->membufs = sset;
   return(RALEIGHSL_ERRNO_NONE);
@@ -938,48 +1231,29 @@ static raleighsl_errno_t __object_close (raleighsl_t *fs,
                                          raleighsl_object_t *object)
 {
   raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
-  z_skip_list_free(&(sset->txn_locks));
-  z_skip_list_free(&(sset->skip_list));
+  z_tree_node_clear(&__sset_node_tree_info, sset->root, NULL);
   z_memory_struct_free(z_global_memory(), raleighsl_sset_t, sset);
   return(RALEIGHSL_ERRNO_NONE);
 }
 
-static raleighsl_errno_t __object_apply (raleighsl_t *fs,
-                                         raleighsl_object_t *object,
-                                         void *mutation)
+static void __object_apply (raleighsl_t *fs,
+                            raleighsl_object_t *object,
+                            raleighsl_txn_atom_t *atom)
 {
+  struct sset_txn *txn = z_container_of(atom, struct sset_txn, __txn_atom__);
   raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
-  struct sset_txn *txn = (struct sset_txn *)mutation;
-  raleighsl_errno_t errno;
 
-  switch (txn->type) {
-    case SSET_TXN_INSERT:
-      errno = __sset_apply_insert(sset, txn->entry->node, txn->entry);
-      break;
-    case SSET_TXN_UPDATE:
-      errno = __sset_apply_update(sset, txn->entry->node, txn->entry);
-      break;
-    case SSET_TXN_REMOVE:
-      errno = __sset_apply_remove(sset, txn->entry->node, &(txn->entry->key), NULL);
-      break;
-    default:
-      errno = RALEIGHSL_ERRNO_NOT_IMPLEMENTED;
-      Z_LOG_WARN("Unknown sset_txn->type=%d", txn->type);
-      break;
-  }
-
-  __sset_txn_remove(sset, txn, 0);
-  return(errno);
+  z_dlink_move(&(sset->dirtyq), &(txn->node->dirtyq));
+  z_dlink_add_tail(&(txn->node->commitq), &(txn->commitq));
 }
 
-static raleighsl_errno_t __object_revert (raleighsl_t *fs,
-                                          raleighsl_object_t *object,
-                                          void *mutation)
+static void __object_revert (raleighsl_t *fs,
+                             raleighsl_object_t *object,
+                             raleighsl_txn_atom_t *atom)
 {
+  struct sset_txn *txn = z_container_of(atom, struct sset_txn, __txn_atom__);
   raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
-  struct sset_txn *txn = (struct sset_txn *)mutation;
-  __sset_txn_remove(sset, txn, 1);
-  return(RALEIGHSL_ERRNO_NONE);
+  __sset_txn_revert(sset, txn);
 }
 
 static raleighsl_errno_t __object_commit (raleighsl_t *fs,
@@ -987,71 +1261,102 @@ static raleighsl_errno_t __object_commit (raleighsl_t *fs,
 {
   raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
   struct sset_node *node;
-  int do_flush = 0;
+  struct sset_txn *txn;
 
-  z_dlink_for_each_entry(&(sset->dirtyq), node, struct sset_node, dirtyq, {
-    z_skip_list_commit(&(node->skip_list));
-    do_flush |= (node->bufsize >= __SSET_SYNC_SIZE);
+  /* Detach old nodes */
+  z_dlink_del_for_each_entry(&(sset->rm_nodes), node, struct sset_node, commitq, {
+    z_tree_node_t *dnode = __sset_node_detach(sset, node);
+    Z_ASSERT(dnode == &(node->__node__), "NOT DETACHD %p", dnode);
+    __sset_node_free(sset, node);
   });
 
-  if (do_flush)
-    object->plug->sync(fs, object);
+  /* Attach new nodes */
+  z_dlink_del_for_each_entry(&(sset->add_nodes), node, struct sset_node, commitq, {
+    __sset_node_attach(sset, node);
+    object->requires_balancing = 0;
+  });
+
+  /* Apply the pending txn-atom write */
+  z_dlink_del_for_each_entry(&(sset->txnq), txn, struct sset_txn, commitq, {
+    __sset_txn_commit(sset, txn);
+  });
+
+  /* TODO: Write to Journal */
+  Z_LOG_WARN("TODO: Write to Journal");
+
+  /* Apply commits - [Point of No Return] */
+  z_dlink_del_for_each_entry(&(sset->dirtyq), node, struct sset_node, dirtyq, {
+    z_dlink_del_for_each_entry(&(node->commitq), txn, struct sset_txn, commitq, {
+      __sset_txn_apply(sset, txn);
+    });
+  });
+
   return(RALEIGHSL_ERRNO_NONE);
 }
 
-static raleighsl_errno_t __object_rollback (raleighsl_t *fs,
-                                            raleighsl_object_t *object)
+static raleighsl_errno_t __object_balance (raleighsl_t *fs,
+                                           raleighsl_object_t *object)
 {
   raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
-  z_skip_list_rollback(&(sset->skip_list));
+  struct sset_block *block;
+  z_tree_iter_t iter_node;
+  struct sset_node *node;
+  z_dlink_node_t blkseq;
+
+  Z_ASSERT(z_dlink_is_empty(&(sset->txnq)), "there are pending commits for the txns");
+  Z_ASSERT(z_dlink_is_empty(&(sset->dirtyq)), "there are pending commits for the nodes");
+
+  /* Build new blocks */
+  z_dlink_init(&blkseq);
+  z_tree_iter_open(&iter_node, sset->root);
+  node = __sset_node_from_tree(z_tree_iter_begin(&iter_node));
+  while (node != NULL) {
+    if (__sset_node_requires_balance(node)) {
+      if (__sset_node_balance(node, &blkseq)) {
+        z_dlink_add_tail(&(sset->rm_nodes), &(node->commitq));
+      }
+    }
+    node = __sset_node_from_tree(z_tree_iter_next(&iter_node));
+  }
+  z_tree_iter_close(&iter_node);
+
+  /* quick exit, nothing to do */
+  if (z_dlink_is_empty(&blkseq)) {
+    object->requires_balancing = 0;
+    return(RALEIGHSL_ERRNO_NONE);
+  }
+
+  /* TODO: Merge small blocks */
+  Z_LOG_TRACE("TODO: BALANCE!");
+
+  /* Build new nodes */
+  z_dlink_del_for_each_entry(&blkseq, block, struct sset_block, blkseq, {
+    node = __sset_node_alloc(block);
+    if (Z_MALLOC_IS_NULL(node))
+      break;
+    z_dlink_add_tail(&(sset->add_nodes), &(node->commitq));
+  });
+
+  if (Z_UNLIKELY(z_dlink_is_not_empty(&blkseq))) {
+    /* Remove new blocks */
+    z_dlink_del_for_each_entry(&blkseq, block, struct sset_block, blkseq, {
+      __sset_block_free(block);
+    });
+    /* Remove new nodes */
+    z_dlink_del_for_each_entry(&(sset->add_nodes), node, struct sset_node, commitq, {
+      __sset_node_free(sset, node);
+    });
+    /* Reset rm_nodes list */
+    z_dlink_init(&(sset->rm_nodes));
+    return(RALEIGHSL_ERRNO_NO_MEMORY);
+  }
+
   return(RALEIGHSL_ERRNO_NONE);
 }
 
 static raleighsl_errno_t __object_sync (raleighsl_t *fs,
                                         raleighsl_object_t *object)
 {
-  raleighsl_sset_t *sset = RALEIGHSL_SSET(object->membufs);
-  struct sset_node *node;
-  int has_empty_node = 1;
-  z_dlink_node_t blkseq;
-
-  z_dlink_init(&blkseq);
-
-Z_TRACE_TIME(sset_sync, {
-  Z_LOG_TRACE("==============================================================");
-  Z_LOG_TRACE("BLOCKS %u", sset->skip_list.size);
-  z_dlink_del_for_each_entry(&(sset->dirtyq), node, struct sset_node, dirtyq, {
-    if (node->bufsize >= __SSET_SYNC_SIZE) {
-      __sset_node_sync(sset, &blkseq, node);
-      has_empty_node &= z_byte_slice_is_not_empty(&(node->key.slice));
-      z_skip_list_remove_direct(&(sset->skip_list), __sset_node_compare, node);
-    }
-  });
-
-  /* TODO: squeeze */
-
-  /* Push back blocks on the list */
-  Z_LOG_TRACE("Replace blocks");
-  {
-    /* Add the Replacement nodes */
-    struct sset_block *block;
-    z_dlink_del_for_each_entry(&blkseq, block, struct sset_block, blkseq, {
-      struct sset_node *node;
-
-      node = __sset_node_alloc(sset, block);
-      __sset_block_debug(block);
-      z_skip_list_put_direct(&(sset->skip_list), node);
-    });
-
-    /* Add an empty node */
-    if (!has_empty_node) {
-      node = __sset_node_alloc(sset, NULL);
-      z_skip_list_put_direct(&(sset->skip_list), node);
-    }
-  }
-  Z_LOG_TRACE("==============================================================");
-});
-
   return(RALEIGHSL_ERRNO_NONE);
 }
 
@@ -1065,10 +1370,12 @@ const raleighsl_object_plug_t raleighsl_object_sset = {
   .create   = __object_create,
   .open     = NULL,
   .close    = __object_close,
-  .commit   = __object_commit,
-  .rollback = __object_rollback,
-  .sync     = __object_sync,
   .unlink   = NULL,
+
   .apply    = __object_apply,
   .revert   = __object_revert,
+  .commit   = __object_commit,
+
+  .balance  = __object_balance,
+  .sync     = __object_sync,
 };

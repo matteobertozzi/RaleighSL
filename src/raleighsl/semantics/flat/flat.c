@@ -12,55 +12,27 @@
  *   limitations under the License.
  */
 
-#include <zcl/skiplist.h>
 #include <zcl/global.h>
 #include <zcl/hash.h>
 #include <zcl/debug.h>
 #include <zcl/bytes.h>
 
+#include <raleighsl/objects/sset.h>
 #include "flat.h"
 
 struct object_entry {
   uint64_t oid;
-  uint8_t key[32];
+  uint8_t  key[32];
+  unsigned int refs;
 };
 
-#define __semantic_table(fs)      Z_CAST(z_skip_list_t, (fs)->semantic.membufs)
+#define __OBJECT_ENTRY(x)         Z_CAST(struct object_entry, x)
 
 /* ============================================================================
  *  PRIVATE Object Entry Macros
  */
 #define __name_to_key(key, name)                                              \
   z_hash256_sha(key, (name)->slice.data, (name)->slice.size)
-
-#define __object_entry_get_func(func, fs, key)                                \
-  (Z_CAST(struct object_entry, func(__semantic_table(fs),                     \
-                                    __object_entry_name_compare, key)))
-
-#define __object_entry_lookup(fs, key)                                        \
-  __object_entry_get_func(z_skip_list_get_custom, fs, key)
-
-#define __object_entry_remove(fs, key)                                        \
-  __object_entry_get_func(z_skip_list_remove_custom, fs, key)
-
-/* ============================================================================
- *  PRIVATE Object Entry methods
- */
-static int __object_entry_compare (void *udata, const void *a, const void *b) {
-  const struct object_entry *ea = (const struct object_entry *)a;
-  const struct object_entry *eb = (const struct object_entry *)b;
-  return(z_memcmp(ea->key, eb->key, 32));
-}
-
-static int __object_entry_name_compare (void *udata, const void *a, const void *key) {
-  const struct object_entry *entry = (const struct object_entry *)a;
-  return(z_memcmp(entry->key, key, 32));
-}
-
-static void __object_entry_free (void *udata, void *obj) {
-  struct object_entry *entry = (struct object_entry *)obj;
-  z_memory_struct_free(z_global_memory(), struct object_entry, entry);
-}
 
 static struct object_entry *__object_entry_alloc (const z_bytes_ref_t *name, uint64_t oid) {
   struct object_entry *entry;
@@ -71,92 +43,157 @@ static struct object_entry *__object_entry_alloc (const z_bytes_ref_t *name, uin
 
   entry->oid = oid;
   __name_to_key(entry->key, name);
+  entry->refs = 1;
   return(entry);
 }
+
+static void __sset_block_inc_ref (void *object) {
+  z_atomic_inc(&(__OBJECT_ENTRY(object)->refs));
+}
+
+static void __sset_block_dec_ref (void *object) {
+  if (z_atomic_dec(&(__OBJECT_ENTRY(object)->refs)) == 0) {
+    z_memory_struct_free(z_global_memory(), struct object_entry, object);
+  }
+}
+
+static const z_vtable_refs_t __entry_vtable_refs = {
+  .inc_ref = __sset_block_inc_ref,
+  .dec_ref = __sset_block_dec_ref,
+};
 
 /* ============================================================================
  *  Flat Semantic Plugin
  */
-raleighsl_errno_t __semantic_init (raleighsl_t *fs) {
-  z_skip_list_t *table;
+static raleighsl_errno_t __semantic_init (raleighsl_t *fs) {
+  raleighsl_errno_t errno;
 
-  table = z_skip_list_alloc(NULL, __object_entry_compare, __object_entry_free, fs, (size_t)fs);
-  if (Z_MALLOC_IS_NULL(table)) {
+  errno = raleighsl_object_create(fs, &raleighsl_object_sset, RALEIGHSL_ROOT_OID);
+  if (errno) return(errno);
+
+  fs->semantic.root = raleighsl_obj_cache_get(fs, RALEIGHSL_ROOT_OID);
+  if (Z_UNLIKELY(fs->semantic.root == NULL)) {
     return(RALEIGHSL_ERRNO_NO_MEMORY);
   }
 
-  fs->semantic.membufs = table;
   return(RALEIGHSL_ERRNO_NONE);
 }
 
-raleighsl_errno_t __semantic_load (raleighsl_t *fs) {
+static raleighsl_errno_t __semantic_load (raleighsl_t *fs) {
+  raleighsl_errno_t errno;
+
+  fs->semantic.root = raleighsl_obj_cache_get(fs, RALEIGHSL_ROOT_OID);
+  if (Z_UNLIKELY(fs->semantic.root == NULL))
+    return(RALEIGHSL_ERRNO_NO_MEMORY);
+
+  if ((errno = raleighsl_object_open(fs, fs->semantic.root))) {
+    raleighsl_obj_cache_release(fs, fs->semantic.root);
+    return(errno);
+  }
+
   return(RALEIGHSL_ERRNO_NONE);
 }
 
-raleighsl_errno_t __semantic_unload (raleighsl_t *fs) {
-  z_skip_list_free(__semantic_table(fs));
+static raleighsl_errno_t __semantic_unload (raleighsl_t *fs) {
+  raleighsl_obj_cache_release(fs, fs->semantic.root);
   return(RALEIGHSL_ERRNO_NONE);
 }
 
-raleighsl_errno_t __semantic_commit (raleighsl_t *fs) {
-  z_skip_list_commit(__semantic_table(fs));
-  return(RALEIGHSL_ERRNO_NONE);
+static raleighsl_errno_t __semantic_commit (raleighsl_t *fs) {
+  return(fs->semantic.root->plug->commit(fs, fs->semantic.root));
 }
 
-raleighsl_errno_t __semantic_rollback (raleighsl_t *fs) {
-  z_skip_list_rollback(__semantic_table(fs));
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-raleighsl_errno_t __semantic_create (raleighsl_t *fs,
-                                     const z_bytes_ref_t *name,
-                                     uint64_t oid)
+static raleighsl_errno_t __semantic_create (raleighsl_t *fs,
+                                            const z_bytes_ref_t *name,
+                                            uint64_t oid)
 {
   struct object_entry *entry;
+  raleighsl_errno_t errno;
+  z_bytes_ref_t value;
+  z_bytes_ref_t key;
 
   entry = __object_entry_alloc(name, oid);
   if (Z_MALLOC_IS_NULL(entry)) {
     return(RALEIGHSL_ERRNO_NO_MEMORY);
   }
 
-  if (z_skip_list_put(__semantic_table(fs), entry)) {
-    __object_entry_free(fs, entry);
+  z_bytes_ref_set_data(&key, entry->key, 32, &__entry_vtable_refs, entry);
+  z_bytes_ref_set_data(&value, &(entry->oid), 8, &__entry_vtable_refs, entry);
+  errno = raleighsl_sset_insert(fs, NULL, fs->semantic.root, 0, &key, &value);
+  switch (errno) {
+    case RALEIGHSL_ERRNO_NONE:
+      break;
+    case RALEIGHSL_ERRNO_DATA_KEY_EXISTS:
+      z_bytes_ref_release(&key);
+      return(RALEIGHSL_ERRNO_OBJECT_EXISTS);
+    default:
+      z_bytes_ref_release(&key);
+      return(errno);
+  }
+
+  z_bytes_ref_release(&key);
+  return(errno);
+}
+
+static raleighsl_errno_t __semantic_lookup (raleighsl_t *fs,
+                                            const z_bytes_ref_t *name,
+                                            uint64_t *oid)
+{
+  raleighsl_errno_t errno;
+  z_bytes_ref_t key_ref;
+  z_bytes_ref_t value;
+  uint8_t key[32];
+
+  __name_to_key(key, name);
+  z_bytes_ref_set_data(&key_ref, key, 32, NULL, NULL);
+
+  errno = raleighsl_sset_get(fs, NULL, fs->semantic.root, &key_ref, &value);
+  switch (errno) {
+    case RALEIGHSL_ERRNO_NONE:
+      break;
+    case RALEIGHSL_ERRNO_DATA_KEY_NOT_FOUND:
+      return(RALEIGHSL_ERRNO_OBJECT_NOT_FOUND);
+    default:
+      return(errno);
+  }
+
+  Z_ASSERT(value.slice.size == 8, "Expected uint64_t found %u bytes", value.slice.size);
+  z_memcpy(oid, value.slice.data, 8);
+  z_bytes_ref_release(&value);
+  return(RALEIGHSL_ERRNO_NONE);
+}
+
+static raleighsl_errno_t __semantic_unlink (raleighsl_t *fs,
+                                            const z_bytes_ref_t *name,
+                                            uint64_t *oid)
+{
+  struct object_entry *entry;
+  raleighsl_errno_t errno;
+  z_bytes_ref_t value;
+  z_bytes_ref_t key;
+
+  entry = __object_entry_alloc(name, 0);
+  if (Z_MALLOC_IS_NULL(entry)) {
     return(RALEIGHSL_ERRNO_NO_MEMORY);
   }
 
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-raleighsl_errno_t __semantic_lookup (raleighsl_t *fs,
-                                     const z_bytes_ref_t *name,
-                                     uint64_t *oid)
-{
-  struct object_entry *entry;
-  uint8_t key[32];
-
-  __name_to_key(key, name);
-  if ((entry = __object_entry_lookup(fs, key)) == NULL) {
-    return(RALEIGHSL_ERRNO_OBJECT_NOT_FOUND);
+  z_bytes_ref_set_data(&key, entry->key, 32, &__entry_vtable_refs, entry);
+  errno = raleighsl_sset_remove(fs, NULL, fs->semantic.root, &key, &value);
+  switch (errno) {
+    case RALEIGHSL_ERRNO_NONE:
+      break;
+    case RALEIGHSL_ERRNO_DATA_KEY_NOT_FOUND:
+      z_bytes_ref_release(&key);
+      return(RALEIGHSL_ERRNO_OBJECT_NOT_FOUND);
+    default:
+      z_bytes_ref_release(&key);
+      return(errno);
   }
 
-  *oid = entry->oid;
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-raleighsl_errno_t __semantic_unlink (raleighsl_t *fs,
-                                     const z_bytes_ref_t *name,
-                                     uint64_t *oid)
-{
-  struct object_entry *entry;
-  uint8_t key[32];
-
-  __name_to_key(key, name);
-  entry = __object_entry_remove(fs, key);
-  if (entry == NULL) {
-    return(RALEIGHSL_ERRNO_OBJECT_NOT_FOUND);
-  }
-
-  *oid = entry->oid;
+  Z_ASSERT(value.slice.size == 8, "Expected uint64_t found %u bytes", value.slice.size);
+  z_memcpy(oid, value.slice.data, 8);
+  z_bytes_ref_release(&key);
+  z_bytes_ref_release(&value);
   return(RALEIGHSL_ERRNO_NONE);
 }
 
@@ -172,7 +209,6 @@ const raleighsl_semantic_plug_t raleighsl_semantic_flat = {
   .unload   = __semantic_unload,
   .sync     = NULL,
   .commit   = __semantic_commit,
-  .rollback = __semantic_rollback,
 
   .create   = __semantic_create,
   .lookup   = __semantic_lookup,

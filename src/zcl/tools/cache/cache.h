@@ -22,9 +22,6 @@ __Z_BEGIN_DECLS__
 #include <zcl/dlink.h>
 #include <stdio.h>
 
-#define __Z_CACHE_ENTRY__               z_cache_entry_t __cache_entry__;
-
-#define Z_CACHE_ENTRY(x)                Z_CAST(z_cache_entry_t, x)
 #define Z_CACHE(x)                      Z_CAST(z_cache_t, x)
 
 Z_TYPEDEF_ENUM(z_cache_type)
@@ -65,7 +62,7 @@ struct z_cache_policy {
   z_cache_type_t type;
 };
 
-#define z_cache_entry_oid(entry)     (Z_CACHE_ENTRY(entry)->oid)
+#define z_cache_entry_oid(entry)     ((entry)->oid)
 
 void              z_cache_entry_init (z_cache_entry_t *entry,
                                       uint64_t oid);
@@ -80,6 +77,7 @@ void              z_cache_release    (z_cache_t *cache, z_cache_entry_t *entry);
 z_cache_entry_t * z_cache_try_insert (z_cache_t *cache, z_cache_entry_t *entry);
 z_cache_entry_t * z_cache_lookup     (z_cache_t *cache, uint64_t oid);
 z_cache_entry_t * z_cache_remove     (z_cache_t *cache, uint64_t oid);
+void              z_cache_reclaim    (z_cache_t *cache, unsigned int capacity);
 void              z_cache_dump       (FILE *stream, z_cache_t *cache);
 __Z_END_DECLS__
 

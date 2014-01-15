@@ -166,7 +166,7 @@ static const z_expr_t *__eval_string_number_op (z_expr_binary_type_t operation,
 #define __expr_is_true(expr)     ((expr)->type == Z_EXPR_TYPE_INT && (expr)->d.integer)
 
 static const z_expr_t *__eval_function (const z_expr_function_t *expr,
-                                        const z_tree_node_t *vars,
+                                        z_tree_node_t *vars,
                                         z_expr_t *result)
 {
   /* Never reached */
@@ -174,7 +174,7 @@ static const z_expr_t *__eval_function (const z_expr_function_t *expr,
 }
 
 static const z_expr_t *__eval_unary_op (const z_expr_unary_t *expr,
-                                        const z_tree_node_t *vars,
+                                        z_tree_node_t *vars,
                                         z_expr_t *result)
 {
   const z_expr_t *operand;
@@ -190,7 +190,7 @@ static const z_expr_t *__eval_unary_op (const z_expr_unary_t *expr,
 }
 
 static const z_expr_t *__eval_binary_op (const z_expr_binary_t *expr,
-                                         const z_tree_node_t *vars,
+                                         z_tree_node_t *vars,
                                          z_expr_t *result)
 {
   const z_expr_t *right;
@@ -246,7 +246,7 @@ static const z_expr_t *__eval_binary_op (const z_expr_binary_t *expr,
  *  PUBLIC evaluate methods
  */
 const z_expr_t *z_expr_evaluate (const z_expr_t *expr,
-                                 const z_tree_node_t *vars,
+                                 z_tree_node_t *vars,
                                  z_expr_t *result)
 {
   const z_expr_variable_t *var;

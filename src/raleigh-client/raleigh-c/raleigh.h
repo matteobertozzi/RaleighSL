@@ -17,14 +17,16 @@
 #ifndef _RALEIGH_CLIENT_H_
 #define _RALEIGH_CLIENT_H_
 
-#define RALEIGH_CLIENT(x)           Z_CAST(raleigh_client_t, x)
+#define RALEIGH_CLIENT(x)             Z_CAST(raleigh_client_t, x)
 
 typedef struct raleigh_client raleigh_client_t;
 
 int  raleigh_initialize   (void);
 void raleigh_uninitialize (void);
 
-raleigh_client_t *raleigh_tcp_connect (const char *address, const char *port, int async);
+raleigh_client_t *raleigh_connect      (int sock, int async);
+raleigh_client_t *raleigh_tcp_connect  (const char *address, const char *port, int async);
+raleigh_client_t *raleigh_unix_connect (const char *address, int async);
 
 typedef void (*raleigh_ping_t) (void *udata);
 int raleigh_ping_async (raleigh_client_t *self, raleigh_ping_t callback, void *udata);

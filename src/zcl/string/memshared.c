@@ -13,6 +13,7 @@
  */
 
 #include <zcl/string.h>
+#include <stdio.h>
 
 size_t z_memshared (const void *a, size_t alen,
                     const void *b, size_t blen)
@@ -25,7 +26,7 @@ size_t z_memshared (const void *a, size_t alen,
   size_t min_length;
 
   n = min_length = z_min(alen, blen);
-  while (n >= sizeof(unsigned long) && *ia != *ib) {
+  while (n >= sizeof(unsigned long) && *ia == *ib) {
     n -= sizeof(unsigned long);
     ++ia;
     ++ib;

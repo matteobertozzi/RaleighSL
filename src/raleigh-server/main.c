@@ -16,6 +16,7 @@
 
 #include <zcl/global.h>
 #include <zcl/iopoll.h>
+#include <zcl/debug.h>
 
 #include <signal.h>
 #include <stdio.h>
@@ -33,7 +34,7 @@ static int __raleighsl_open (void) {
   raleighsl_errno_t errno;
 
   if (raleighsl_alloc(fs) == NULL) {
-    fprintf(stderr, "raleighsl: allocatin failed\n");
+    Z_LOG_FATAL("raleighsl: allocatin failed\n");
     return(1);
   }
 
@@ -50,7 +51,7 @@ static int __raleighsl_open (void) {
   raleighsl_device_t *device = NULL;
 
   if ((errno = raleighsl_create(fs, device, format, space, semantic))) {
-    fprintf(stderr, "raleighsl: %s\n", raleighsl_errno_string(errno));
+    Z_LOG_FATAL("raleighsl: %s\n", raleighsl_errno_string(errno));
     raleighsl_free(fs);
     return(2);
   }
@@ -63,8 +64,17 @@ static void __raleighsl_close (void) {
   raleighsl_free(&(__global_ctx.fs));
 }
 
+static void __unplug_ipc (z_ipc_server_t *servers[], int n) {
+  while (n--) {
+    z_ipc_unplug(&(__global_ctx.iopoll), servers[n]);
+  }
+}
+
 int main (int argc, char **argv) {
-  z_ipc_server_t *server[4];
+  z_ipc_server_t *tcp_server[4];
+#ifdef Z_SOCKET_HAS_UNIX
+  //z_ipc_server_t *unix_server[1];
+#endif /* Z_SOCKET_HAS_UNIX */
 
   /* Initialize signals */
   signal(SIGINT, __signal_handler);
@@ -82,7 +92,7 @@ int main (int argc, char **argv) {
 
   /* Initialize I/O Poll */
   if (z_iopoll_open(&(__global_ctx.iopoll), NULL, 0)) {
-    fprintf(stderr, "z_iopoll_open(): failed\n");
+    Z_LOG_FATAL("z_iopoll_open(): failed\n");
     z_global_context_close();
     z_allocator_close(&(__global_ctx.allocator));
     return(1);
@@ -97,19 +107,23 @@ int main (int argc, char **argv) {
   }
 
   /* Setup RPC plugins */
-  server[0] = z_ipc_echo_plug(&(__global_ctx.iopoll),  NULL, "11212", &__global_ctx);
-  server[1] = z_ipc_redis_plug(&(__global_ctx.iopoll), NULL, "11213", &__global_ctx);
-  server[2] = z_ipc_stats_plug(&(__global_ctx.iopoll), NULL, "11217", &__global_ctx);
-  server[3] = z_ipc_raleighsl_plug(&(__global_ctx.iopoll), NULL, "11215", &__global_ctx);
+  tcp_server[0] = z_raleighsl_tcp_plug(&(__global_ctx.iopoll), NULL, "11215", &__global_ctx);
+  tcp_server[1] = z_echo_tcp_plug(&(__global_ctx.iopoll),  NULL, "11212", &__global_ctx);
+  tcp_server[2] = z_redis_tcp_plug(&(__global_ctx.iopoll), NULL, "11213", &__global_ctx);
+  tcp_server[3] = z_stats_tcp_plug(&(__global_ctx.iopoll), NULL, "11217", &__global_ctx);
+
+#ifdef Z_SOCKET_HAS_UNIX
+  //unix_server[0] = z_raleighsl_unix_plug(&(__global_ctx.iopoll), "raleighsl.sock", &__global_ctx);
+#endif /* Z_SOCKET_HAS_UNIX */
 
   /* Start spinning... */
   z_iopoll_poll(&(__global_ctx.iopoll), 0, &(__global_ctx.is_running), 2000);
 
   /* ...and we're done */
-  z_ipc_unplug(&(__global_ctx.iopoll), server[3]);
-  z_ipc_unplug(&(__global_ctx.iopoll), server[2]);
-  z_ipc_unplug(&(__global_ctx.iopoll), server[1]);
-  z_ipc_unplug(&(__global_ctx.iopoll), server[0]);
+  __unplug_ipc(tcp_server, 4);
+#ifdef Z_SOCKET_HAS_UNIX
+  //__unplug_ipc(unix_server, 1);
+#endif /* Z_SOCKET_HAS_UNIX */
 
   __raleighsl_close();
   z_iopoll_close(&(__global_ctx.iopoll));

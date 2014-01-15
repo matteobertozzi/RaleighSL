@@ -18,6 +18,7 @@
 #include <zcl/buffer.h>
 #include <zcl/iopoll.h>
 #include <zcl/iovec.h>
+#include <zcl/fd.h>
 
 #include "generated/rpc.h"
 #include "raleigh.h"
@@ -39,18 +40,23 @@ static int __parse_head (const unsigned char *buffer, size_t bufsize, struct rpc
   uint8_t len[2];
   uint32_t magic;
 
+  if (Z_UNLIKELY(bufsize < 8)) {
+    fprintf(stderr, "Expected at least 8 bytes for the rpc-header, got %zu\n", bufsize);
+    return(-1);
+  }
+
   version        = buffer[0];
   head->msg_size = buffer[1] | buffer[2] << 8 | buffer[3] << 16;
   magic          = buffer[4] | buffer[5] << 8 | buffer[6] << 16 | buffer[7] << 24;
 
   if (Z_UNLIKELY(version != 0)) {
     fprintf(stderr, "Invalid Version %"PRIu8, version);
-    return(-1);
+    return(-2);
   }
 
   if (Z_UNLIKELY(magic != 0xaacc33d5)) {
     fprintf(stderr, "Invalid Magic %"PRIx32"\n", magic);
-    return(-2);
+    return(-3);
   }
 
   len[0] = 1 + z_fetch_3bit(buffer[8], 5);
@@ -64,7 +70,7 @@ static int __parse_head (const unsigned char *buffer, size_t bufsize, struct rpc
   if (Z_UNLIKELY(bufsize != (8 + head->msg_size))) {
     fprintf(stderr, "Response length doesn't match %zu - head_len=%"PRIu8" msg_len=%"PRIu32"\n",
                     bufsize, head_len, head->msg_size);
-    return(-3);
+    return(-4);
   }
 
   return(head_len);
@@ -119,8 +125,7 @@ static ssize_t __send_message(int fd, uint64_t msg_type, uint64_t req_id, void *
   iov[2].iov_base = buf;
   iov[2].iov_len  = bufsize;
 
-  /* TODO: loop */
-  return(writev(fd, iov, 3));
+  return(z_fd_writev(fd, iov, 3));
 }
 #endif
 
@@ -162,7 +167,7 @@ int raleigh_ping (raleigh_client_t *self) {
   server_ping_request_free(&req);
 
   /* TODO: loop */
-  rd = read(Z_IOPOLL_ENTITY_FD(self), buffer, sizeof(buffer));
+  rd = z_fd_read(Z_IOPOLL_ENTITY_FD(self), buffer, sizeof(buffer));
   if (Z_UNLIKELY(rd < 0)) {
     perror("read()");
     return(1);

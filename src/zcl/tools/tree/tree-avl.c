@@ -45,7 +45,8 @@ struct avl_remove_data {
 static z_tree_node_t **__do_insert_lookup (const z_tree_info_t *tree,
                                            struct avl_insert_data *v,
                                            z_tree_node_t **root,
-                                           void *data)
+                                           z_tree_node_t *node,
+                                           void *udata)
 {
   z_tree_node_t *p, *q;
   int k, dir;
@@ -55,12 +56,19 @@ static z_tree_node_t **__do_insert_lookup (const z_tree_info_t *tree,
   dir = 0;
   k = 0;
   for (q = v->top, p = v->parent; p != NULL; q = p, p = p->child[dir]) {
-    int cmp = tree->key_compare(tree->user_data, p->data, data);
+    int cmp = tree->node_compare(udata, p, node);
     if (Z_UNLIKELY(cmp == 0)) {
-      if (p->data != data && tree->data_free != NULL)
-        tree->data_free(tree->user_data, p->data);
+      if (Z_LIKELY(p != node)) {
+        Z_ASSERT(q->child[dir] == p, "wrong parent node");
+        node->child[0] = p->child[0];
+        node->child[1] = p->child[1];
+        node->balance  = p->balance;
+        q->child[dir] = node;
 
-      p->data = data;
+        if (tree->node_free != NULL) {
+          tree->node_free(udata, p);
+        }
+      }
       return(NULL);
     }
 
@@ -267,12 +275,13 @@ static void __do_remove (const z_tree_info_t *tree,
 
 static int __avl_attach (const z_tree_info_t *tree,
                          z_tree_node_t **root,
-                         z_tree_node_t *node)
+                         z_tree_node_t *node,
+                         void *udata)
 {
   struct avl_insert_data v;
   z_tree_node_t **p;
 
-  p = __do_insert_lookup(tree, &v, root, node->data);
+  p = __do_insert_lookup(tree, &v, root, node, udata);
   if (Z_UNLIKELY(p == NULL))
     return(1);
 
@@ -283,7 +292,8 @@ static int __avl_attach (const z_tree_info_t *tree,
 
 static z_tree_node_t *__avl_detach (const z_tree_info_t *tree,
                                     z_tree_node_t **root,
-                                    const void *key)
+                                    const void *key,
+                                    void *udata)
 {
   struct avl_remove_data v;
   z_tree_node_t *p;
@@ -301,7 +311,7 @@ static z_tree_node_t *__avl_detach (const z_tree_info_t *tree,
 
     if ((p = p->child[dir]) == NULL)
       return(NULL);
-  } while ((cmp = tree->key_compare(tree->user_data, p->data, key)) != 0);
+  } while ((cmp = tree->key_compare(udata, p, key)) != 0);
 
   __do_remove(tree, &v, p);
   p->child[0] = NULL;

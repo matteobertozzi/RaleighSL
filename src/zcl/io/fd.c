@@ -12,6 +12,7 @@
  *   limitations under the License.
  */
 
+#include <zcl/debug.h>
 #include <zcl/fd.h>
 
 #include <sys/types.h>
@@ -39,4 +40,53 @@ int z_fd_set_blocking (int fd, int blocking) {
   }
 
   return(0);
+}
+
+static int __fd_read_link (int fd, char *path, int size) {
+  char fd_path[255];
+  snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", fd);
+  return(readlink(fd_path, path, size) < 0);
+}
+
+int z_fd_get_path (int fd, char *path, int size) {
+#if defined(F_GETPATH)
+  if (fcntl(fd, F_GETPATH, path) > 0)
+    return(0);
+#endif
+  return(__fd_read_link(fd, path, size));
+}
+
+ssize_t z_fd_write (int fd, const void *buf, size_t bufsize) {
+  const char *p = buf;
+  ssize_t total = 0;
+
+  while (bufsize > 0) {
+    ssize_t written = write(fd, p, bufsize);
+    if (written <= 0)
+      return(written);
+
+    p += written;
+    total += written;
+    bufsize -= written;
+  }
+
+  return(total);
+}
+
+ssize_t z_fd_writev(int fd, const struct iovec *iov, int iovcnt) {
+  ssize_t wr = writev(fd, iov, iovcnt);
+  /* TODO */
+#if 1 && __Z_DEBUG__
+  ssize_t total = 0;
+
+  while (iovcnt--) {
+    total += iov->iov_len;
+    iov++;
+  }
+
+  if (wr >= 0) {
+    Z_ASSERT(wr == total, "Incomplete writev wr=%zd total=%zd", wr, total);
+  }
+#endif
+  return(wr);
 }

@@ -118,7 +118,8 @@ struct z_expr_function {
 };
 
 struct z_expr_variable {
-  __Z_TREE_NODE__
+  z_tree_node_t __node__;
+
   z_bytes_t *key;
   z_expr_t expr;
 };
@@ -134,18 +135,18 @@ int                      z_expr_var_add    (z_tree_node_t **root,
                                             z_expr_variable_t *var);
 z_expr_variable_t *      z_expr_var_pop    (z_tree_node_t **root,
                                             const z_byte_slice_t *key);
-const z_expr_variable_t *z_expr_var_lookup (const z_tree_node_t *root,
+const z_expr_variable_t *z_expr_var_lookup (z_tree_node_t *root,
                                             const z_byte_slice_t *key);
 
 const z_expr_t *z_expr_evaluate (const z_expr_t *expr,
-                                 const z_tree_node_t *vars,
+                                 z_tree_node_t *vars,
                                  z_expr_t *result);
 
 int z_expr_parse_predicate (z_lexer_t *lex, z_expr_t *expr);
 
 void z_expr_dump (FILE *stream,
                   const z_expr_t *expr,
-                  const z_tree_node_t *vars);
+                  z_tree_node_t *vars);
 
 __Z_END_DECLS__
 

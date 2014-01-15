@@ -13,6 +13,7 @@
  */
 
 #include <raleighsl/semantic.h>
+#include <raleighsl/object.h>
 #include <raleighsl/exec.h>
 
 #include <zcl/global.h>
@@ -25,7 +26,7 @@
  */
 int raleighsl_semantic_alloc (raleighsl_t *fs) {
   raleighsl_semantic_t *semantic = &(fs->semantic);
-  semantic->next_oid = 1;
+  semantic->next_oid = RALEIGHSL_RESERVED_OIDS;
   z_task_rwcsem_open(&(semantic->rwcsem));
   return(0);
 }
@@ -208,9 +209,7 @@ static void __sched_semantic_task_exec (z_task_t *task) {
     switch (task->state) {
       case SEMANTIC_SCHED_CREATE:
         errno = __sched_task_create_func_exec(fs, RALEIGHSL_OBJECT_PLUG(task->args[3].ptr), task);
-        if (errno) {
-          raleighsl_semantic_rollback(fs);
-        } else {
+        if (!errno) {
           z_rwcsem_set_commit_flag(&(fs->semantic.rwcsem.lock));
           is_complete = 0;
           task->state = SEMANTIC_SCHED_COMMIT;
@@ -223,9 +222,7 @@ static void __sched_semantic_task_exec (z_task_t *task) {
       case SEMANTIC_SCHED_UNLINK:
       case SEMANTIC_SCHED_RENAME:
         errno = __sched_task_modify_func_exec(fs, task);
-        if (errno) {
-          raleighsl_semantic_rollback(fs);
-        } else {
+        if (!errno) {
           z_rwcsem_set_commit_flag(&(fs->semantic.rwcsem.lock));
           is_complete = 0;
           task->state = SEMANTIC_SCHED_COMMIT;
@@ -234,9 +231,6 @@ static void __sched_semantic_task_exec (z_task_t *task) {
         break;
       case SEMANTIC_SCHED_COMMIT:
         errno = raleighsl_semantic_commit(fs);
-        if (Z_UNLIKELY(errno)) {
-          raleighsl_semantic_rollback(fs);
-        }
         break;
     }
   } while (keep_running);

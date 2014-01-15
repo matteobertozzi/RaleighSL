@@ -20,6 +20,7 @@
 #define RALEIGHSL_NUMBER(x)            Z_CAST(raleighsl_number_t, x)
 
 typedef struct raleighsl_number {
+  raleighsl_txn_atom_t __txn_atom__;
   int64_t read_value;
   int64_t write_value;
   uint64_t txn_id;
@@ -63,7 +64,7 @@ raleighsl_errno_t raleighsl_number_set (raleighsl_t *fs,
 
   if (transaction != NULL && number->txn_id != txn_id) {
     raleighsl_errno_t errno;
-    if ((errno = raleighsl_transaction_add(fs, transaction, object, NULL)))
+    if ((errno = raleighsl_transaction_add(fs, transaction, object, &(number->__txn_atom__))))
       return(errno);
   }
 
@@ -93,7 +94,7 @@ raleighsl_errno_t raleighsl_number_cas (raleighsl_t *fs,
 
   if (transaction != NULL && number->txn_id != txn_id) {
     raleighsl_errno_t errno;
-    if ((errno = raleighsl_transaction_add(fs, transaction, object, NULL)))
+    if ((errno = raleighsl_transaction_add(fs, transaction, object, &(number->__txn_atom__))))
       return(errno);
   }
 
@@ -118,7 +119,7 @@ raleighsl_errno_t raleighsl_number_add (raleighsl_t *fs,
 
   if (transaction != NULL && number->txn_id != txn_id) {
     raleighsl_errno_t errno;
-    if ((errno = raleighsl_transaction_add(fs, transaction, object, NULL)))
+    if ((errno = raleighsl_transaction_add(fs, transaction, object, &(number->__txn_atom__))))
       return(errno);
   }
 
@@ -144,7 +145,7 @@ raleighsl_errno_t raleighsl_number_mul (raleighsl_t *fs,
 
   if (transaction != NULL && number->txn_id != txn_id) {
     raleighsl_errno_t errno;
-    if ((errno = raleighsl_transaction_add(fs, transaction, object, NULL)))
+    if ((errno = raleighsl_transaction_add(fs, transaction, object, &(number->__txn_atom__))))
       return(errno);
   }
 
@@ -174,7 +175,7 @@ raleighsl_errno_t raleighsl_number_div (raleighsl_t *fs,
 
   if (transaction != NULL && number->txn_id != txn_id) {
     raleighsl_errno_t errno;
-    if ((errno = raleighsl_transaction_add(fs, transaction, object, NULL)))
+    if ((errno = raleighsl_transaction_add(fs, transaction, object, &(number->__txn_atom__))))
       return(errno);
   }
 
@@ -213,6 +214,26 @@ static raleighsl_errno_t __object_close (raleighsl_t *fs,
   return(RALEIGHSL_ERRNO_NONE);
 }
 
+static void __object_apply (raleighsl_t *fs,
+                            raleighsl_object_t *object,
+                            raleighsl_txn_atom_t *atom)
+{
+  raleighsl_number_t *number = RALEIGHSL_NUMBER(object->membufs);
+  Z_ASSERT(atom == &(number->__txn_atom__), "Wrong TXN atom");
+  number->read_value = number->write_value;
+  number->txn_id = 0;
+}
+
+static void __object_revert (raleighsl_t *fs,
+                             raleighsl_object_t *object,
+                             raleighsl_txn_atom_t *atom)
+{
+  raleighsl_number_t *number = RALEIGHSL_NUMBER(object->membufs);
+  Z_ASSERT(atom == &(number->__txn_atom__), "Wrong TXN atom");
+  number->write_value = number->read_value;
+  number->txn_id = 0;
+}
+
 static raleighsl_errno_t __object_commit (raleighsl_t *fs,
                                           raleighsl_object_t *object)
 {
@@ -220,36 +241,6 @@ static raleighsl_errno_t __object_commit (raleighsl_t *fs,
   if (number->txn_id == 0) {
     number->read_value = number->write_value;
   }
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __object_rollback (raleighsl_t *fs,
-                                            raleighsl_object_t *object)
-{
-  raleighsl_number_t *number = RALEIGHSL_NUMBER(object->membufs);
-  if (number->txn_id == 0) {
-    number->write_value = number->read_value;
-  }
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __object_apply (raleighsl_t *fs,
-                                         raleighsl_object_t *object,
-                                         void *mutation)
-{
-  raleighsl_number_t *number = RALEIGHSL_NUMBER(object->membufs);
-  number->read_value = number->write_value;
-  number->txn_id = 0;
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __object_revert (raleighsl_t *fs,
-                                          raleighsl_object_t *object,
-                                          void *mutation)
-{
-  raleighsl_number_t *number = RALEIGHSL_NUMBER(object->membufs);
-  number->write_value = number->read_value;
-  number->txn_id = 0;
   return(RALEIGHSL_ERRNO_NONE);
 }
 
@@ -263,10 +254,12 @@ const raleighsl_object_plug_t raleighsl_object_number = {
   .create   = __object_create,
   .open     = NULL,
   .close    = __object_close,
-  .commit   = __object_commit,
-  .rollback = __object_rollback,
-  .sync     = NULL,
   .unlink   = NULL,
+
   .apply    = __object_apply,
   .revert   = __object_revert,
+  .commit   = __object_commit,
+
+  .balance  = NULL,
+  .sync     = NULL,
 };

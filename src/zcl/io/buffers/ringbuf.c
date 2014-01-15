@@ -23,6 +23,7 @@
 #include <zcl/ringbuf.h>
 #include <zcl/global.h>
 #include <zcl/string.h>
+#include <zcl/fd.h>
 
 /* ===========================================================================
  *  PRIVATE Ringbuf methods
@@ -120,7 +121,7 @@ ssize_t z_ringbuf_fd_fetch (z_ringbuf_t *self, int fd) {
     iov[1].iov_base = self->buffer;
     iov[1].iov_len  = head;
     avail = iov[0].iov_len + iov[1].iov_len;
-    rd = readv(fd, iov, 2);
+    rd = z_fd_readv(fd, iov, 2);
   } else {
     /*
      *     -- iov[0] ---
@@ -130,7 +131,7 @@ ssize_t z_ringbuf_fd_fetch (z_ringbuf_t *self, int fd) {
      *     ^tail       ^head
      */
     avail = head - tail;
-    rd = read(fd, self->buffer + tail, avail);
+    rd = z_fd_read(fd, self->buffer + tail, avail);
   }
 
   if (rd > 0) {
@@ -160,7 +161,7 @@ ssize_t z_ringbuf_fd_dump (z_ringbuf_t *self, int fd) {
      * +---------------------------------------+
      *            ^head            ^tail
      */
-    wr = write(fd, self->buffer + head, tail - head);
+    wr = z_fd_write(fd, self->buffer + head, tail - head);
   } else {
     /*
      * -- iov[1] ---           -- iov[0] ---
@@ -174,7 +175,7 @@ ssize_t z_ringbuf_fd_dump (z_ringbuf_t *self, int fd) {
     iov[0].iov_len  = self->size - head;
     iov[1].iov_base = self->buffer;
     iov[1].iov_len  = tail;
-    wr = writev(fd, iov, 2);
+    wr = z_fd_writev(fd, iov, 2);
   }
 
   if (wr > 0) {

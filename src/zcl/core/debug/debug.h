@@ -27,7 +27,9 @@ __Z_BEGIN_DECLS__
 #define Z_LOG_DEBUG(format, ...)     Z_LOG(4, format, ##__VA_ARGS__)
 #define Z_LOG_TRACE(format, ...)     Z_LOG(5, format, ##__VA_ARGS__)
 
-#if 0
+#define THZ_FORCE_DEBUG       0
+
+#if THZ_FORCE_DEBUG
   #define Z_LOG(level, format, ...)                                       \
     Z_FLOG(stderr, level, format, ##__VA_ARGS__)
 
@@ -40,7 +42,7 @@ __Z_BEGIN_DECLS__
   #define Z_FLOG(fp, level, format, ...)          while (0)
 #endif
 
-#if __Z_DEBUG__
+#if THZ_FORCE_DEBUG && __Z_DEBUG__
   #define Z_ASSERT(cond, format, ...)                                     \
     if (Z_UNLIKELY(!(cond)))                                              \
       __z_assert(__FILE__, __LINE__, __FUNCTION__,                        \
@@ -52,9 +54,9 @@ __Z_BEGIN_DECLS__
   #define Z_PRINT_DEBUG(format, ...)                                      \
     fprintf(stderr, format, ##__VA_ARGS__)
 #else
-  #define Z_BUG(format, ...)                      while (0)
-  #define Z_ASSERT(cond, format, ...)             while (0)
-  #define Z_ASSERT_IF(ifcond, cond, format, ...)  while (0)
+  #define Z_BUG(format, ...)                      while (0) { (void)(cond); }
+  #define Z_ASSERT(cond, format, ...)             while (0) { (void)(cond); }
+  #define Z_ASSERT_IF(ifcond, cond, format, ...)  while (0) { (void)(cond); }
 
   #define Z_PRINT_DEBUG(format, ...)              while (0)
 #endif

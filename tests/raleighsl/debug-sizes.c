@@ -10,6 +10,7 @@ int main (int argc, char **argv) {
   printf("---------------------------------\n");
   __print_size(raleighsl_t);
   __print_size(raleighsl_key_t);
+  __print_size(raleighsl_block_t);
   __print_size(raleighsl_object_t);
   __print_size(raleighsl_transaction_t);
   __print_size(raleighsl_semantic_t);

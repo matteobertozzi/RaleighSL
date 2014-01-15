@@ -17,6 +17,7 @@
 #include <zcl/string.h>
 #include <zcl/debug.h>
 #include <zcl/ipc.h>
+#include <zcl/fd.h>
 
 #define Z_MSGBUF_VERSION      (0x0)
 #define Z_MSGBUF_MAGIC        (0xaacc33d5)
@@ -226,7 +227,7 @@ static int __ipc_outbuf_flush (z_ipc_msgbuf_t *self, int fd) {
     m_offset = 0;
   }
 
-  ssize_t wr = writev(fd, iovs, iov - iovs);
+  ssize_t wr = z_fd_writev(fd, iovs, iov - iovs);
   if (Z_UNLIKELY(wr < 0)) return(-1);
 
   count = niovs;

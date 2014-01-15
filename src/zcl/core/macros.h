@@ -88,6 +88,12 @@ __Z_BEGIN_DECLS__
 
 #define z_sizeof(type)                  ((long)sizeof(type))
 
+#define z_offset_of(type, member)                           \
+  ((unsigned long)(&((type *)0)->member))
+
+#define z_container_of(ptr, type, member)                   \
+  ((type *)(((char *)(ptr)) - z_offset_of(type, member)))
+
 #define Z_ARGN_(_,_11,_10,_9,_8,_7,_6,_5,_4,_3,_2,_1,n,...)  n
 #define Z_ARGN(...)             Z_ARGN_(0,__VA_ARGS__,11,10,9,8,7,6,5,4,3,2,1,0)
 
@@ -137,9 +143,6 @@ __Z_BEGIN_DECLS__
 #define z_in(x, ...)                    (Z_FOLD(__zin_, x, __VA_ARGS__))
 
 #define z_between(v, a, b)              ((v) >= (a) && (v) <= (b))
-
-#define z_container_of(ptr, type, member)                                     \
-    ((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))
 
 __Z_END_DECLS__
 

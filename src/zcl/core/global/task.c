@@ -19,21 +19,22 @@
 /* ===========================================================================
  *  PRIVATE Task Tree
  */
-static int __task_tree_key_compare (void *udata, const void *a, const void *b) {
-  uint64_t atime = Z_TASK(a)->itime;
-  uint64_t btime = Z_TASK(b)->itime;
-  return(z_cmp(atime, btime));
+static int __task_tree_compare (void *udata, const void *a, const void *b) {
+  const z_task_t *ea = z_container_of(a, const z_task_t, __node__);
+  const z_task_t *eb = z_container_of(b, const z_task_t, __node__);
+  return(z_cmp(ea->itime, eb->itime));
 }
 
-static void __task_tree_node_free (void *udata, void *object) {
-  z_task_free(Z_TASK(object));
+static void __task_tree_node_free (void *udata, void *obj) {
+  z_task_t *task = z_container_of(obj, z_task_t, __node__);
+  z_task_free(task);
 }
 
 static const z_tree_info_t __task_tree_info = {
-  .plug        = &z_tree_avl,
-  .key_compare = __task_tree_key_compare,
-  .data_free   = __task_tree_node_free,
-  .user_data   = NULL,
+  .plug         = &z_tree_avl,
+  .node_compare = __task_tree_compare,
+  .key_compare  = __task_tree_compare,
+  .node_free    = __task_tree_node_free,
 };
 
 /* ===========================================================================
@@ -45,11 +46,6 @@ z_task_t *z_task_alloc (z_task_func_t func) {
   task = z_memory_struct_alloc(z_global_memory(), z_task_t);
   if (Z_MALLOC_IS_NULL(task))
     return(NULL);
-
-  task->__node__.child[0] = NULL;
-  task->__node__.child[1] = NULL;
-  task->__node__.data = task;
-  task->__node__.balance = 0;
 
   task->itime = 0;
   task->func = func;
@@ -72,9 +68,9 @@ void z_task_queue_close (z_task_queue_t *self) {
 
 void z_task_queue_push (z_task_queue_t *self, z_task_t *task) {
   if (task != NULL) {
-    z_tree_node_t *node = Z_TREE_NODE(task);
+    z_tree_node_t *node = &(task->__node__);
     if (self->head != NULL) {
-      z_tree_node_t *head = Z_TREE_NODE(self->head);
+      z_tree_node_t *head = &(self->head->__node__);
       z_tree_node_t *tail = head->child[1];
 
       tail->child[0] = node;
@@ -92,11 +88,11 @@ void z_task_queue_push (z_task_queue_t *self, z_task_t *task) {
 z_task_t *z_task_queue_pop (z_task_queue_t *self) {
   if (self->head != NULL) {
     z_task_t *task = self->head;
-    z_tree_node_t *head = Z_TREE_NODE(self->head);
+    z_tree_node_t *head = &(self->head->__node__);
     z_tree_node_t *next = head->child[0];
     z_tree_node_t *tail = head->child[1];
 
-    if ((self->head = Z_TASK(next)) != NULL)
+    if ((self->head = z_container_of(next, z_task_t, __node__)) != NULL)
       next->child[1] = tail;
 
     task->__node__.child[0] = NULL;
@@ -125,7 +121,7 @@ void z_task_tree_close (z_task_tree_t *self) {
 void z_task_tree_push (z_task_tree_t *self, z_task_t *task) {
   while (task != NULL) {
     z_task_t *next = Z_TASK(task->__node__.child[0]);
-    z_tree_node_attach(&__task_tree_info, &(self->root), Z_TREE_NODE(task));
+    z_tree_node_attach(&__task_tree_info, &(self->root), &(task->__node__), NULL);
     task = next;
   }
 }

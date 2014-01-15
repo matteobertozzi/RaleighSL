@@ -17,6 +17,9 @@
 
 #include <raleighsl/types.h>
 
+#define RALEIGHSL_ROOT_OID            1
+#define RALEIGHSL_RESERVED_OIDS       128
+
 raleighsl_errno_t raleighsl_semantic_create (raleighsl_t *fs,
                                              const raleighsl_object_plug_t *plug,
                                              const z_bytes_ref_t *name,

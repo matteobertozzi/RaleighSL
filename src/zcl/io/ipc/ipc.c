@@ -114,6 +114,9 @@ static z_ipc_server_t *__ipc_server_alloc (const z_ipc_protocol_t *proto,
 }
 
 static void __ipc_server_free (z_ipc_server_t *server) {
+  if (server->protocol->unbind != NULL)
+    server->protocol->unbind(server);
+
   z_iopoll_entity_close(Z_IOPOLL_ENTITY(server));
   z_memory_struct_free(z_global_memory(), z_ipc_server_t, server);
 }

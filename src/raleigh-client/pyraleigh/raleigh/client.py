@@ -25,7 +25,7 @@ class RaleighException(Exception):
     self.message = data.get('message')
 
   def __str__(self):
-    return 'ERROR %d: %s' % (self.code, self.message)
+    return 'RaleighException(%d: %s)' % (self.code, self.message)
 
 class RaleighClient(IpcRpcClient):
   STATUS_FIELDS = ('error', {1: ('code', 'uint', None), 2: ('message', 'string', None)}, None)

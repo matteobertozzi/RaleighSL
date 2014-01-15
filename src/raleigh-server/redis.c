@@ -247,9 +247,10 @@ static int __client_write (z_ipc_client_t *client) {
   return(0);
 }
 
-const struct z_ipc_protocol redis_protocol = {
+const struct z_ipc_protocol redis_tcp_protocol = {
   /* server protocol */
   .bind         = z_ipc_bind_tcp,
+  .unbind       = NULL,
   .accept       = z_ipc_accept_tcp,
   .setup        = NULL,
 

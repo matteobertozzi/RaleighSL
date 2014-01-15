@@ -20,7 +20,7 @@
  */
 static void __expr_unary_dump (FILE *stream,
                                const z_expr_t *expr,
-                               const z_tree_node_t *vars)
+                               z_tree_node_t *vars)
 {
   const z_expr_unary_t *unary = expr->d.unary;
   switch (unary->type) {
@@ -34,7 +34,7 @@ static void __expr_unary_dump (FILE *stream,
 
 static void __expr_binary_dump (FILE *stream,
                                 const z_expr_t *expr,
-                                const z_tree_node_t *vars)
+                                z_tree_node_t *vars)
 {
   const z_expr_binary_t *binary = expr->d.binary;
   fprintf(stream, "(");
@@ -70,7 +70,7 @@ static void __expr_binary_dump (FILE *stream,
 
 static void __expr_function_dump (FILE *stream,
                                   const z_expr_t *expr,
-                                  const z_tree_node_t *vars)
+                                  z_tree_node_t *vars)
 {
   fprintf(stream, "TODO-FUNCTION(");
   fprintf(stream, ")");
@@ -81,7 +81,7 @@ static void __expr_function_dump (FILE *stream,
  */
 void z_expr_dump (FILE *stream,
                   const z_expr_t *expr,
-                  const z_tree_node_t *vars)
+                  z_tree_node_t *vars)
 {
   switch (expr->type) {
     case Z_EXPR_TYPE_INT:

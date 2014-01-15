@@ -50,26 +50,29 @@ struct z_bucket_iterator {
 };
 
 struct z_vtable_bucket {
-  int       (*open)         (const uint8_t *node, uint32_t size);
-  void      (*create)       (uint8_t *node, uint32_t size);
-  void      (*finalize)     (uint8_t *node);
+  int       (*open)           (const uint8_t *node, uint32_t size);
+  void      (*create)         (uint8_t *node, uint32_t size);
+  void      (*finalize)       (uint8_t *node);
 
-  uint32_t  (*available)    (const uint8_t *node);
-  int       (*has_space)    (const uint8_t *node,
-                             const z_bucket_entry_t *item);
-  int       (*append)       (uint8_t *node,
-                             const z_bucket_entry_t *item);
-  void      (*remove)       (uint8_t *node,
-                             z_bucket_entry_t *entry);
+  uint32_t  (*available)      (const uint8_t *node);
+  int       (*has_space)      (const uint8_t *node,
+                               const z_bucket_entry_t *item);
+  int       (*append)         (uint8_t *node,
+                               const z_bucket_entry_t *item);
+  void      (*remove)         (uint8_t *node,
+                               z_bucket_entry_t *entry);
 
-  int       (*fetch_first)  (const uint8_t *node,
-                             z_bucket_entry_t *entry);
-  int       (*fetch_next)   (const uint8_t *node,
-                             z_bucket_entry_t *entry);
+  void      (*first_key)      (const uint8_t *node,
+                               z_byte_slice_t *key);
+  int       (*fetch_first)    (const uint8_t *node,
+                               z_bucket_entry_t *entry);
+  int       (*fetch_next)     (const uint8_t *node,
+                               z_bucket_entry_t *entry);
+
+  int       (*prefix_encoded) (const uint8_t *node);
 };
 
-extern const z_vtable_map_iterator_t z_bucket_map_iterator;
-extern const z_vtable_bucket_t z_bucket_variable;
+extern const z_vtable_bucket_t z_bucket_vprefix;
 
 int z_bucket_search (const z_vtable_bucket_t *vtable,
                      const uint8_t *node,

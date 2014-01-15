@@ -52,25 +52,6 @@ static int __parse_predicate (struct expr_parser *self, z_expr_t *expr);
 /* ===========================================================================
  *  PRIVATE Task Tree
  */
-static int __string_tree_key_compare (void *udata, const void *a, const void *b) {
-  return(z_bytes_compare(Z_BYTES(a), Z_BYTES(b)));
-}
-
-static int __string_compare (void *udata, const void *a, const void *b) {
-  return(z_byte_slice_compare(z_bytes_slice(Z_BYTES(a)), Z_BYTE_SLICE(b)));
-}
-
-static void __string_node_free (void *udata, void *object) {
-  z_bytes_free(Z_BYTES(object));
-}
-
-static const z_tree_info_t __string_tree_info = {
-  .plug        = &z_tree_avl,
-  .key_compare = __string_tree_key_compare,
-  .data_free   = __string_node_free,
-  .user_data   = NULL,
-};
-
 static int __expr_parser_open (struct expr_parser *self, z_lexer_t *lex) {
   self->error = NULL;
   self->lex = lex;
@@ -86,24 +67,7 @@ static z_bytes_t *__expr_add_identifier (struct expr_parser *self,
                                          const char *identifier,
                                          size_t length)
 {
-  const z_tree_node_t *node;
-  z_byte_slice_t key;
-  z_bytes_t *bytes;
-
-  z_byte_slice_set(&key, identifier, length);
-  node = z_tree_node_lookup(self->string_pool, __string_compare, &key, NULL);
-  if (node == NULL) {
-    bytes = z_bytes_from_data(identifier, length);
-    if (self->pool_used < __MAX_POOL_SIZE) {
-      z_tree_node_t *node = &(self->identifiers[self->pool_used++]);
-      node->data = bytes;
-      z_tree_node_attach(&__string_tree_info, &(self->string_pool), node);
-    }
-  } else {
-    bytes = z_bytes_acquire(Z_BYTES(node->data));
-  }
-
-  return(bytes);
+  return z_bytes_from_data(identifier, length);
 }
 
 static int __get_binary_precedence(const z_lexer_t *lex, z_expr_binary_type_t *op_type) {

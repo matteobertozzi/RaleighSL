@@ -18,7 +18,16 @@
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
-int          z_fd_set_blocking      (int fd, int blocking);
+#include <zcl/macros.h>
+
+int     z_fd_set_blocking (int fd, int blocking);
+int     z_fd_get_path     (int fd, char *path, int size);
+
+ssize_t z_fd_write        (int fd, const void *buf, size_t bufsize);
+ssize_t z_fd_writev       (int fd, const struct iovec *iov, int iovcnt);
+
+#define z_fd_read         read
+#define z_fd_readv        readv
 
 __Z_END_DECLS__
 

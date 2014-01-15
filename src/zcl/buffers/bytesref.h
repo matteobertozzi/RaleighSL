@@ -42,18 +42,24 @@ struct z_bytes_ref {
 #define z_bytes_ref_slice(self)         (&((self)->slice))
 #define z_bytes_ref_data(self)          ((self)->slice.data)
 #define z_bytes_ref_size(self)          ((self)->slice.size)
+#define z_bytes_ref_is_empty(self)      z_byte_slice_is_empty(&((self)->slice))
 
 #define z_bytes_ref_compare(a, b)                                       \
   z_byte_slice_compare(z_bytes_ref_slice(a), z_bytes_ref_slice(b))
 
-void z_bytes_ref_reset   (z_bytes_ref_t *self);
-void z_bytes_ref_set     (z_bytes_ref_t *self,
-                          const z_byte_slice_t *slice,
-                          const z_vtable_refs_t *vtable,
-                          void *object);
-void z_bytes_ref_acquire (z_bytes_ref_t *self,
-                          const z_bytes_ref_t *other);
-void z_bytes_ref_release (z_bytes_ref_t *self);
+void z_bytes_ref_reset    (z_bytes_ref_t *self);
+void z_bytes_ref_set      (z_bytes_ref_t *self,
+                           const z_byte_slice_t *slice,
+                           const z_vtable_refs_t *vtable,
+                           void *object);
+void z_bytes_ref_set_data (z_bytes_ref_t *self,
+                           const void *data,
+                           unsigned int size,
+                           const z_vtable_refs_t *vtable,
+                           void *object);
+void z_bytes_ref_acquire  (z_bytes_ref_t *self,
+                           const z_bytes_ref_t *other);
+void z_bytes_ref_release  (z_bytes_ref_t *self);
 
 
 __Z_END_DECLS__

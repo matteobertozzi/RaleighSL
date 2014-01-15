@@ -78,7 +78,7 @@ int z_thread_bind_to_core (z_thread_t *thread, int core) {
    * https://developer.apple.com/library/mac/releasenotes/Performance/RN-AffinityAPI/index.html
    */
 
-  Z_LOG_WARN("unable to bind thread %p to core %d", core);
+  Z_LOG_WARN("unable to bind thread %p to core %d", thread, core);
   return(-1);
 #endif
 }

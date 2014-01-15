@@ -17,6 +17,8 @@
 #ifndef _RALEIGH_SERVER_H_
 #define _RALEIGH_SERVER_H_
 
+#include <zcl/config.h>
+
 #include <raleighsl/raleighsl.h>
 
 #include <zcl/ringbuf.h>
@@ -57,26 +59,33 @@ struct stats_client {
   uint64_t id;
 };
 
-extern const z_ipc_protocol_t echo_protocol;
-extern const z_ipc_protocol_t redis_protocol;
-extern const z_ipc_protocol_t stats_protocol;
-extern const z_ipc_protocol_t raleighsl_protocol;
+extern const z_ipc_protocol_t echo_tcp_protocol;
+extern const z_ipc_protocol_t redis_tcp_protocol;
+extern const z_ipc_protocol_t stats_tcp_protocol;
+extern const z_ipc_protocol_t raleighsl_tcp_protocol;
 
-#define z_ipc_echo_plug(iopoll, address, service, udata)              \
-  z_ipc_plug(iopoll, &echo_protocol, struct echo_client,              \
+#define z_echo_tcp_plug(iopoll, address, service, udata)                  \
+  z_ipc_plug(iopoll, &echo_tcp_protocol, struct echo_client,              \
              address, service, udata)
 
-#define z_ipc_redis_plug(iopoll, address, service, udata)             \
-  z_ipc_plug(iopoll, &redis_protocol, struct redis_client,            \
+#define z_redis_tcp_plug(iopoll, address, service, udata)                 \
+  z_ipc_plug(iopoll, &redis_tcp_protocol, struct redis_client,            \
              address, service, udata)
 
-#define z_ipc_stats_plug(iopoll, address, service, udata)             \
-  z_ipc_plug(iopoll, &stats_protocol, struct stats_client,            \
+#define z_stats_tcp_plug(iopoll, address, service, udata)                 \
+  z_ipc_plug(iopoll, &stats_tcp_protocol, struct stats_client,            \
              address, service, udata)
 
-#define z_ipc_raleighsl_plug(iopoll, address, service, udata)         \
-  z_ipc_plug(iopoll, &raleighsl_protocol, struct raleighsl_client,    \
+#define z_raleighsl_tcp_plug(iopoll, address, service, udata)             \
+  z_ipc_plug(iopoll, &raleighsl_tcp_protocol, struct raleighsl_client,    \
              address, service, udata)
 
+#ifdef Z_SOCKET_HAS_UNIX
+extern const z_ipc_protocol_t raleighsl_unix_protocol;
+
+#define z_raleighsl_unix_plug(iopoll, address, udata)                     \
+  z_ipc_plug(iopoll, &raleighsl_unix_protocol, struct raleighsl_client,   \
+             address, NULL, udata)
+#endif /* Z_SOCKET_HAS_UNIX */
 
 #endif /* !_RALEIGH_SERVER_H_ */

@@ -95,11 +95,13 @@ struct z_sorted_map_interfaces {
 struct z_map_entry {
   z_byte_slice_t key;
   z_byte_slice_t value;
+  int is_delete_marker;
 };
 
 struct z_map_merger {
   z_dlink_node_t merge_list;
   z_map_iterator_t *smallest_iter;
+  int skip_equals;
 };
 
 struct z_map_iterator_head {
@@ -155,8 +157,9 @@ void z_map_iterator_seek_to (z_map_iterator_t *self,
                              const z_byte_slice_t *key,
                              int include_key);
 
-void z_map_merger_open (z_map_merger_t *self);
-int  z_map_merger_add  (z_map_merger_t *self, z_map_iterator_t *iter);
+void z_map_merger_open  (z_map_merger_t *self);
+void z_map_merger_close (z_map_merger_t *self);
+int  z_map_merger_add   (z_map_merger_t *self, z_map_iterator_t *iter);
 const z_map_entry_t *z_map_merger_next (z_map_merger_t *self);
 
 void z_dump_map_entry (FILE *stream, const z_map_entry_t *entry);

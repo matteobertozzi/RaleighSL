@@ -38,7 +38,7 @@ const char *raleighsl_errno_byte_slice (raleighsl_errno_t errno,
     __ERR(SCHED_YIELD, "retry");
 
     /* System related */
-    __ERR(NO_MEMORY, "not memory available");
+    __ERR(NO_MEMORY, "no memory available");
 
     /* Plugins related */
     __ERR_PLUGIN(NOT_LOADED, "plugin not loaded");

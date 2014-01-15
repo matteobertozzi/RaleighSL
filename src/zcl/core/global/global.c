@@ -142,7 +142,11 @@ static void __cpu_ctx_close (struct cpu_ctx *cpu_ctx) {
   z_memory_close(&(cpu_ctx->memory));
 }
 
-static struct cpu_ctx *__current_cpu_ctx (void) {
+/* ============================================================================
+ *  PRIVATE cpu-context thread-local lookups
+ */
+static __thread struct cpu_ctx *__local_cpu_ctx = NULL;
+static struct cpu_ctx *__set_local_cpu_ctx (void) {
   struct cpu_ctx *cpu_ctx = __global_ctx->cpus;
   int ncpus = __global_ctx->ncpus;
   z_thread_t tid;
@@ -151,8 +155,14 @@ static struct cpu_ctx *__current_cpu_ctx (void) {
   while (--ncpus && cpu_ctx->thread != tid) {
     ++cpu_ctx;
   }
+  fprintf(stderr, "Lookup Local CPU-ctx for thread %ld (CPU ID %ld)\n",
+                  (long)tid, cpu_ctx - __global_ctx->cpus);
+  __local_cpu_ctx = cpu_ctx;
   return(cpu_ctx);
 }
+
+#define __current_cpu_ctx()                                                    \
+  (Z_LIKELY(__local_cpu_ctx != NULL) ? __local_cpu_ctx : __set_local_cpu_ctx())
 
 #define __current_cpu_ctx_id()    (__current_cpu_ctx() - __global_ctx->cpus)
 #define __current_queue_slot()    (__current_cpu_ctx_id() & (__NUM_WORK_QUEUES - 1))

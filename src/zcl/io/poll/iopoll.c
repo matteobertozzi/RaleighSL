@@ -58,12 +58,12 @@ void z_iopoll_stats_add_events (z_iopoll_engine_t *engine, int nevents, uint64_t
   stats->max_events = z_max(stats->max_events, nevents);
 }
 
-void z_iopoll_stats_add_read_event (z_iopoll_engine_t *engine, uint64_t time) {
-  z_histogram_add(&(engine->stats.ioread), time);
+void z_iopoll_stats_add_read_event (z_iopoll_engine_t *engine, uint64_t rtime) {
+  z_histogram_add(&(engine->stats.ioread), rtime);
 }
 
-void z_iopoll_stats_add_write_event (z_iopoll_engine_t *engine, uint64_t time) {
-  z_histogram_add(&(engine->stats.iowrite), time);
+void z_iopoll_stats_add_write_event (z_iopoll_engine_t *engine, uint64_t wtime) {
+  z_histogram_add(&(engine->stats.iowrite), wtime);
 }
 
 void z_iopoll_stats_dump (z_iopoll_engine_t *engine) {
@@ -285,6 +285,7 @@ void z_iopoll_process (z_iopoll_t *iopoll,
                        uint32_t events)
 {
   const z_vtable_iopoll_entity_t *vtable = entity->vtable;
+  uint64_t tnow;
 
   if (Z_UNLIKELY(events & Z_IOPOLL_HANGUP)) {
     __iopoll_engine_remove(iopoll, engine, entity);
@@ -292,30 +293,29 @@ void z_iopoll_process (z_iopoll_t *iopoll,
     return;
   }
 
+  tnow = z_time_micros();
   if (events & Z_IOPOLL_READABLE) {
-    z_timer_t timer;
-    z_timer_start(&timer);
+    uint64_t rstime = tnow;
     if (Z_UNLIKELY(vtable->read(entity) < 0)) {
       __iopoll_engine_remove(iopoll, engine, entity);
       vtable->close(entity);
       return;
     }
-    z_timer_stop(&timer);
-    z_iopoll_stats_add_read_event(engine, z_timer_micros(&timer));
+    tnow = z_time_micros();
+    z_iopoll_stats_add_read_event(engine, tnow - rstime);
   }
 
   if (events & Z_IOPOLL_WRITABLE) {
     if (entity->flags & Z_IOPOLL_HAS_DATA) {
-      z_timer_t timer;
-      z_timer_start(&timer);
+      uint64_t wstime = tnow;
       if (Z_UNLIKELY(vtable->write(entity) < 0)) {
         __iopoll_engine_remove(iopoll, engine, entity);
         vtable->close(entity);
         return;
       }
-      z_timer_stop(&timer);
-      z_iopoll_stats_add_write_event(engine, z_timer_micros(&timer));
-    } else if ((z_time_micros() - entity->last_wavail) > 1000000) {
+      tnow = z_time_micros();
+      z_iopoll_stats_add_write_event(engine, tnow - wstime);
+    } else if ((tnow - entity->last_wavail) > 1000000) {
       /* Apply the changes after 1sec of no data, to avoid too may context switch */
       z_spin_lock(&(entity->lock));
       if (!(entity->flags & Z_IOPOLL_HAS_DATA)) {

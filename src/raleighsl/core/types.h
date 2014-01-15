@@ -21,17 +21,18 @@ __Z_BEGIN_DECLS__
 #include <zcl/hashmap.h>
 #include <zcl/object.h>
 #include <zcl/opaque.h>
+#include <zcl/ticket.h>
 #include <zcl/cache.h>
 #include <zcl/dlink.h>
 #include <zcl/task.h>
 
 #include <raleighsl/plugins.h>
 
-#define RALEIGHSL_MASTER_MAGIC            ("R4l3igHfS-v5")
-#define RALEIGHSL_MASTER_QMAGIC           (0xf5ba5028cb6afc76ul)
+#define RALEIGHSL_MASTER_MAGIC          ("R4l3igHfS-v5")
+#define RALEIGHSL_MASTER_QMAGIC         (0xf5ba5028cb6afc76ul)
 
-#define raleighsl_oid(obj)                z_cache_entry_oid(obj)
-#define raleighsl_txn_id(txn)             z_cache_entry_oid(txn)
+#define raleighsl_oid(obj)              z_cache_entry_oid(&((obj)->cache_entry))
+#define raleighsl_txn_id(txn)           z_cache_entry_oid(&((txn)->cache_entry))
 
 struct raleighsl_master {
   uint8_t  mb_magic[12];                  /* Master block magic */
@@ -56,29 +57,47 @@ typedef enum raleighsl_txn_state {
   RALEIGHSL_TXN_ROLLEDBACK,
 } raleighsl_txn_state_t;
 
+struct raleighsl_txn_atom {
+  raleighsl_txn_atom_t *next;
+};
+
+struct raleighsl_block {
+  z_cache_entry_t cache_entry;
+
+  z_tree_node_t hash_node;
+  uint64_t hash[4];
+
+  uint32_t length;
+  uint32_t pad;
+
+  uint8_t *data;
+};
+
 struct raleighsl_transaction {
-  __Z_CACHE_ENTRY__
+  z_cache_entry_t cache_entry;            /* Transaction Cache Entry */
 
   z_task_rwcsem_t rwcsem;                 /* Transaction RWC-Task-Lock */
 
-  void *objects;                          /* TXN Object groups */
+  void *objects;                          /* Transaction Object groups */
   uint64_t mtime;                         /* Modification time */
 
-  raleighsl_txn_state_t state;            /* TXN state */
+  raleighsl_txn_state_t state;            /* Transaction state */
+  z_ticket_t lock;                        /* Transaction internal lock */
 };
 
 struct raleighsl_object {
-  __Z_CACHE_ENTRY__
+  z_cache_entry_t cache_entry;            /* Object Cache Entry */
+  z_dlink_node_t journal;                 /* Object Journal Node */
 
   z_task_rwcsem_t rwcsem;                 /* Object RWC-Task-Lock */
   uint64_t pending_txn_id;                /* Pending Transaction Id */
 
   const raleighsl_object_plug_t *plug;    /* Object plugin */
 
+  int requires_balancing; /* TODO: REMOVE ME! */
+
   void *devbufs;                          /* Object Device buffers */
   void *membufs;                          /* Object Memory buffers */
-
-  z_dlink_node_t journal;                 /* Object Journal Node */
 };
 
 struct raleighsl_semantic {
@@ -86,15 +105,19 @@ struct raleighsl_semantic {
 
   const raleighsl_semantic_plug_t *plug;  /* Semantic plugin */
 
+  raleighsl_object_t *root;
+
   uint64_t next_oid;                      /* Next Object-ID */
-  void *devbufs;                          /* Semantic Device buffers */
-  void *membufs;                          /* Semantic Memory buffers */
 };
 
 struct raleighsl_journal {
   z_spinlock_t   lock;                    /* Object list lock */
   z_dlink_node_t objects;                 /* Dirty Objects */
   uint64_t       otime;                   /* Oldest entry Time */
+};
+
+struct raleighsl_blkcache {
+  z_cache_t *cache;
 };
 
 struct raleighsl_device {
@@ -111,7 +134,6 @@ struct raleighsl {
   /* File-system plugins */
   __RALEIGHSL_DECLARE_PLUG(format)        /* Disk Format plug */
   __RALEIGHSL_DECLARE_PLUG(space)         /* Space Allocator */
-  /* OID Allocator */
 
   #undef __RALEIGHSL_DECLARE_PLUG
 

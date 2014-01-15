@@ -135,16 +135,11 @@ void raleigh_client_free (raleigh_client_t *self) {
   z_memory_struct_free(z_global_memory(), raleigh_client_t, self);
 }
 
-raleigh_client_t *raleigh_tcp_connect (const char *address, const char *port, int async) {
+raleigh_client_t *raleigh_connect (int sock, int async) {
   raleigh_client_t *self;
-  int sock;
-
-  if ((sock = z_socket_tcp_connect(address, port, NULL)) < 0)
-    return(NULL);
 
   self = raleigh_client_alloc();
   if (Z_MALLOC_IS_NULL(self)) {
-    close(sock);
     return(NULL);
   }
 
@@ -153,4 +148,34 @@ raleigh_client_t *raleigh_tcp_connect (const char *address, const char *port, in
     z_iopoll_add(&(__global_ctx.iopoll), Z_IOPOLL_ENTITY(self));
   }
   return(self);
+}
+
+raleigh_client_t *raleigh_tcp_connect (const char *address, const char *port, int async) {
+  raleigh_client_t *self;
+  int sock;
+
+  if ((sock = z_socket_tcp_connect(address, port, NULL)) < 0)
+    return(NULL);
+
+  if ((self = raleigh_connect(sock, async)) == NULL)
+    close(sock);
+
+  return(self);
+}
+
+raleigh_client_t *raleigh_unix_connect (const char *address, int async) {
+#ifdef Z_SOCKET_HAS_UNIX
+  raleigh_client_t *self;
+  int sock;
+
+  if ((sock = z_socket_unix_connect(address)) < 0)
+    return(NULL);
+
+  if ((self = raleigh_connect(sock, async)) == NULL)
+    close(sock);
+
+  return(self);
+#else /* !Z_SOCKET_HAS_UNIX */
+  return(NULL);
+#endif /* !Z_SOCKET_HAS_UNIX */
 }

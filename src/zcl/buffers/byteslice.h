@@ -26,8 +26,8 @@ Z_TYPEDEF_STRUCT(z_byte_slice)
 #define Z_BYTE_SLICE(x)                      Z_CAST(z_byte_slice_t, x)
 
 struct z_byte_slice {
-  uint8_t *data;
   uint32_t size;
+  uint8_t *data;
 };
 
 #define z_byte_slice_set(slice, data_, size_)                                 \

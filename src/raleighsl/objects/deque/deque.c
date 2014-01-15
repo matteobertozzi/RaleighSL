@@ -25,14 +25,19 @@ struct deque_entry {
   z_bytes_ref_t  data;
 };
 
+struct deque_txn {
+  raleighsl_txn_atom_t __txn_atom__;
+  uint64_t txn_id;
+};
+
 typedef struct raleighsl_deque {
   z_dlink_node_t data;
   z_dlink_node_t pending_front;
   z_dlink_node_t pending_back;
   z_dlink_node_t *removed_front;
   z_dlink_node_t *removed_back;
-  uint64_t txn_id_front;
-  uint64_t txn_id_back;
+  struct deque_txn txn_id_front;
+  struct deque_txn txn_id_back;
 } raleighsl_deque_t;
 
 /* ============================================================================
@@ -70,21 +75,21 @@ raleighsl_errno_t raleighsl_deque_push (raleighsl_t *fs,
 {
   raleighsl_deque_t *deque = RALEIGHSL_DEQUE(object->membufs);
   z_dlink_node_t *pending_deque;
+  struct deque_txn *txn_atom;
   struct deque_entry *entry;
-  uint64_t *current_txn_id;
   uint64_t txn_id;
 
   if (push_front) {
     pending_deque = &(deque->pending_front);
-    current_txn_id = &(deque->txn_id_front);
+    txn_atom = &(deque->txn_id_front);
   } else {
     pending_deque = &(deque->pending_back);
-    current_txn_id = &(deque->txn_id_back);
+    txn_atom = &(deque->txn_id_back);
   }
 
   /* Verify that no other transaction is holding the operation-lock */
   txn_id = (transaction != NULL) ? raleighsl_txn_id(transaction) : 0;
-  if (*current_txn_id > 0 && *current_txn_id != txn_id)
+  if (txn_atom->txn_id > 0 && txn_atom->txn_id != txn_id)
     return(RALEIGHSL_ERRNO_TXN_LOCKED_OPERATION);
 
   /* Allocate the new entry */
@@ -93,18 +98,18 @@ raleighsl_errno_t raleighsl_deque_push (raleighsl_t *fs,
     return(RALEIGHSL_ERRNO_NO_MEMORY);
 
   /* Add only a single element to the transaction */
-  if (transaction != NULL && txn_id != *current_txn_id) {
+  if (transaction != NULL && txn_id != txn_atom->txn_id) {
     raleighsl_errno_t errno;
-    if ((errno = raleighsl_transaction_add(fs, transaction, object, current_txn_id))) {
+    if ((errno = raleighsl_transaction_add(fs, transaction, object, &(txn_atom->__txn_atom__)))) {
       __deque_entry_free(deque, entry);
       return(errno);
     }
   }
 
-  Z_LOG_TRACE("Push current_txn_id=%"PRIu64" txn_id=%"PRIu64, *current_txn_id = txn_id);
+  Z_LOG_TRACE("Push current_txn_id=%"PRIu64" txn_id=%"PRIu64, txn_atom->txn_id = txn_id);
 
   /* Push entry to the pending deque */
-  *current_txn_id = txn_id;
+  txn_atom->txn_id = txn_id;
   z_dlink_add(pending_deque, &(entry->node));
   return(RALEIGHSL_ERRNO_NONE);
 }
@@ -118,23 +123,23 @@ raleighsl_errno_t raleighsl_deque_pop (raleighsl_t *fs,
   raleighsl_deque_t *deque = RALEIGHSL_DEQUE(object->membufs);
   z_dlink_node_t **removed_entry;
   z_dlink_node_t *pending_deque;
+  struct deque_txn *txn_atom;
   z_dlink_node_t *node;
-  uint64_t *current_txn_id;
   uint64_t txn_id;
 
   if (pop_front) {
-    removed_entry  = &(deque->removed_front);
-    pending_deque  = &(deque->pending_front);
-    current_txn_id = &(deque->txn_id_front);
+    removed_entry = &(deque->removed_front);
+    pending_deque = &(deque->pending_front);
+    txn_atom = &(deque->txn_id_front);
   } else {
-    removed_entry  = &(deque->removed_back);
-    pending_deque  = &(deque->pending_back);
-    current_txn_id = &(deque->txn_id_back);
+    removed_entry = &(deque->removed_back);
+    pending_deque = &(deque->pending_back);
+    txn_atom = &(deque->txn_id_back);
   }
 
   /* Verify that no other transaction is holding the operation-lock */
   txn_id = (transaction != NULL) ? raleighsl_txn_id(transaction) : 0;
-  if (*current_txn_id > 0 && *current_txn_id != txn_id)
+  if (txn_atom->txn_id > 0 && txn_atom->txn_id != txn_id)
     return(RALEIGHSL_ERRNO_TXN_LOCKED_OPERATION);
 
   if (z_dlink_is_not_empty(pending_deque)) {
@@ -167,17 +172,17 @@ raleighsl_errno_t raleighsl_deque_pop (raleighsl_t *fs,
       *removed_entry = (*removed_entry)->prev;
     }
 
-    *current_txn_id = txn_id;
+    txn_atom->txn_id = txn_id;
     return(RALEIGHSL_ERRNO_NONE);
   }
 
   /* Remove from the other side */
   if (pop_front) {
-    pending_deque  = &(deque->pending_back);
-    current_txn_id = &(deque->txn_id_back);
+    pending_deque = &(deque->pending_back);
+    txn_atom = &(deque->txn_id_back);
   } else {
-    pending_deque  = &(deque->pending_front);
-    current_txn_id = &(deque->txn_id_front);
+    pending_deque = &(deque->pending_front);
+    txn_atom = &(deque->txn_id_front);
   }
 
   if (z_dlink_is_not_empty(pending_deque)) {
@@ -214,8 +219,8 @@ static raleighsl_errno_t __object_create (raleighsl_t *fs,
   z_dlink_init(&(deque->pending_back));
   deque->removed_front = NULL;
   deque->removed_back = NULL;
-  deque->txn_id_front = 0;
-  deque->txn_id_back = 0;
+  deque->txn_id_front.txn_id = 0;
+  deque->txn_id_back.txn_id = 0;
 
   object->membufs = deque;
   return(RALEIGHSL_ERRNO_NONE);
@@ -230,6 +235,39 @@ static raleighsl_errno_t __object_close (raleighsl_t *fs,
   return(RALEIGHSL_ERRNO_NONE);
 }
 
+static void __object_apply (raleighsl_t *fs,
+                            raleighsl_object_t *object,
+                            raleighsl_txn_atom_t *atom)
+{
+  struct deque_txn *txn = z_container_of(atom, struct deque_txn, __txn_atom__);
+  txn->txn_id = 0;
+}
+
+static void __object_revert (raleighsl_t *fs,
+                             raleighsl_object_t *object,
+                             raleighsl_txn_atom_t *atom)
+{
+  struct deque_txn *txn = z_container_of(atom, struct deque_txn, __txn_atom__);
+  raleighsl_deque_t *deque = RALEIGHSL_DEQUE(object->membufs);
+  struct deque_entry *entry;
+
+  if (txn->txn_id == deque->txn_id_front.txn_id) {
+    z_dlink_for_each_safe_entry(&(deque->pending_front), entry, struct deque_entry, node, {
+      __deque_entry_free(deque, entry);
+    });
+    z_dlink_init(&(deque->pending_front));
+    deque->removed_front = NULL;
+    txn->txn_id = 0;
+  } else if (txn->txn_id == deque->txn_id_back.txn_id) {
+    z_dlink_for_each_safe_entry(&(deque->pending_back), entry, struct deque_entry, node, {
+      __deque_entry_free(deque, entry);
+    });
+    z_dlink_init(&(deque->pending_back));
+    deque->removed_back = NULL;
+    txn->txn_id = 0;
+  }
+}
+
 static raleighsl_errno_t __object_commit (raleighsl_t *fs,
                                           raleighsl_object_t *object)
 {
@@ -237,7 +275,7 @@ static raleighsl_errno_t __object_commit (raleighsl_t *fs,
   struct deque_entry *entry;
   z_dlink_node_t *node;
 
-  if (deque->txn_id_front == 0) {
+  if (deque->txn_id_front.txn_id == 0) {
     /* Remove front */
     if (deque->removed_front != NULL) {
       node = z_dlink_front(&(deque->data));
@@ -257,7 +295,7 @@ static raleighsl_errno_t __object_commit (raleighsl_t *fs,
     }
   }
 
-  if (deque->txn_id_back == 0) {
+  if (deque->txn_id_back.txn_id == 0) {
     /* Remove back */
     if (deque->removed_back != NULL) {
       node = z_dlink_back(&(deque->data));
@@ -280,67 +318,6 @@ static raleighsl_errno_t __object_commit (raleighsl_t *fs,
   return(RALEIGHSL_ERRNO_NONE);
 }
 
-static raleighsl_errno_t __object_rollback (raleighsl_t *fs,
-                                            raleighsl_object_t *object)
-{
-  raleighsl_deque_t *deque = RALEIGHSL_DEQUE(object->membufs);
-  struct deque_entry *entry;
-
-  if (deque->txn_id_front == 0) {
-    z_dlink_for_each_safe_entry(&(deque->pending_front), entry, struct deque_entry, node, {
-      __deque_entry_free(deque, entry);
-    });
-    z_dlink_init(&(deque->pending_front));
-    deque->removed_front = NULL;
-  }
-
-  if (deque->txn_id_back == 0) {
-    z_dlink_for_each_safe_entry(&(deque->pending_back), entry, struct deque_entry, node, {
-      __deque_entry_free(deque, entry);
-    });
-    z_dlink_init(&(deque->pending_back));
-    deque->removed_back = NULL;
-  }
-
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __object_apply (raleighsl_t *fs,
-                                         raleighsl_object_t *object,
-                                         void *mutation)
-{
-  uint64_t *current_txn_id = (uint64_t *)mutation;
-  *current_txn_id = 0;
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __object_revert (raleighsl_t *fs,
-                                          raleighsl_object_t *object,
-                                          void *mutation)
-{
-  raleighsl_deque_t *deque = RALEIGHSL_DEQUE(object->membufs);
-  uint64_t *current_txn_id = (uint64_t *)mutation;
-  struct deque_entry *entry;
-
-  if (current_txn_id == &(deque->txn_id_front)) {
-    z_dlink_for_each_safe_entry(&(deque->pending_front), entry, struct deque_entry, node, {
-      __deque_entry_free(deque, entry);
-    });
-    z_dlink_init(&(deque->pending_front));
-    deque->removed_front = NULL;
-    *current_txn_id = 0;
-  } else if (current_txn_id == &(deque->txn_id_back)) {
-    z_dlink_for_each_safe_entry(&(deque->pending_back), entry, struct deque_entry, node, {
-      __deque_entry_free(deque, entry);
-    });
-    z_dlink_init(&(deque->pending_back));
-    deque->removed_back = NULL;
-    *current_txn_id = 0;
-  }
-
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
 const raleighsl_object_plug_t raleighsl_object_deque = {
   .info = {
     .type = RALEIGHSL_PLUG_TYPE_OBJECT,
@@ -351,10 +328,12 @@ const raleighsl_object_plug_t raleighsl_object_deque = {
   .create   = __object_create,
   .open     = NULL,
   .close    = __object_close,
-  .commit   = __object_commit,
-  .rollback = __object_rollback,
-  .sync     = NULL,
   .unlink   = NULL,
+
   .apply    = __object_apply,
   .revert   = __object_revert,
+  .commit   = __object_commit,
+
+  .balance  = NULL,
+  .sync     = NULL,
 };

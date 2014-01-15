@@ -26,6 +26,7 @@
 #include <raleighsl/filesystem.h>
 #include <raleighsl/transaction.h>
 #include <raleighsl/semantic.h>
+#include <raleighsl/object.h>
 #include <raleighsl/exec.h>
 
 #include <raleighsl/devices/memory.h>

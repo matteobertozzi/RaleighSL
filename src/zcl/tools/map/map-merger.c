@@ -20,6 +20,10 @@
 void z_map_merger_open (z_map_merger_t *self) {
   z_dlink_init(&(self->merge_list));
   self->smallest_iter = NULL;
+  self->skip_equals = 0;
+}
+
+void z_map_merger_close (z_map_merger_t *self) {
 }
 
 int z_map_merger_add (z_map_merger_t *self, z_map_iterator_t *iter) {
@@ -46,12 +50,27 @@ const z_map_entry_t *z_map_merger_next (z_map_merger_t *self) {
   }
 
   /* TODO: Optimize me */
-  z_dlink_for_each_entry(&(self->merge_list), iter, z_map_iterator_t, head.merge_list, {
+  z_dlink_for_each_safe_entry(&(self->merge_list), iter, z_map_iterator_t, head.merge_list, {
     const z_map_entry_t *entry = z_map_iterator_current(iter);
     Z_ASSERT(entry != NULL, "NULL Entry for iterator %p", iter);
-    if (smallest_entry == NULL || z_byte_slice_compare(&(entry->key), &(smallest_entry->key)) < 0) {
+
+#if 0
+    fprintf(stderr, "MERGER CMP %p: ", iter);
+    z_dump_map_entry(stderr, entry);
+#endif
+    if (smallest_entry == NULL) {
       self->smallest_iter = iter;
       smallest_entry = entry;
+    } else {
+      int cmp = z_byte_slice_compare(&(entry->key), &(smallest_entry->key));
+      if (cmp < 0) {
+        self->smallest_iter = iter;
+        smallest_entry = entry;
+      } else if (cmp == 0 && self->skip_equals) {
+        if (!z_map_iterator_next(iter)) {
+          z_dlink_del(&(iter->head.merge_list));
+        }
+      }
     }
   });
 

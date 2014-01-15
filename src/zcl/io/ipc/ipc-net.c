@@ -15,6 +15,7 @@
 #include <zcl/socket.h>
 #include <zcl/debug.h>
 #include <zcl/ipc.h>
+#include <zcl/fd.h>
 
 /* ============================================================================
  *  IPC over TPC socket
@@ -55,6 +56,15 @@ int z_ipc_bind_unix (const void *path, const void *service) {
 
   Z_LOG_INFO("Service %d up and running on %s...", sock, path);
   return(sock);
+}
+
+void z_ipc_unbind_unix (z_ipc_server_t *server) {
+#if 0
+  char path[4096];
+  if (!z_fd_get_path(Z_IOPOLL_ENTITY_FD(server), path, sizeof(path))) {
+    unlink(path);
+  }
+#endif
 }
 
 int z_ipc_accept_unix (z_ipc_server_t *server) {

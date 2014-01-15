@@ -162,29 +162,12 @@ int   raleighsl_semantic_alloc    (raleighsl_t *fs);
 void  raleighsl_semantic_free     (raleighsl_t *fs);
 
 #define raleighsl_semantic_commit(fs)    __semantic_call_required(fs, commit)
-#define raleighsl_semantic_rollback(fs)  __semantic_call_required(fs, rollback)
 
 /* ============================================================================
  *  Object related
  */
-raleighsl_errno_t raleighsl_object_create (raleighsl_t *fs,
-                                           const raleighsl_object_plug_t *plug,
-                                           uint64_t oid);
-raleighsl_errno_t raleighsl_object_open   (raleighsl_t *fs,
-                                           raleighsl_object_t *object);
-raleighsl_errno_t raleighsl_object_close  (raleighsl_t *fs,
-                                           raleighsl_object_t *object);
-raleighsl_errno_t raleighsl_object_sync   (raleighsl_t *fs,
-                                           raleighsl_object_t *object);
-
-#define raleighsl_object_is_open(fs, object)                  \
-  ((object)->membufs != NULL || (object)->devbufs != NULL)
-
 #define raleighsl_object_commit(fs, object)       \
   __object_call_required(fs, object, commit)
-
-#define raleighsl_object_rollback(fs, object)     \
-  __object_call_required(fs, object, rollback)
 
 #define raleighsl_object_apply(fs, object, mutation)     \
   __object_call_required(fs, object, apply, mutation)
@@ -197,10 +180,5 @@ raleighsl_errno_t raleighsl_object_sync   (raleighsl_t *fs,
  */
 int                 raleighsl_obj_cache_alloc   (raleighsl_t *fs);
 void                raleighsl_obj_cache_free    (raleighsl_t *fs);
-
-raleighsl_object_t *raleighsl_obj_cache_get     (raleighsl_t *fs,
-                                                 uint64_t oid);
-void                raleighsl_obj_cache_release (raleighsl_t *fs,
-                                                 raleighsl_object_t *object);
 
 #endif /* !_RALEIGHSL_PRIVATE_H_ */

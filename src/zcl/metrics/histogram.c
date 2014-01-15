@@ -19,15 +19,6 @@
 /* ===========================================================================
  *  PRIVATE Histogram methods
  */
-static int __histogram_get_bucket (const z_histogram_t *self, uint64_t value) {
-  int buckets = self->nbuckets - 1;
-  int i;
-  for (i = 0; i < buckets; ++i) {
-    if (value <= self->bounds[i])
-      return(i);
-  }
-  return(i);
-}
 
 /* ===========================================================================
  *  PUBLIC Histogram
@@ -55,9 +46,16 @@ void z_histogram_clear (z_histogram_t *self) {
 }
 
 void z_histogram_add (z_histogram_t *self, uint64_t value) {
-  int index = __histogram_get_bucket(self, value);
+  const uint64_t *bound = self->bounds;
+  int buckets = self->nbuckets - 1;
+  int index;
+  for (index = 0; index < buckets; ++index) {
+    if (value <= *bound++)
+      break;
+  }
+
   ++self->events[index];
-  if (Z_UNLIKELY(self->nevents++ == 0)) {
+  if (Z_UNLIKELY(++self->nevents == 1)) {
     self->min = value;
     self->max = value;
   } else if (Z_UNLIKELY(value < self->min)) {

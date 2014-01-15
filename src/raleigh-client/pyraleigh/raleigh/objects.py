@@ -46,7 +46,7 @@ class RaleighSSet(_RaleighObject):
   TYPE = 'sset'
 
   class Scanner:
-    SCAN_SIZE = 10
+    SCAN_SIZE = 100
 
     def __init__(self, sset):
       self._sset = sset

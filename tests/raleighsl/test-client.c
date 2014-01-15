@@ -23,7 +23,7 @@
 #include <zcl/socket.h>
 #include <zcl/debug.h>
 #include <zcl/time.h>
-
+#include <zcl/fd.h>
 
 #define NREQUESTS    ((uint64_t)200000)
 #define NTHREADS     1
@@ -58,7 +58,7 @@ static ssize_t __send_message(int fd, uint64_t msg_type, uint64_t req_id, void *
   iov[1].iov_len  = 1 + len[0] + len[1];
   iov[2].iov_base = buf;
   iov[2].iov_len  = bufsize;
-  return(writev(fd, iov, 3));
+  return(z_fd_writev(fd, iov, 3));
 }
 
 static int __parse_head (const unsigned char *buffer, size_t bufsize,
@@ -68,6 +68,11 @@ static int __parse_head (const unsigned char *buffer, size_t bufsize,
   uint8_t version;
   uint8_t len[2];
   uint32_t magic;
+
+  if (Z_UNLIKELY(bufsize < 8)) {
+    fprintf(stderr, "Expected at least 8 bytes, got %zu\n", bufsize);
+    return(-1);
+  }
 
   version   = buffer[0];
   *msg_size = buffer[1] | buffer[2] << 8 | buffer[3] << 16;
@@ -107,7 +112,7 @@ static void __read_and_verify (int sock, uint64_t req_id, uint64_t msg_type) {
   ssize_t rd;
   int head;
 
-  rd = read(sock, buffer, sizeof(buffer));
+  rd = z_fd_read(sock, buffer, sizeof(buffer));
   if (Z_UNLIKELY(rd < 0)) perror("read()");
 
   head = __parse_head(buffer, rd, &resp_type, &resp_id, &resp_size);
@@ -136,7 +141,7 @@ static void __create_number (int sock, uint64_t req_id) {
 
   bufsize += z_encode_field(buffer + bufsize, 2, 6);
   z_memcpy(buffer + bufsize, "number", 6);
-  bufsize += 7;
+  bufsize += 6;
 
   rd = __send_message(sock, 11, req_id, buffer, bufsize);
   if (Z_UNLIKELY(rd < 0)) perror("write()");
@@ -170,18 +175,9 @@ static void __server_ping (int sock, uint64_t req_id) {
   __read_and_verify(sock, req_id, 90);
 }
 
-void *__execute_test (void *args) {
+static void __execute_test_base (int sock) {
   uint64_t req_id = 0;
   uint64_t st, et;
-  int sock;
-
-  sock = z_socket_tcp_connect("localhost", "11215", NULL);
-  if (sock < 0) {
-    perror("sock()");
-    return(NULL);
-  }
-
-  fprintf(stderr, "Start Test!\n");
 
   /* create new number */
   __create_number(sock, req_id++);
@@ -213,6 +209,39 @@ void *__execute_test (void *args) {
 #endif
 
   close(sock);
+}
+
+static void __execute_test_tcp (void) {
+  int sock;
+
+  sock = z_socket_tcp_connect("localhost", "11215", NULL);
+  if (sock < 0) {
+    perror("sock()");
+    return;
+  }
+
+  fprintf(stderr, "Start TCP Test! %d\n", sock);
+  __execute_test_base(sock);
+}
+
+#ifdef Z_SOCKET_HAS_UNIX
+static void __execute_test_unix (void) {
+  int sock;
+
+  sock = z_socket_unix_connect("raleighsl.sock");
+  if (sock < 0) {
+    perror("sock()");
+    return;
+  }
+
+  fprintf(stderr, "Start Unix Test! %d\n", sock);
+  __execute_test_base(sock);
+}
+#endif /* Z_SOCKET_HAS_UNIX */
+
+static void *__execute_test (void *args) {
+  __execute_test_tcp();
+  __execute_test_unix();
   return(NULL);
 }
 
@@ -249,6 +278,9 @@ int main (int argc, char **argv) {
 #endif
   et = z_time_nanos();
   nrequests = (1 + (NREQUESTS * 2) * NTHREADS);
+#ifdef Z_SOCKET_HAS_UNIX
+  nrequests *= 2;
+#endif
   //nrequests = ((NREQUESTS * 1) * NTHREADS);
   printf("%d clients estimate avg-reqs %"PRIu64" %.3fsec (%.2freq/sec)\n", NTHREADS,
          nrequests, (et - st) / 1000000000.0f,

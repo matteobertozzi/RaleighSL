@@ -27,8 +27,12 @@ static int __bucket_search (const z_vtable_bucket_t *vtable,
 {
   const uint8_t *pkey = key->data;
   size_t ksize = key->size;
+  size_t use_prefix = 0;
   uint32_t koffset = 0;
   int has_item;
+
+  if (vtable->prefix_encoded(node))
+    use_prefix = 0xffffffff;
 
   has_item = vtable->fetch_first(node, entry);
   while (has_item) {
@@ -49,6 +53,7 @@ static int __bucket_search (const z_vtable_bucket_t *vtable,
     if (entry->key.data[kshared] > pkey[kshared])
       return(-1);
 
+    kshared &= use_prefix;
     koffset += kshared;
     ksize -= kshared;
     pkey += kshared;
@@ -92,6 +97,7 @@ static int __bucket_iter_next (void *self) {
       z_byte_slice_copy(&(iter->map_entry.key), &(iter->entry.key));
     }
     z_byte_slice_copy(&(iter->map_entry.value), &(iter->entry.value));
+    iter->map_entry.is_delete_marker = iter->entry.is_deleted;
   } while (iter->has_data && iter->entry.is_deleted);
   return(iter->has_data);
 }
@@ -104,6 +110,7 @@ static int __bucket_iter_begin (void *self) {
   } else {
     z_byte_slice_copy(&(iter->map_entry.key), &(iter->entry.key));
     z_byte_slice_copy(&(iter->map_entry.value), &(iter->entry.value));
+    iter->map_entry.is_delete_marker = iter->entry.is_deleted;
   }
   return(iter->has_data);
 }
@@ -157,6 +164,14 @@ static int __bucket_iter_seek (void *self, const z_byte_slice_t *key) {
   return(cmp);
 }
 
+const z_vtable_map_iterator_t z_bucket_map_iterator = {
+  .begin    = __bucket_iter_begin,
+  .next     = __bucket_iter_next,
+  .current  = __bucket_iter_current,
+  .get_refs = __bucket_iter_get_refs,
+  .seek     = __bucket_iter_seek,
+};
+
 void z_bucket_iterator_open (z_bucket_iterator_t *self,
                              const z_vtable_bucket_t *vtable,
                              const uint8_t *node,
@@ -168,11 +183,3 @@ void z_bucket_iterator_open (z_bucket_iterator_t *self,
   self->node = node;
   self->has_data = 0;
 }
-
-const z_vtable_map_iterator_t z_bucket_map_iterator = {
-  .begin    = __bucket_iter_begin,
-  .next     = __bucket_iter_next,
-  .current  = __bucket_iter_current,
-  .get_refs = __bucket_iter_get_refs,
-  .seek     = __bucket_iter_seek,
-};

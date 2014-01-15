@@ -28,11 +28,6 @@ struct raleighsl_txn_mgr {
   z_ticket_t lock;
 };
 
-struct txn_atom {
-  struct txn_atom *next;
-  void *mutation;
-};
-
 enum txn_sched_state {
   TXN_SCHED_ACQUIRE,
   TXN_SCHED_BARRIER,
@@ -50,30 +45,19 @@ enum txn_commit_type {
 struct txn_obj_group {
   struct txn_obj_group *next;
   raleighsl_object_t *object;
-  struct txn_atom *atoms_head;
-  struct txn_atom *atoms_tail;
+  raleighsl_txn_atom_t *atoms_head;
+  raleighsl_txn_atom_t *atoms_tail;
 };
 
 /* ============================================================================
- *  PRIVATE TXN Atom
+ *  PRIVATE Transaction macros
  */
-static struct txn_atom *__txn_atom_alloc (void *mutation) {
-  struct txn_atom *atom;
+#define __txn_from_cache_entry(entry)                         \
+  z_container_of(entry, raleighsl_transaction_t, cache_entry)
 
-  atom = z_memory_struct_alloc(z_global_memory(), struct txn_atom);
-  if (Z_MALLOC_IS_NULL(atom))
-    return(NULL);
-
-  atom->next = NULL;
-  atom->mutation = mutation;
-  return(atom);
-}
-
-static void __txn_atom_free (struct txn_atom *atom) {
-  Z_ASSERT(atom->mutation == NULL, "the txn mutation must be freed by the owner");
-  z_memory_struct_free(z_global_memory(), struct txn_atom, atom);
-}
-
+/* ============================================================================
+ *  PRIVATE Object group methods
+ */
 static struct txn_obj_group *__txn_object_group_alloc (raleighsl_object_t *object) {
   struct txn_obj_group *group;
 
@@ -88,17 +72,25 @@ static struct txn_obj_group *__txn_object_group_alloc (raleighsl_object_t *objec
   return(group);
 }
 
-/* ============================================================================
- *  PRIVATE Object group methods
- */
 static void __txn_object_group_free (struct txn_obj_group *group) {
-  struct txn_atom *p;
-  /* TODO: Free the atoms? */
+  /* TODO: Free the atoms?
   for (p = group->atoms_head; p != NULL; p = p->next) {
-    __txn_atom_free(p);
+    TODO: Free the atom?
   }
-
+  */
   z_memory_struct_free(z_global_memory(), struct txn_obj_group, group);
+}
+
+static struct txn_obj_group *__txn_object_group (raleighsl_transaction_t *transaction,
+                                                 raleighsl_object_t *object)
+{
+  struct txn_obj_group *group = (struct txn_obj_group *)transaction->objects;
+  while (group != NULL) {
+    if (group->object == object)
+      return(group);
+    group = group->next;
+  }
+  return(NULL);
 }
 
 static struct txn_obj_group *__txn_object_group_add (raleighsl_transaction_t *transaction,
@@ -139,13 +131,14 @@ raleighsl_transaction_t *raleighsl_transaction_alloc (raleighsl_t *fs, uint64_t 
     return(NULL);
 
   /* Initialize cache-entry attributes */
-  z_cache_entry_init(Z_CACHE_ENTRY(txn), txn_id);
+  z_cache_entry_init(&(txn->cache_entry), txn_id);
 
   /* Initialize Transactions's attributes */
   txn->objects = NULL;
   txn->mtime = z_time_micros();
   z_task_rwcsem_open(&(txn->rwcsem));
   txn->state = RALEIGHSL_TXN_WAIT_COMMIT;
+  z_ticket_init(&(txn->lock));
   return(txn);
 }
 
@@ -267,26 +260,24 @@ static void __sched_txn_task_exec (z_task_t *task) {
     Z_LOG_TRACE("%s atoms on TXN-ID %"PRIu64, (commit_type == TXN_APPLY ? "Apply" : "Revert"), raleighsl_txn_id(txn));
     for (group = (struct txn_obj_group *)txn->objects; group != NULL && !errno; group = group->next) {
       raleighsl_object_t *object = group->object;
-      struct txn_atom *atom;
+      raleighsl_txn_atom_t *atom;
 
       atom = group->atoms_head;
       while (atom != NULL && !errno) {
-        struct txn_atom *atom_next = atom->next;
+        raleighsl_txn_atom_t *atom_next = atom->next;
 
         if (commit_type == TXN_APPLY) {
           Z_LOG_TRACE("Apply Txn-ID=%"PRIu64" Atom=%p on OID=%"PRIu64"",
                       raleighsl_txn_id(txn), atom, raleighsl_oid(object));
-          errno = raleighsl_object_apply(fs, object, atom->mutation);
+          raleighsl_object_apply(fs, object, atom);
         } else {
           Z_LOG_TRACE("Revert Txn-ID=%"PRIu64" Atom=%p on OID=%"PRIu64"",
                       raleighsl_txn_id(txn), atom, raleighsl_oid(object));
-          errno = raleighsl_object_revert(fs, object, atom->mutation);
+          raleighsl_object_revert(fs, object, atom);
         }
         /* TODO: How to handle commit error */
 
         /* Release the processed atom - the mutation should be freed by the object */
-        atom->mutation = NULL;
-        __txn_atom_free(atom);
         atom = atom_next;
         group->atoms_head = atom_next;
       }
@@ -296,11 +287,6 @@ static void __sched_txn_task_exec (z_task_t *task) {
     if (errno) {
       Z_LOG_TRACE("Rollback TXN-ID %"PRIu64" - %s", raleighsl_txn_id(txn), raleighsl_errno_string(errno));
       is_complete = 1;
-      for (group = (struct txn_obj_group *)txn->objects; group != NULL; group = group->next) {
-        /* TODO: Revert pending atoms */
-        raleighsl_object_t *object = group->object;
-        raleighsl_object_rollback(fs, object);
-      }
     } else {
       Z_LOG_TRACE("Prepare Commit on TXN-ID %"PRIu64, raleighsl_txn_id(txn));
       task->state = TXN_SCHED_COMMIT;
@@ -339,7 +325,7 @@ static void __sched_txn_task_exec (z_task_t *task) {
   __txn_mgr_release_locks(fs, txn);
   z_task_rwcsem_release(&(txn->rwcsem), Z_RWCSEM_COMMIT, task, is_complete);
   __sched_task_notify_func_exec(fs, 0, errno, task);
-  z_cache_release(fs->txn_mgr->cache, Z_CACHE_ENTRY(txn));
+  z_cache_release(fs->txn_mgr->cache, &(txn->cache_entry));
   z_task_free(task);
 }
 
@@ -350,6 +336,7 @@ static int __txn_commit_task (raleighsl_t *fs,
                               void *udata, void *err_data)
 {
   raleighsl_transaction_t *txn;
+  z_cache_entry_t *entry;
   z_task_t *task;
 
   task = z_task_alloc(__sched_txn_task_exec);
@@ -357,13 +344,14 @@ static int __txn_commit_task (raleighsl_t *fs,
     return(-1);
   }
 
-  txn = RALEIGHSL_TRANSACTION(z_cache_remove(fs->txn_mgr->cache, txn_id));
-  if (txn == NULL) {
+  entry = z_cache_remove(fs->txn_mgr->cache, txn_id);
+  if (entry == NULL) {
     z_task_free(task);
     notify_func(fs, 0, RALEIGHSL_ERRNO_TXN_NOT_FOUND, udata, err_data);
     return(0);
   }
 
+  txn = __txn_from_cache_entry(entry);
   z_rwcsem_set_commit_flag(&(txn->rwcsem.lock));
   task->state = TXN_SCHED_ACQUIRE;
   task->context = fs;
@@ -380,17 +368,19 @@ static int __txn_commit_task (raleighsl_t *fs,
 /* ============================================================================
  *  PUBLIC Transaction WRITE methods
  */
-static void __txn_cache_entry_free (void *fs, void *txn) {
+static void __txn_cache_entry_free (void *fs, void *entry) {
+  raleighsl_transaction_t *txn = __txn_from_cache_entry(entry);
+
   /* TODO: Rollback transaction */
   Z_LOG_WARN("TODO: Rollback transaction %"PRIu64, raleighsl_txn_id(txn));
-  raleighsl_transaction_free(RALEIGHSL(fs), RALEIGHSL_TRANSACTION(txn));
+  raleighsl_transaction_free(RALEIGHSL(fs), txn);
 }
 
 static int __txn_cache_entry_evict (void *udata,
                                     unsigned int size,
                                     z_cache_entry_t *entry)
 {
-  raleighsl_transaction_t *txn = RALEIGHSL_TRANSACTION(entry);
+  raleighsl_transaction_t *txn = __txn_from_cache_entry(entry);
   uint64_t txn_time = z_time_micros() - txn->mtime;
 
   if (txn_time > Z_TIME_SEC(60)) {
@@ -433,21 +423,22 @@ void raleighsl_txn_mgr_free (raleighsl_t *fs) {
 raleighsl_errno_t raleighsl_transaction_add (raleighsl_t *fs,
                                              raleighsl_transaction_t *transaction,
                                              raleighsl_object_t *object,
-                                             void *mutation)
+                                             raleighsl_txn_atom_t *atom)
 {
   struct txn_obj_group *group;
-  struct txn_atom *atom;
+
+  Z_ASSERT(atom != NULL, "Expected a NOT NULL atom");
+
+  z_ticket_acquire(&(transaction->lock));
 
   /* lookup/allocate object group */
   group = __txn_object_group_add(transaction, object);
-  if (Z_MALLOC_IS_NULL(group))
+  if (Z_MALLOC_IS_NULL(group)) {
+    z_ticket_release(&(transaction->lock));
     return(RALEIGHSL_ERRNO_NO_MEMORY);
+  }
 
-  /* Allocate new txn-atom */
-  atom = __txn_atom_alloc(mutation);
-  if (Z_MALLOC_IS_NULL(atom))
-    return(RALEIGHSL_ERRNO_NO_MEMORY);
-
+  atom->next = NULL;
   if (group->atoms_tail != NULL) {
     group->atoms_tail->next = atom;
   } else {
@@ -457,14 +448,61 @@ raleighsl_errno_t raleighsl_transaction_add (raleighsl_t *fs,
 
   transaction->mtime = z_time_micros();
 
+  z_ticket_release(&(transaction->lock));
+
   Z_LOG_TRACE("Add Txn-ID=%"PRIu64" Atom=%p", raleighsl_txn_id(transaction), atom);
   return(RALEIGHSL_ERRNO_NONE);
+}
+
+void raleighsl_transaction_replace (raleighsl_t *fs,
+                                    raleighsl_transaction_t *transaction,
+                                    raleighsl_object_t *object,
+                                    raleighsl_txn_atom_t *atom,
+                                    raleighsl_txn_atom_t *new_atom)
+{
+  struct txn_obj_group *group;
+  raleighsl_txn_atom_t *prev;
+  raleighsl_txn_atom_t *p;
+
+  Z_ASSERT(atom != NULL, "Expected a NOT NULL atom");
+
+  z_ticket_acquire(&(transaction->lock));
+
+  group = __txn_object_group(transaction, object);
+  Z_ASSERT(atom != NULL, "Expected a group for the atom");
+
+  for (p = prev = group->atoms_head; p != NULL; p = p->next) {
+    if (p == atom) {
+      if (new_atom == NULL) {
+        prev->next = atom->next;
+      } else {
+        new_atom->next = p->next;
+        prev->next = new_atom;
+      }
+      break;
+    }
+    prev = p;
+  }
+  z_ticket_release(&(transaction->lock));
+
+  Z_ASSERT(prev->next == ((new_atom == NULL) ? atom->next : new_atom), "txn-atom not found");
+  Z_LOG_TRACE("Replaced Txn-ID=%"PRIu64" Atom=%p with %p",
+              raleighsl_txn_id(transaction), atom, new_atom);
+}
+
+void raleighsl_transaction_remove (raleighsl_t *fs,
+                                   raleighsl_transaction_t *transaction,
+                                   raleighsl_object_t *object,
+                                   raleighsl_txn_atom_t *atom)
+{
+  raleighsl_transaction_replace(fs, transaction, object, atom, NULL);
 }
 
 raleighsl_errno_t raleighsl_transaction_create (raleighsl_t *fs,
                                                 uint64_t *txn_id)
 {
   raleighsl_transaction_t *txn;
+  z_cache_entry_t *entry;
 
   *txn_id = z_atomic_inc(&(fs->txn_mgr->next_txn_id));
 
@@ -473,9 +511,9 @@ raleighsl_errno_t raleighsl_transaction_create (raleighsl_t *fs,
     return(RALEIGHSL_ERRNO_NO_MEMORY);
 
   Z_LOG_TRACE("Create new Transaction %"PRIu64, *txn_id);
-  txn = RALEIGHSL_TRANSACTION(z_cache_try_insert(fs->txn_mgr->cache,
-                                                 Z_CACHE_ENTRY(txn)));
-  Z_ASSERT(txn == NULL, "Another transaction with same id present %p", txn);
+  entry = z_cache_try_insert(fs->txn_mgr->cache, &(txn->cache_entry));
+  Z_ASSERT(entry == NULL, "Another transaction with same id present %"PRIu64,
+                          raleighsl_txn_id(txn));
 
   return(RALEIGHSL_ERRNO_NONE);
 }
@@ -506,12 +544,14 @@ raleighsl_errno_t raleighsl_transaction_acquire (raleighsl_t *fs,
   *txn = NULL;
   if (txn_id > 0) {
     raleighsl_transaction_t *txn_ctx;
+    z_cache_entry_t *entry;
 
     Z_LOG_TRACE("Acquire Txn-ID %"PRIu64, txn_id);
-    txn_ctx = RALEIGHSL_TRANSACTION(z_cache_lookup(fs->txn_mgr->cache, txn_id));
-    if (txn_ctx == NULL)
+    entry = z_cache_lookup(fs->txn_mgr->cache, txn_id);
+    if (entry == NULL)
       return(RALEIGHSL_ERRNO_TXN_NOT_FOUND);
 
+    txn_ctx = __txn_from_cache_entry(entry);
     if (!z_rwcsem_try_acquire_read(&(txn_ctx->rwcsem.lock)))
       return(RALEIGHSL_ERRNO_TXN_CLOSED);
 
@@ -528,5 +568,5 @@ void raleighsl_transaction_release (raleighsl_t *fs,
 
   Z_LOG_TRACE("Release Txn-ID %"PRIu64, raleighsl_txn_id(txn));
   z_rwcsem_release_read(&(txn->rwcsem.lock));
-  z_cache_release(fs->txn_mgr->cache, Z_CACHE_ENTRY(txn));
+  z_cache_release(fs->txn_mgr->cache, &(txn->cache_entry));
 }

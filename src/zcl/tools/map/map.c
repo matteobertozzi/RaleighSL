@@ -37,19 +37,14 @@ void z_map_iterator_seek_to (z_map_iterator_t *self,
   if (key == NULL || z_byte_slice_is_empty(key)) {
     z_map_iterator_begin(self);
   } else {
+    const z_map_entry_t *entry;
+
     z_map_iterator_seek(self, key);
-#if 0
-    fprintf(stderr, "seek to: ");
-    z_dump_map_entry(stderr, z_map_iterator_current(self));
-    fprintf(stderr, "expected ");
-    z_dump_byte_slice(stderr, key);
-#endif
-    if (!include_key) {
+
+    /* TODO: Skip entry comparison and rely on seek cmp return value */
+    entry = z_map_iterator_current(self);
+    if (!include_key && entry != NULL && z_byte_slice_compare(&(entry->key), key) <= 0) {
       z_map_iterator_next(self);
-#if 0
-      fprintf(stderr, "seek to next: ");
-      z_dump_map_entry(stderr, z_map_iterator_current(self));
-#endif
     }
   }
 }

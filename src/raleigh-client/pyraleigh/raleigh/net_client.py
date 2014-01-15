@@ -199,7 +199,8 @@ class NetIOClient(object):
       if r:
         self._rbuf += self._sock.recv(4096)
       et = time()
-      print 'wait %.3fsec for %r' % (et - st, r)
+      if (et - st) > 100:
+        print 'wait %.3fsec for %r' % (et - st, r)
     else:
       self._rbuf += self._sock.recv(4096)
     return self._rbuf

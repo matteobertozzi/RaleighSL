@@ -12,6 +12,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+from hashlib import sha1
+from bisect import insort, bisect_left
+
 from raleigh.objects import RaleighSSet
 from raleigh.objects import RaleighTransaction
 from raleigh.client import RaleighException
@@ -131,6 +134,91 @@ class TestSSet(RaleighTestCase):
       self.assertEquals(data['value'], value)
       data = sset_2.get(key)
       self.assertEquals(data['value'], value)
+
+  def test_long_run(self):
+    oid = self.createObject(RaleighSSet.TYPE)
+    sset = RaleighSSet(self.client, oid)
+
+    hkey = lambda x: sha1('%d' % x).hexdigest()
+    hval = lambda x, v: sha1('%d-v%s' % (x, v)).hexdigest()
+    NKEYS = (64 * 1024) / (20 + 40)
+    VERIFY_MOD = 100
+
+    class Data:
+      def __init__(self):
+        self.data = []
+        self.rm_keys = set()
+
+      def __len__(self):
+        return len(self.data)
+
+      def get(self, key):
+        index = self._get_index(key)
+        return index, self.data[index][1]
+
+      def insert(self, key, value):
+        insort(self.data, (key, value))
+
+      def update(self, key, value):
+        index = self._get_index(key)
+        self.data[index] = (key, value)
+
+      def remove(self, key):
+        del self.data[self._get_index(key)]
+        self.rm_keys.add(key)
+
+      def is_removed(self, key):
+        return key in self.rm_keys
+
+      def _get_index(self, key):
+        index = bisect_left(self.data, (key, None))
+        if index != len(self.data) and self.data[index][0] == key:
+          return index
+        raise ValueError
+
+    def _verify_sset_data(sset, test_data):
+      for j in xrange(len(test_data)):
+        key = hkey(j)
+        if test_data.is_removed(key):
+          self.assertRaises(RaleighException, sset.get, key)
+        else:
+          _, value = test_data.get(key)
+          result = sset.get(key)
+          self.assertEquals(result['value'], value)
+
+      for j, (key, value) in enumerate(sset.create_scanner()):
+        index, test_value = test_data.get(key)
+        self.assertEquals(test_value, value)
+        self.assertEquals(index, j)
+
+    test_data = Data()
+
+    # Insert and Verify
+    for i in xrange(NKEYS):
+      key, value = hkey(i), hval(i, 1)
+      sset.insert(key, value)
+      test_data.insert(key, value)
+      if i % VERIFY_MOD == 0:
+        _verify_sset_data(sset, test_data)
+    _verify_sset_data(sset, test_data)
+
+    # Update and Verify
+    for i in xrange(0, NKEYS, 2):
+      key, value = hkey(i), hval(i, 2)
+      sset.update(key, value)
+      test_data.update(key, value)
+      if i % VERIFY_MOD == 0:
+        _verify_sset_data(sset, test_data)
+    _verify_sset_data(sset, test_data)
+
+    # Delete and Verify
+    for i in xrange(1, NKEYS, 2):
+      key = hkey(i)
+      sset.pop(key)
+      test_data.remove(key)
+      if i % VERIFY_MOD == 0:
+        _verify_sset_data(sset, test_data)
+    _verify_sset_data(sset, test_data)
 
 if __name__ == '__main__':
   import unittest

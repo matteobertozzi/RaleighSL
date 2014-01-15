@@ -13,11 +13,13 @@
  */
 
 #include <raleighsl/transaction.h>
+#include <raleighsl/object.h>
 #include <raleighsl/exec.h>
 
 #include <zcl/locking.h>
 #include <zcl/global.h>
 #include <zcl/debug.h>
+#include <zcl/time.h>
 
 #include "private.h"
 
@@ -37,7 +39,9 @@ raleighsl_errno_t raleighsl_object_create (raleighsl_t *fs,
     return(RALEIGHSL_ERRNO_NO_MEMORY);
 
   /* Assign plug to object */
+  Z_ASSERT(plug != NULL, "Missing plug for object %"PRIu64, oid);
   object->plug = plug;
+  Z_LOG_TRACE("create new %s object with oid %"PRIu64, plug->info.label, oid);
 
   /* Object create */
   if ((errno = __object_call_required(fs, object, create))) {
@@ -45,7 +49,7 @@ raleighsl_errno_t raleighsl_object_create (raleighsl_t *fs,
   }
 
   raleighsl_obj_cache_release(fs, object);
-
+  object->requires_balancing = 0;
   return(RALEIGHSL_ERRNO_NONE);
 }
 
@@ -68,6 +72,7 @@ raleighsl_errno_t raleighsl_object_open (raleighsl_t *fs,
     return(errno);
   }
 
+  object->requires_balancing = 0;
   return(RALEIGHSL_ERRNO_NONE);
 }
 
@@ -84,22 +89,71 @@ raleighsl_errno_t raleighsl_object_sync (raleighsl_t *fs,
 }
 
 /* ============================================================================
- *  RaleighSL Object Scheduler
+ *  PRIVATE Object sched
  */
 enum object_sched_state {
-  OBJECT_SCHED_OPEN   = 0,
-  OBJECT_SCHED_READ   = 1,
-  OBJECT_SCHED_WRITE  = 2,
-  OBJECT_SCHED_COMMIT = 3,
+  OBJECT_SCHED_OPEN    = 0,
+  OBJECT_SCHED_READ    = 1,
+  OBJECT_SCHED_WRITE   = 2,
+  OBJECT_SCHED_COMMIT  = 3,
 };
 
 static z_rwcsem_op_t __sched_state_rwc_op[] = {
-  [OBJECT_SCHED_OPEN]   = Z_RWCSEM_WRITE,
-  [OBJECT_SCHED_READ]   = Z_RWCSEM_READ,
-  [OBJECT_SCHED_WRITE]  = Z_RWCSEM_WRITE,
-  [OBJECT_SCHED_COMMIT] = Z_RWCSEM_COMMIT,
+  [OBJECT_SCHED_OPEN]    = Z_RWCSEM_WRITE,
+  [OBJECT_SCHED_READ]    = Z_RWCSEM_READ,
+  [OBJECT_SCHED_WRITE]   = Z_RWCSEM_WRITE,
+  [OBJECT_SCHED_COMMIT]  = Z_RWCSEM_COMMIT,
 };
 
+/* ============================================================================
+ *  PRIVATE RaleighSL Object Balancing
+ */
+
+/* TODO */
+#define __object_requires_balancing(fs, object)       \
+  ((object)->requires_balancing)
+
+static raleighsl_errno_t __balance_func (raleighsl_t *fs,
+                                         raleighsl_transaction_t *transaction,
+                                         raleighsl_object_t *object,
+                                         void *udata)
+{
+  return(__object_call_unrequired(fs, object, balance));
+}
+
+static void __balance_notify_func (raleighsl_t *fs,
+                                   uint64_t oid, raleighsl_errno_t errno,
+                                   void *udata, void *err_data)
+{
+  if (errno) {
+    Z_LOG_ERROR("got an error while balancing object %"PRIu64": %s",
+                oid, raleighsl_errno_string(errno));
+  } else {
+    Z_LOG_DEBUG("balanced object %"PRIu64": %s", oid, raleighsl_errno_string(errno));
+  }
+}
+
+static void __object_sched_balance (z_task_t *task,
+                                    raleighsl_t *fs,
+                                    raleighsl_object_t *object)
+{
+  Z_LOG_DEBUG("sched %s balancing for object %"PRIu64,
+              object->plug->info.label, raleighsl_oid(object));
+  task->state = OBJECT_SCHED_OPEN;
+  task->flags = OBJECT_SCHED_WRITE;
+  task->context = fs;
+  task->object.u64 = raleighsl_oid(object);
+  task->udata = NULL;
+  task->args[0].ptr = __balance_notify_func;
+  task->args[1].ptr = NULL;
+  task->args[2].ptr = __balance_func;
+  task->args[3].ptr = NULL;
+  z_global_add_task(task);
+}
+
+/* ============================================================================
+ *  RaleighSL Object Scheduler
+ */
 #define __sched_task_read_func_exec(fs, txn, object, task)                \
   ((raleighsl_read_func_t)((task)->args[2].ptr))                          \
     (fs, txn, object, (task)->udata)
@@ -124,6 +178,7 @@ static void __sched_object_task_exec (z_task_t *task) {
   txn = RALEIGHSL_TRANSACTION(task->args[3].ptr);
   if (task->state == OBJECT_SCHED_OPEN) {
     object = raleighsl_obj_cache_get(fs, task->object.u64);
+    Z_ASSERT(raleighsl_oid(object) == task->object.u64, "wrong object ID");
     if (raleighsl_object_is_open(fs, object)) {
       task->object.ptr = object;
       task->state = task->flags;
@@ -155,11 +210,7 @@ static void __sched_object_task_exec (z_task_t *task) {
       case OBJECT_SCHED_OPEN:
         task->object.ptr = object;
         errno = raleighsl_object_open(fs, object);
-        if (errno) {
-          if (object->plug != NULL) {
-            raleighsl_object_rollback(fs, object);
-          }
-        } else {
+        if (!errno) {
           is_complete = 0;
           task->state = task->flags;
           keep_running = z_rwcsem_try_switch(&(object->rwcsem.lock), op_type, __sched_state_rwc_op[task->state]);
@@ -174,10 +225,10 @@ static void __sched_object_task_exec (z_task_t *task) {
       case OBJECT_SCHED_WRITE:
         errno = __sched_task_write_func_exec(fs, txn, object, task);
         if (errno) {
-          if (txn != NULL) txn->state = RALEIGHSL_TXN_DONT_COMMIT;
-          raleighsl_object_rollback(fs, object);
+          if (txn != NULL) {
+            txn->state = RALEIGHSL_TXN_DONT_COMMIT;
+          }
         } else {
-          /* TODO: No need for commit if txn != NULL */
           z_rwcsem_set_commit_flag(&(object->rwcsem.lock));
           is_complete = 0;
           task->state = OBJECT_SCHED_COMMIT;
@@ -186,9 +237,6 @@ static void __sched_object_task_exec (z_task_t *task) {
         break;
       case OBJECT_SCHED_COMMIT:
         errno = raleighsl_object_commit(fs, object);
-        if (Z_UNLIKELY(errno)) {
-          raleighsl_object_rollback(fs, object);
-        }
         break;
     }
   } while (keep_running);
@@ -196,10 +244,20 @@ static void __sched_object_task_exec (z_task_t *task) {
 
   if (is_complete) {
     __sched_task_notify_func_exec(fs, raleighsl_oid(object), errno, task);
+
+    if (task->state == OBJECT_SCHED_COMMIT &&
+        __object_requires_balancing(fs, object))
+    {
+      __object_sched_balance(task, fs, object);
+    } else {
+      z_task_free(task);
+    }
+
     raleighsl_obj_cache_release(fs, object);
     raleighsl_transaction_release(fs, txn);
-    z_task_free(task);
   }
+
+  /* TODO: Verify memory pressure */
 }
 
 /* ============================================================================

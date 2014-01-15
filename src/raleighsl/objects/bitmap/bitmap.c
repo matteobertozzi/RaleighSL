@@ -101,34 +101,24 @@ static raleighsl_errno_t __object_close (raleighsl_t *fs,
   return(RALEIGHSL_ERRNO_NONE);
 }
 
+static void __object_apply (raleighsl_t *fs,
+                            raleighsl_object_t *object,
+                            raleighsl_txn_atom_t *atom)
+{
+  //raleighsl_bitmap_t *bitmap = RALEIGHSL_BITMAP(object->membufs);
+  /* TODO */
+}
+
+static void __object_revert (raleighsl_t *fs,
+                             raleighsl_object_t *object,
+                             raleighsl_txn_atom_t *atom)
+{
+  //raleighsl_bitmap_t *bitmap = RALEIGHSL_BITMAP(object->membufs);
+  /* TODO */
+}
+
 static raleighsl_errno_t __object_commit (raleighsl_t *fs,
                                           raleighsl_object_t *object)
-{
-  //raleighsl_bitmap_t *bitmap = RALEIGHSL_BITMAP(object->membufs);
-  /* TODO */
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __object_rollback (raleighsl_t *fs,
-                                            raleighsl_object_t *object)
-{
-  //raleighsl_bitmap_t *bitmap = RALEIGHSL_BITMAP(object->membufs);
-  /* TODO */
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __object_apply (raleighsl_t *fs,
-                                         raleighsl_object_t *object,
-                                         void *mutation)
-{
-  //raleighsl_bitmap_t *bitmap = RALEIGHSL_BITMAP(object->membufs);
-  /* TODO */
-  return(RALEIGHSL_ERRNO_NONE);
-}
-
-static raleighsl_errno_t __object_revert (raleighsl_t *fs,
-                                          raleighsl_object_t *object,
-                                          void *mutation)
 {
   //raleighsl_bitmap_t *bitmap = RALEIGHSL_BITMAP(object->membufs);
   /* TODO */
@@ -145,10 +135,12 @@ const raleighsl_object_plug_t raleighsl_object_bitmap = {
   .create   = __object_create,
   .open     = NULL,
   .close    = __object_close,
-  .commit   = __object_commit,
-  .rollback = __object_rollback,
-  .sync     = NULL,
   .unlink   = NULL,
+
   .apply    = __object_apply,
   .revert   = __object_revert,
+  .commit   = __object_commit,
+
+  .balance  = NULL,
+  .sync     = NULL,
 };

@@ -15,3 +15,32 @@
 #include <raleighsl/errno.h>
 
 #include "private.h"
+
+/*
+ * +--------------------------+
+ * | cache entry   (40 bytes) |
+ * +--------------------------+
+ * |  - hash-next  ( 8 bytes) |
+ * |  - cnode-link (16 bytes) |
+ * |  - OID        ( 8 bytes) |
+ * |  - refs       ( 4 bytes) |
+ * |  - state      ( 4 bytes) |
+ * +--------------------------+
+ * | block         (72 bytes) |
+ * +--------------------------+
+ * |  - block hash (32 bytes) |
+ * |  - hash node  (24 bytes) |
+ * |  - length     ( 4 bytes) |
+ * |  - pad        ( 4 bytes) |
+ * |  - data-ptr   ( 8 bytes) |
+ * +--------------------------+
+ * |              (112 bytes) |
+ * +--------------------------+
+ */
+
+struct blk_page {
+  struct blk_group *next;
+  unsigned int x;
+  unsigned int y;
+  raleighsl_block_t block[73];
+};
