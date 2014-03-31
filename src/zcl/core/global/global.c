@@ -19,8 +19,6 @@
 #include <zcl/debug.h>
 #include <zcl/time.h>
 
-#define __NUM_WORK_QUEUES         (1)
-
 struct cpu_ctx {
   z_thread_t thread;
   uint8_t pad0[z_align_up(sizeof(z_thread_t), 128) - sizeof(z_thread_t)];
@@ -30,9 +28,8 @@ struct cpu_ctx {
 };
 
 struct z_global_context {
-  uint64_t req_id;
-  z_task_tree_t  pending[__NUM_WORK_QUEUES];
-  z_task_queue_t queue[__NUM_WORK_QUEUES];
+  z_task_sched_t sched;
+  z_task_rq_fair_t rq_fair;
 
   z_thread_pool_t thread_pool;
 
@@ -51,37 +48,22 @@ static z_global_context_t *__global_ctx = NULL;
  *  PRIVATE cpu-context methods
  */
 static void *__cpu_ctx_fetch_task (void *cpu_ctx) {
-  z_task_t *task;
-#if __NUM_WORK_QUEUES > 1
-  int count;
+  z_task_rq_t *rq;
 
-  count = __NUM_WORK_QUEUES;
-  while (count--) {
-    if ((task = z_task_tree_pop(&(__global_ctx->pending[count]))) != NULL)
-      return(task);
-  }
+  rq = z_task_sched_get_rq(&(__global_ctx->sched));
+  if (Z_UNLIKELY(rq == NULL))
+    return(NULL);
 
-  count = __NUM_WORK_QUEUES;
-  while (count--) {
-    if ((task = z_task_queue_pop(&(__global_ctx->queue[count]))) != NULL)
-      return(task);
-  }
-#else
-  if ((task = z_task_tree_pop(&(__global_ctx->pending[0]))) != NULL)
-    return(task);
-
-  if ((task = z_task_queue_pop(&(__global_ctx->queue[0]))) != NULL)
-    return(task);
-#endif
-  return(NULL);
+  return(z_task_rq_fetch(rq));
 }
 
 static void *__cpu_ctx_loop (void *cpu_ctx) {
   int is_running = 1;
   while (is_running) {
-    void *task = z_thread_pool_ctx_fetch(&(__global_ctx->thread_pool),
-                                         __cpu_ctx_fetch_task, cpu_ctx,
-                                         &is_running);
+    z_task_t *task;
+    task = Z_TASK(z_thread_pool_ctx_fetch(&(__global_ctx->thread_pool),
+                                          __cpu_ctx_fetch_task, cpu_ctx,
+                                          &is_running));
     if (Z_LIKELY(task != NULL)) {
       z_task_exec(task);
     }
@@ -135,7 +117,6 @@ static struct cpu_ctx *__set_local_cpu_ctx (void) {
   (Z_LIKELY(__local_cpu_ctx != NULL) ? __local_cpu_ctx : __set_local_cpu_ctx())
 
 #define __current_cpu_ctx_id()    (__current_cpu_ctx() - __global_ctx->cpus)
-#define __current_queue_slot()    (__current_cpu_ctx_id() & (__NUM_WORK_QUEUES - 1))
 
 /* ============================================================================
  *  PUBLIC global-context methods
@@ -143,7 +124,7 @@ static struct cpu_ctx *__set_local_cpu_ctx (void) {
 int z_global_context_open (z_allocator_t *allocator, void *user_data) {
   struct cpu_ctx *cpu_ctx;
   unsigned int mmsize;
-  int i, ncpus;
+  int ncpus;
 
   if (__global_ctx != NULL) {
     Z_LOG_WARN("global context exists already!");
@@ -166,12 +147,14 @@ int z_global_context_open (z_allocator_t *allocator, void *user_data) {
   __global_ctx->allocator = allocator;
   __global_ctx->user_data = user_data;
 
-  __global_ctx->req_id = 0;
-  for (i = 0; i < __NUM_WORK_QUEUES; ++i) {
-    z_task_tree_open(&__global_ctx->pending[i]);
-    z_task_queue_open(&__global_ctx->queue[i]);
-  }
+  Z_LOG_DEBUG("Initialize global-context task scheduler");
+  z_task_sched_open(&(__global_ctx->sched));
 
+  Z_LOG_DEBUG("Initialize global-context run-queue");
+  z_task_rq_open(&(__global_ctx->rq_fair.rq), &z_task_rq_fair, 50);
+  z_task_sched_add_rq(&(__global_ctx->sched), &(__global_ctx->rq_fair.rq));
+
+  Z_LOG_DEBUG("Initialize global-context thread-pool");
   if (z_thread_pool_open(&(__global_ctx->thread_pool), ncpus)) {
     Z_LOG_FATAL("unable to initialize the global context thread-pool.");
     z_allocator_free(allocator, __global_ctx);
@@ -182,6 +165,7 @@ int z_global_context_open (z_allocator_t *allocator, void *user_data) {
   /* Initialize cpu context */
   cpu_ctx = __global_ctx->cpus;
   while (ncpus--) {
+    Z_LOG_DEBUG("Initialize global-context cpu-ctx %d", ncpus);
     if (__cpu_ctx_open(cpu_ctx++, ncpus)) {
       while (++ncpus < __global_ctx->thread_pool.total_threads)
         __cpu_ctx_close(--cpu_ctx);
@@ -194,13 +178,12 @@ int z_global_context_open (z_allocator_t *allocator, void *user_data) {
   }
 
   /* Wait thread pool initialization */
+  Z_LOG_DEBUG("Waiting for global-context thread-pool initialization");
   z_thread_pool_wait(&(__global_ctx->thread_pool));
   return(0);
 }
 
 void z_global_context_close (void) {
-  int i;
-
   /* clear queue */
   z_thread_pool_stop(&(__global_ctx->thread_pool));
   while (__global_ctx->thread_pool.total_threads--) {
@@ -208,10 +191,7 @@ void z_global_context_close (void) {
   }
   z_thread_pool_close(&(__global_ctx->thread_pool));
 
-  for (i = 0; i < __NUM_WORK_QUEUES; ++i) {
-    z_task_tree_close(&__global_ctx->pending[i]);
-    z_task_queue_close(&__global_ctx->queue[i]);
-  }
+  z_task_sched_close(&(__global_ctx->sched));
 
   z_allocator_free(__global_ctx->allocator, __global_ctx);
   __global_ctx = NULL;
@@ -232,23 +212,24 @@ z_memory_t *z_global_memory (void) {
   return(&(__current_cpu_ctx()->memory));
 }
 
+z_task_sched_t *z_global_task_sched (void) {
+  return(&(__global_ctx->sched));
+}
+
 void z_global_add_task (z_task_t *task) {
   if (task != NULL) {
-    const int slot = __current_queue_slot();
     z_mutex_lock(&(__global_ctx->thread_pool.mutex));
-    task->seqid = __global_ctx->req_id++;
-    z_task_queue_push(&(__global_ctx->queue[slot]), task);
+    z_task_rq_add(&(__global_ctx->rq_fair.rq), task);
     z_wait_cond_signal(&(__global_ctx->thread_pool.task_ready));
     z_mutex_unlock(&(__global_ctx->thread_pool.mutex));
   }
 }
 
-void z_global_add_pending_tasks (z_task_t *tasks) {
-  return(z_global_add_pending_ntasks(1, tasks));
+void z_global_add_tasks (z_task_t *tasks) {
+  return(z_global_add_ntasks(1, tasks));
 }
 
-void z_global_add_pending_ntasks (int count, ...) {
-  const int slot = __current_queue_slot();
+void z_global_add_ntasks (int count, ...) {
   int ntasks = 0;
   va_list ap;
 
@@ -267,7 +248,7 @@ void z_global_add_pending_ntasks (int count, ...) {
     z_mutex_lock(&(__global_ctx->thread_pool.mutex));
     while (count--) {
       z_task_t *tasks = va_arg(ap, z_task_t *);
-      z_task_tree_push(&(__global_ctx->pending[slot]), tasks);
+      z_task_rq_add(&(__global_ctx->rq_fair.rq), tasks);
     }
     if (ntasks > 1) {
       z_wait_cond_broadcast(&(__global_ctx->thread_pool.task_ready));

@@ -12,31 +12,23 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_GLOBAL_H_
-#define _Z_GLOBAL_H_
+#ifndef _Z_BITMAP_H_
+#define _Z_BITMAP_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
-#include <zcl/allocator.h>
 #include <zcl/macros.h>
-#include <zcl/memory.h>
-#include <zcl/task.h>
+#include <zcl/bits.h>
 
-Z_TYPEDEF_STRUCT(z_global_context)
+#define z_bitmap_size(num_bits)         (((num_bits) + 7) >> 3)
+#define z_bitmap_byte(bmap, bit)        *((bmap) + ((bit) >> 3))
 
-int   z_global_context_open      (z_allocator_t *allocator, void *user_data);
-void  z_global_context_close     (void);
-void  z_global_context_stop      (void);
-void *z_global_context_user_data (void);
-
-z_memory_t *    z_global_memory     (void);
-z_task_sched_t *z_global_task_sched (void);
-
-void      z_global_add_task   (z_task_t *task);
-void      z_global_add_tasks  (z_task_t *tasks);
-void      z_global_add_ntasks (int count, ...);
+#define z_bitmap_set(bmap, bit)         z_1bit_set(z_bitmap_byte(bmap, bit), bit)
+#define z_bitmap_clear(bmap, bit)       z_1bit_clear(z_bitmap_byte(bmap, bit), bit)
+#define z_bitmap_change(bmap, bit, v)   z_1bit_change(z_bitmap_byte(bmap, bit), bit, v)
+#define z_bitmap_test(bmap, bit)        z_1bit_fetch(z_bitmap_byte(bmap, bit), bit)
 
 __Z_END_DECLS__
 
-#endif /* _Z_GLOBAL_H_ */
+#endif /* _Z_BITMAP_H_ */

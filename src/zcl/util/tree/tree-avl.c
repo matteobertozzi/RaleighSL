@@ -328,6 +328,11 @@ static z_tree_node_t *__avl_detach_edge (const z_tree_info_t *tree,
 
   v.istack = 0;
   p = (z_tree_node_t *)root;
+  v.stack[v.istack] = p;
+  __dstack_change(&v, v.istack, 0);
+  ++(v.istack);
+  p = p->child[0];
+
   while ((next = p->child[edge]) != NULL) {
     v.stack[v.istack] = p;
     __dstack_change(&v, v.istack, edge);

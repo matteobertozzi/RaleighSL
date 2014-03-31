@@ -27,6 +27,14 @@ __Z_BEGIN_DECLS__
 #define z_rotr32(x, r)                  z_rotr(x, r, 32)
 #define z_rotr64(x, r)                  z_rotr(x, r, 64)
 
+#define z_shl56(x)                      (((uint64_t)(x)) << 56)
+#define z_shl48(x)                      (((uint64_t)(x)) << 48)
+#define z_shl40(x)                      (((uint64_t)(x)) << 40)
+#define z_shl32(x)                      (((uint64_t)(x)) << 32)
+#define z_shl24(x)                      (((uint64_t)(x)) << 24)
+#define z_shl16(x)                      (((uint32_t)(x)) << 16)
+#define z_shl8(x)                       (((uint16_t)(x)) <<  8)
+
 #define z_bits_mask(nbits, pos)         (((1 << (nbits)) - 1) << ((pos) & 0x7))
 #define z_7bit_mask(pos)                z_bits_mask(7, pos)
 #define z_6bit_mask(pos)                z_bits_mask(6, pos)
@@ -45,7 +53,7 @@ __Z_BEGIN_DECLS__
 #define z_4bit_fetch(byte, pos)         z_bits_fetch(byte, 4, pos)
 #define z_3bit_fetch(byte, pos)         z_bits_fetch(byte, 3, pos)
 #define z_2bit_fetch(byte, pos)         z_bits_fetch(byte, 2, pos)
-#define z_1bit_fetch(byte, pos)         ((byte) & z_mask_1bit(pos))
+#define z_1bit_fetch(byte, pos)         ((byte) & z_1bit_mask(pos))
 
 #define z_bits_change(byte, nbits, pos, value)                                 \
   (byte) = (((byte) & ~z_bits_mask(nbits, pos)) | ((!!(value)) << ((pos) & 0x7)))
