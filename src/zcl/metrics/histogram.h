@@ -21,36 +21,31 @@ __Z_BEGIN_DECLS__
 #include <zcl/macros.h>
 #include <zcl/humans.h>
 
-#include <stdio.h>
-
 Z_TYPEDEF_STRUCT(z_histogram)
-
-#define Z_HISTOGRAM(x)            Z_CAST(z_histogram_t, x)
 
 struct z_histogram {
   const uint64_t *bounds;
-  unsigned int nbuckets;
   uint64_t *events;
-  uint64_t nevents;
+  uint64_t sum;
   uint64_t min;
   uint64_t max;
-  uint64_t sum;
+  uint32_t nbuckets;
+  uint32_t pad;
 };
 
-void    z_histogram_open          (z_histogram_t *self,
-                                   const uint64_t *bounds,
-                                   uint64_t *events,
-                                   unsigned int nbounds);
-void    z_histogram_close         (z_histogram_t *self);
-void    z_histogram_clear         (z_histogram_t *self);
-void    z_histogram_add           (z_histogram_t *self, uint64_t value);
-double  z_histogram_average       (z_histogram_t *self);
-double  z_histogram_percentile    (z_histogram_t *self, double p);
-#define z_histogram_median(self)  z_histogram_percentile(self, 50.0)
-void    z_histogram_dump          (z_histogram_t *self,
-                                   FILE *stream,
-                                   z_human_u64_t key);
-
+void     z_histogram_init          (z_histogram_t *self,
+                                    const uint64_t *bounds,
+                                    uint64_t *events,
+                                    unsigned int nbounds);
+void     z_histogram_clear         (z_histogram_t *self);
+void     z_histogram_add           (z_histogram_t *self, uint64_t value);
+uint64_t z_histogram_nevents       (const z_histogram_t *self);
+double   z_histogram_average       (const z_histogram_t *self);
+double   z_histogram_percentile    (const z_histogram_t *self, double p);
+#define  z_histogram_median(self)  z_histogram_percentile(self, 50.0)
+void     z_histogram_dump          (const z_histogram_t *self,
+                                    FILE *stream,
+                                    z_human_u64_t key);
 
 __Z_END_DECLS__
 

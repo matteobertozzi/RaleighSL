@@ -25,6 +25,13 @@ uint8_t z_uint16_size (uint16_t value);
 uint8_t z_uint32_size (uint32_t value);
 uint8_t z_uint64_size (uint64_t value);
 
+#define       z_uint8_size        z_uint16_size
+
+#define       z_int8_size         z_int32_size
+#define       z_int16_size        z_int32_size
+#define       z_int32_size(n)     z_uint32_size(z_zigzag32_encode(n))
+#define       z_int64_size(n)     z_uint64_size(z_zigzag64_encode(n))
+
 #define z_uint16_encode     z_uint_encode
 #define z_uint32_encode     z_uint_encode
 #define z_uint64_encode     z_uint_encode
@@ -59,6 +66,11 @@ uint8_t *z_vint32_encode (uint8_t *buf, uint32_t value);
 uint8_t *z_vint64_encode (uint8_t *buf, uint64_t value);
 uint8_t  z_vint32_decode (const uint8_t *buf, uint32_t *value);
 uint8_t  z_vint64_decode (const uint8_t *buf, uint64_t *value);
+
+#define z_zigzag32_encode(n)      (((n) << 1) ^ ((n) >> 31))
+#define z_zigzag64_encode(n)      (((n) << 1) ^ ((n) >> 63))
+#define z_zigzag32_decode(n)      (((n) >> 1) ^ -((n) & 1))
+#define z_zigzag64_decode(n)      (((n) >> 1) ^ -((n) & 1))
 
 int z_3int_encode (uint8_t *buf, uint64_t a, uint64_t b, uint32_t c);
 int z_3int_decode (const uint8_t *buf, uint64_t *a, uint64_t *b, uint32_t *c);

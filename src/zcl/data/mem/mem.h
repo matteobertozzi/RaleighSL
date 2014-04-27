@@ -31,7 +31,6 @@ __Z_BEGIN_DECLS__
 #define z_memzero(dst, n)     z_memset(dst, 0, n)
 #define z_memeq(m1, m2, n)    (!z_memcmp(m1, m2, n))
 
-
 size_t      z_memshared     (const void *a,
                              size_t alen,
                              const void *b,

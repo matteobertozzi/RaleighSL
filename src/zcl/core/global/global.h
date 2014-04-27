@@ -19,23 +19,28 @@
 __Z_BEGIN_DECLS__
 
 #include <zcl/allocator.h>
+#include <zcl/task-rq.h>
 #include <zcl/macros.h>
 #include <zcl/memory.h>
-#include <zcl/task.h>
 
-Z_TYPEDEF_STRUCT(z_global_context)
-
+/* global-ctx init/close */
 int   z_global_context_open      (z_allocator_t *allocator, void *user_data);
 void  z_global_context_close     (void);
 void  z_global_context_stop      (void);
-void *z_global_context_user_data (void);
+void  z_global_context_wait      (void);
 
-z_memory_t *    z_global_memory     (void);
-z_task_sched_t *z_global_task_sched (void);
+/* get/set cpu-ctx user-data */
+void *z_global_cpu_ctx        (void);
+void *z_global_cpu_ctx_id     (int core);
+void  z_global_set_cpu_ctx    (void *udata);
+void  z_global_set_cpu_ctx_id (int core, void *udata);
 
-void      z_global_add_task   (z_task_t *task);
-void      z_global_add_tasks  (z_task_t *tasks);
-void      z_global_add_ntasks (int count, ...);
+z_task_rq_t *z_global_rq     (void);
+z_memory_t * z_global_memory (void);
+
+void z_global_new_task_signal     (void);
+void z_global_new_tasks_broadcast (void);
+void z_global_new_tasks_signal    (int ntasks);
 
 __Z_END_DECLS__
 

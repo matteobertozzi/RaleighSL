@@ -16,62 +16,59 @@
 #include <zcl/mem.h>
 
 /* ===========================================================================
- *  PRIVATE Histogram methods
- */
-
-/* ===========================================================================
  *  PUBLIC Histogram
  */
-void z_histogram_open (z_histogram_t *self,
+void z_histogram_init (z_histogram_t *self,
                        const uint64_t *bounds,
                        uint64_t *events,
-                       unsigned int nbounds)
+                       uint32_t nbounds)
 {
   self->bounds = bounds;
   self->events = events;
-  self->nbuckets = nbounds + 1;
+  self->nbuckets = nbounds;
   z_histogram_clear(self);
 }
 
-void z_histogram_close (z_histogram_t *self) {
-}
-
 void z_histogram_clear (z_histogram_t *self) {
-  self->nevents = 0;
   self->min = 0xffffffffffffffff;
   self->max = 0;
-  self->sum = 0;
   z_memzero(self->events, self->nbuckets * sizeof(uint64_t));
 }
 
 void z_histogram_add (z_histogram_t *self, uint64_t value) {
   const uint64_t *bound = self->bounds;
-  int buckets = self->nbuckets - 1;
-  int index;
-  for (index = 0; index < buckets; ++index) {
-    if (value <= *bound++)
-      break;
-  }
+  uint64_t *events = self->events;
 
-  ++self->events[index];
-  if (Z_UNLIKELY(++self->nevents == 1)) {
-    self->min = value;
-    self->max = value;
-  } else if (Z_UNLIKELY(value < self->min)) {
-    self->min = value;
-  } else if (Z_UNLIKELY(value > self->max)) {
-    self->max = value;
-  }
+  while (value > *bound++)
+    events += 1;
+  *events += 1;
+
   self->sum += value;
+  if (Z_UNLIKELY(value < self->min)) {
+    self->min = value;
+  }
+  if (Z_UNLIKELY(value > self->max)) {
+    self->max = value;
+  }
 }
 
-double z_histogram_average (z_histogram_t *self) {
-  return((self->nevents > 0) ? (((double)self->sum) / self->nevents) : 0);
+uint64_t z_histogram_nevents (const z_histogram_t *self) {
+  uint64_t nevents = 0;
+  int i;
+  for (i = 0; i < self->nbuckets; ++i)
+    nevents += self->events[i];
+  return(nevents);
 }
 
-double z_histogram_percentile (z_histogram_t *self, double p) {
+double z_histogram_average (const z_histogram_t *self) {
+  uint64_t nevents = z_histogram_nevents(self);
+  return((nevents > 0) ? (((double)self->sum) / nevents) : 0);
+}
+
+double z_histogram_percentile (const z_histogram_t *self, double p) {
+  uint64_t nevents = z_histogram_nevents(self);
   unsigned int buckets = self->nbuckets;
-  double threshold = self->nevents * (p * 0.01);
+  double threshold = nevents * (p * 0.01);
   double sum = 0;
   int i;
   for (i = 0; i < buckets; ++i) {
@@ -84,16 +81,11 @@ double z_histogram_percentile (z_histogram_t *self, double p) {
   return(self->max);
 }
 
-void z_histogram_dump (z_histogram_t *self, FILE *stream, z_human_u64_t key) {
+void z_histogram_dump (const z_histogram_t *self, FILE *stream, z_human_u64_t key) {
   uint64_t min = 0xffffffffffffffff;
   uint64_t max = 0;
   char buffer[16];
   int i, j, step;
-
-  if (self->nevents == 0) {
-    fprintf(stream, "No Data\n");
-    return;
-  }
 
   for (i = 0; i < self->nbuckets; ++i) {
     min = z_min(min, self->events[i]);
@@ -104,9 +96,11 @@ void z_histogram_dump (z_histogram_t *self, FILE *stream, z_human_u64_t key) {
   fprintf(stream, "Min %s ", key(buffer, sizeof(buffer), self->min));
   fprintf(stream, "Max %s ", key(buffer, sizeof(buffer), self->max));
   fprintf(stream, "Avg %s ", key(buffer, sizeof(buffer), (uint64_t)z_histogram_average(self)));
-  fprintf(stream, "\n----------------------------------------------------------------------\n");
+  fprintf(stream, "\n--------------------------------------------------------------------------\n");
 
   for (i = 0; i < self->nbuckets - 1; ++i) {
+    if (self->events[i] == 0) continue;
+
     fprintf(stream, "%10s |", key(buffer, sizeof(buffer), self->bounds[i]));
     for (j = 0; j < self->events[i]; j += step) fputc('=', stream);
     fprintf(stream, " (%"PRIu64" events)\n", self->events[i]);

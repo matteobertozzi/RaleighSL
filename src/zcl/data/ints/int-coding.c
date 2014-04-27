@@ -95,11 +95,11 @@ void z_uint64_decode (const uint8_t *buffer,
   uint64_t result = 0;
 
   switch (length) {
-    case 8: result  = ((uint64_t)buffer[7]) << 56;
-    case 7: result += ((uint64_t)buffer[6]) << 48;
-    case 6: result += ((uint64_t)buffer[5]) << 40;
-    case 5: result += ((uint64_t)buffer[4]) << 32;
-    case 4: result += ((uint64_t)buffer[3]) << 24;
+    case 8: result  = z_shl56(buffer[7]);
+    case 7: result += z_shl48(buffer[6]);
+    case 6: result += z_shl40(buffer[5]);
+    case 5: result += z_shl32(buffer[4]);
+    case 4: result += z_shl24(buffer[3]);
     case 3: result += buffer[2] << 16;
     case 2: result += buffer[1] <<  8;
     case 1: result += buffer[0];

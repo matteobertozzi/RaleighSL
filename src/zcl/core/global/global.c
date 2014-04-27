@@ -12,68 +12,153 @@
  *   limitations under the License.
  */
 
-#include <zcl/threading.h>
-#include <zcl/locking.h>
+#include <zcl/threadpool.h>
+#include <zcl/histogram.h>
+#include <zcl/task-rq.h>
 #include <zcl/global.h>
 #include <zcl/system.h>
 #include <zcl/debug.h>
 #include <zcl/time.h>
 
+#define __CPU_CTX(x)                  Z_CAST(struct cpu_ctx, cpu_ctx)
+
 struct cpu_ctx {
-  z_thread_t thread;
-  uint8_t pad0[z_align_up(sizeof(z_thread_t), 128) - sizeof(z_thread_t)];
+  z_histogram_t rq_time;
+  uint64_t rq_time_events[18];
+
+  z_histogram_t task_vtime;
+  uint64_t task_vtime_events[18];
 
   z_memory_t memory;
-  uint8_t pad[z_align_up(sizeof(z_memory_t), 128) - sizeof(z_memory_t)];
+
+  void *user_data;
+  z_thread_t thread;
+  uint8_t pad1[Z_CACHELINE_PAD(sizeof(z_thread_t) + sizeof(void *))];
 };
 
-struct z_global_context {
-  z_task_sched_t sched;
-  z_task_rq_fair_t rq_fair;
+struct global_ctx {
+  z_task_rq_rr_t rq;
+  uint8_t pad1[Z_CACHELINE_PAD(sizeof(z_task_rq_rr_t))];
 
   z_thread_pool_t thread_pool;
+  uint8_t pad2[Z_CACHELINE_PAD(sizeof(z_thread_pool_t))];
 
-  z_allocator_t *allocator;
-  void *         user_data;
+  z_allocator_t * allocator;
+  void *          user_data;
+  uint8_t pad3[Z_CACHELINE_PAD(sizeof(z_allocator_t *) + sizeof(void *))];
 
-  struct cpu_ctx cpus[1];
+  struct cpu_ctx  cpus[1];
+};
+
+/* ============================================================================
+ *  PRIVATE task-vtime histogram bounds
+ */
+#define __STATS_HISTO_NBOUNDS       z_fix_array_size(__STATS_HISTO_BOUNDS)
+static const uint64_t __STATS_HISTO_BOUNDS[18] = {
+  Z_TIME_USEC(5),   Z_TIME_USEC(10),  Z_TIME_USEC(25),  Z_TIME_USEC(75),
+  Z_TIME_USEC(250), Z_TIME_USEC(500), Z_TIME_MSEC(1),   Z_TIME_MSEC(5),
+  Z_TIME_MSEC(10),  Z_TIME_MSEC(25),  Z_TIME_MSEC(75),  Z_TIME_MSEC(250),
+  Z_TIME_MSEC(500), Z_TIME_MSEC(750), Z_TIME_SEC(1),    Z_TIME_SEC(2),
+  Z_TIME_SEC(5),    0xffffffffffffffffll,
 };
 
 /* ============================================================================
  *  PRIVATE global-context instance
  */
-static z_global_context_t *__global_ctx = NULL;
+static struct global_ctx *__global_ctx = NULL;
 
 /* ============================================================================
  *  PRIVATE cpu-context methods
  */
-static void *__cpu_ctx_fetch_task (void *cpu_ctx) {
-  z_task_rq_t *rq;
-
-  rq = z_task_sched_get_rq(&(__global_ctx->sched));
-  if (Z_UNLIKELY(rq == NULL))
-    return(NULL);
-
-  return(z_task_rq_fetch(rq));
-}
+#define __cpu_ctx_id(cpu_ctx)       (__CPU_CTX(cpu_ctx) - __global_ctx->cpus)
 
 static void *__cpu_ctx_loop (void *cpu_ctx) {
+  uint64_t __stime = z_time_micros();
+  uint64_t unlock_no_task = 0;
+  uint64_t nreqests = 0;
   int is_running = 1;
+  uint64_t now;
+
+  now = z_time_micros();
   while (is_running) {
-    z_task_t *task;
-    task = Z_TASK(z_thread_pool_ctx_fetch(&(__global_ctx->thread_pool),
-                                          __cpu_ctx_fetch_task, cpu_ctx,
-                                          &is_running));
-    if (Z_LIKELY(task != NULL)) {
-      z_task_exec(task);
+    z_vtask_t *vtask;
+    uint64_t stime;
+
+    stime = now;
+    vtask = z_task_rq_fetch(&(__global_ctx->rq.rq));
+    now = z_time_micros();
+    z_histogram_add(&(__CPU_CTX(cpu_ctx)->rq_time), now - stime);
+
+    if (Z_LIKELY(vtask != NULL)) {
+      uint64_t vtime;
+
+      stime = now;
+      z_vtask_exec(vtask);
+      nreqests += 1;
+      now = z_time_micros();
+
+      vtime = (now - stime);
+      //vtask->vtime += vtime;
+      z_histogram_add(&(__CPU_CTX(cpu_ctx)->task_vtime), vtime);
+      is_running = __global_ctx->thread_pool.is_running;
+    } else {
+      unlock_no_task += 1;
+      is_running = z_thread_pool_worker_wait(&(__global_ctx->thread_pool));
     }
   }
 
-  z_thread_pool_ctx_close(&(__global_ctx->thread_pool));
+  Z_LOG_TRACE("CPU %ld %7"PRIu64" %.3freq/sec - unlock-timeout=%"PRIu64,
+          __cpu_ctx_id(cpu_ctx), nreqests,
+          (float)nreqests / ((z_time_micros() - __stime) / 1000000.0),
+          unlock_no_task);
+
+  z_thread_pool_worker_close(&(__global_ctx->thread_pool));
   return(NULL);
 }
 
+static void __cpu_ctx_dump (struct cpu_ctx *cpu_ctx) {
+  char buf0[16], buf1[16], buf2[16];
+  uint64_t nevents;
+
+  nevents = z_histogram_nevents(&(cpu_ctx->task_vtime));
+  if (nevents == 0) {
+    return;
+  }
+
+  fprintf(stdout, "Memory Stats CPU %d\n", (int)(cpu_ctx - __global_ctx->cpus));
+  fprintf(stdout, "==================================\n");
+  z_memory_stats_dump(&(cpu_ctx->memory), stdout);
+  fprintf(stdout, "\n");
+
+  fprintf(stdout, "Task Stats CPU %d\n", (int)(cpu_ctx - __global_ctx->cpus));
+  fprintf(stdout, "==================================\n");
+  fprintf(stdout, "Task events:      %"PRIu64"\n", nevents);
+  fprintf(stdout, "avg Task vtime:   %s (%s-%s)\n",
+        z_human_time(buf0, sizeof(buf0), z_histogram_average(&(cpu_ctx->task_vtime))),
+        z_human_time(buf1, sizeof(buf1), z_histogram_percentile(&(cpu_ctx->task_vtime), 0)),
+        z_human_time(buf2, sizeof(buf2), z_histogram_percentile(&(cpu_ctx->task_vtime), 99.9999)));
+
+  fprintf(stdout, "RQ-Time ");
+  z_histogram_dump(&(cpu_ctx->rq_time), stdout, z_human_time);
+  fprintf(stdout, "\n");
+
+  fprintf(stdout, "VTime ");
+  z_histogram_dump(&(cpu_ctx->task_vtime), stdout, z_human_time);
+  fprintf(stdout, "\n");
+}
+
 static int __cpu_ctx_open (struct cpu_ctx *cpu_ctx, int cpu_id) {
+  /* Initialize Memory */
+  z_memory_open(&(cpu_ctx->memory), __global_ctx->allocator);
+
+  /* Initialize Task Histogram */
+  z_histogram_init(&(cpu_ctx->task_vtime),  __STATS_HISTO_BOUNDS,
+                   cpu_ctx->task_vtime_events,  __STATS_HISTO_NBOUNDS);
+  z_histogram_init(&(cpu_ctx->rq_time),  __STATS_HISTO_BOUNDS,
+                   cpu_ctx->rq_time_events,  __STATS_HISTO_NBOUNDS);
+
+  cpu_ctx->user_data = NULL;
+
   /* Create the cpu context thread */
   if (z_thread_start(&(cpu_ctx->thread), __cpu_ctx_loop, cpu_ctx)) {
     Z_LOG_FATAL("unable to initialize the thread for cpu %d.", cpu_id);
@@ -82,10 +167,6 @@ static int __cpu_ctx_open (struct cpu_ctx *cpu_ctx, int cpu_id) {
 
   /* Bind the cpu context to the specified core */
   z_thread_bind_to_core(&(cpu_ctx->thread), cpu_id);
-
-  /* Initialize Memory */
-  z_memory_open(&(cpu_ctx->memory), __global_ctx->allocator);
-
   return(0);
 }
 
@@ -101,29 +182,38 @@ static __thread struct cpu_ctx *__local_cpu_ctx = NULL;
 static struct cpu_ctx *__set_local_cpu_ctx (void) {
   int ncpus = __global_ctx->thread_pool.total_threads;
   struct cpu_ctx *cpu_ctx = __global_ctx->cpus;
+  int not_found = 1;
   z_thread_t tid;
 
   z_thread_self(&tid);
-  while (--ncpus && cpu_ctx->thread != tid) {
+  while (--ncpus && (not_found = (cpu_ctx->thread != tid))) {
     ++cpu_ctx;
   }
-  fprintf(stderr, "Lookup Local CPU-ctx for thread %ld (CPU ID %ld)\n",
-                  (long)tid, cpu_ctx - __global_ctx->cpus);
+
+  if (not_found) {
+    int core = 0;
+    z_thread_get_core(&tid, &core);
+    ncpus = __global_ctx->thread_pool.total_threads;
+    cpu_ctx = &(__global_ctx->cpus[core % ncpus]);
+  }
+
+  fprintf(stderr, "Lookup Local CPU-ctx for thread %ld (CPU ID %ld Is-Task %d)\n",
+                  (long)tid, cpu_ctx - __global_ctx->cpus, !not_found);
   __local_cpu_ctx = cpu_ctx;
   return(cpu_ctx);
 }
 
-#define __current_cpu_ctx()                                                    \
-  (Z_LIKELY(__local_cpu_ctx != NULL) ? __local_cpu_ctx : __set_local_cpu_ctx())
-
-#define __current_cpu_ctx_id()    (__current_cpu_ctx() - __global_ctx->cpus)
+#define __current_cpu_ctx()                       \
+  (Z_LIKELY(__local_cpu_ctx != NULL) ?            \
+    __local_cpu_ctx : __set_local_cpu_ctx())
 
 /* ============================================================================
- *  PUBLIC global-context methods
+ *  PUBLIC
  */
 int z_global_context_open (z_allocator_t *allocator, void *user_data) {
+  char buf0[16], buf1[16], buf2[16];
   struct cpu_ctx *cpu_ctx;
-  unsigned int mmsize;
+  size_t mmsize;
   int ncpus;
 
   if (__global_ctx != NULL) {
@@ -136,23 +226,24 @@ int z_global_context_open (z_allocator_t *allocator, void *user_data) {
 
   /* Allocate the global-ctx object */
   ncpus = z_align_up(z_system_processors(), 2);
-  mmsize = sizeof(z_global_context_t) + ((ncpus - 1) * sizeof(struct cpu_ctx));
-  __global_ctx = z_allocator_alloc(allocator, z_global_context_t, mmsize);
+  mmsize = sizeof(struct global_ctx) + ((ncpus - 1) * sizeof(struct cpu_ctx));
+  __global_ctx = z_allocator_alloc(allocator, struct global_ctx, mmsize);
   if (__global_ctx == NULL) {
     Z_LOG_FATAL("unable to allocate the global context.");
     return(1);
   }
 
+  Z_LOG_DEBUG("z_global_context %s (mmsize %s) - ncpus %d - cpu_ctx %s",
+              z_human_size(buf0, sizeof(buf0), sizeof(struct global_ctx)),
+              z_human_size(buf1, sizeof(buf1), mmsize), ncpus,
+              z_human_size(buf2, sizeof(buf2), sizeof(struct cpu_ctx)));
+
   /* Initialize the global context */
   __global_ctx->allocator = allocator;
   __global_ctx->user_data = user_data;
 
-  Z_LOG_DEBUG("Initialize global-context task scheduler");
-  z_task_sched_open(&(__global_ctx->sched));
-
   Z_LOG_DEBUG("Initialize global-context run-queue");
-  z_task_rq_open(&(__global_ctx->rq_fair.rq), &z_task_rq_fair, 50);
-  z_task_sched_add_rq(&(__global_ctx->sched), &(__global_ctx->rq_fair.rq));
+  z_task_rq_open(&(__global_ctx->rq.rq), &z_task_rq_rr, 0);
 
   Z_LOG_DEBUG("Initialize global-context thread-pool");
   if (z_thread_pool_open(&(__global_ctx->thread_pool), ncpus)) {
@@ -180,18 +271,27 @@ int z_global_context_open (z_allocator_t *allocator, void *user_data) {
   /* Wait thread pool initialization */
   Z_LOG_DEBUG("Waiting for global-context thread-pool initialization");
   z_thread_pool_wait(&(__global_ctx->thread_pool));
+  Z_LOG_DEBUG("Completed initialization of global-context");
   return(0);
 }
 
 void z_global_context_close (void) {
+  int i, total_threads = __global_ctx->thread_pool.total_threads;
+
   /* clear queue */
   z_thread_pool_stop(&(__global_ctx->thread_pool));
-  while (__global_ctx->thread_pool.total_threads--) {
-    __cpu_ctx_close(&(__global_ctx->cpus[__global_ctx->thread_pool.total_threads]));
+  for (i = 0; i < total_threads; ++i) {
+    __cpu_ctx_close(&(__global_ctx->cpus[i]));
   }
   z_thread_pool_close(&(__global_ctx->thread_pool));
 
-  z_task_sched_close(&(__global_ctx->sched));
+
+  /* Dump cpu-ctx */
+  for (i = 0; i < total_threads; ++i) {
+    __cpu_ctx_dump(&(__global_ctx->cpus[i]));
+  }
+
+  z_task_rq_close(&(__global_ctx->rq.rq));
 
   z_allocator_free(__global_ctx->allocator, __global_ctx);
   __global_ctx = NULL;
@@ -204,58 +304,46 @@ void z_global_context_stop (void) {
   z_thread_pool_stop(&(__global_ctx->thread_pool));
 }
 
-void *z_global_context_user_data (void) {
-  return(__global_ctx->user_data);
+void z_global_context_wait (void) {
+  z_thread_pool_wait(&(__global_ctx->thread_pool));
+}
+
+void *z_global_cpu_ctx (void) {
+  return(__current_cpu_ctx()->user_data);
+}
+
+void z_global_set_cpu_ctx (void *udata) {
+  __current_cpu_ctx()->user_data = udata;
+}
+
+void *z_global_cpu_ctx_id (int core) {
+  return(__global_ctx->cpus[core].user_data);
+}
+
+void z_global_set_cpu_ctx_id (int core, void *udata) {
+  __global_ctx->cpus[core].user_data = udata;
+}
+
+z_task_rq_t *z_global_rq (void) {
+  return(&(__global_ctx->rq.rq));
 }
 
 z_memory_t *z_global_memory (void) {
   return(&(__current_cpu_ctx()->memory));
 }
 
-z_task_sched_t *z_global_task_sched (void) {
-  return(&(__global_ctx->sched));
+void z_global_new_task_signal (void) {
+  z_wait_cond_signal(&(__global_ctx->thread_pool.task_ready));
 }
 
-void z_global_add_task (z_task_t *task) {
-  if (task != NULL) {
-    z_mutex_lock(&(__global_ctx->thread_pool.mutex));
-    z_task_rq_add(&(__global_ctx->rq_fair.rq), task);
+void z_global_new_tasks_broadcast (void) {
+  z_wait_cond_broadcast(&(__global_ctx->thread_pool.task_ready));
+}
+
+void z_global_new_tasks_signal (int ntasks) {
+  if (ntasks > 1) {
+    z_wait_cond_broadcast(&(__global_ctx->thread_pool.task_ready));
+  } else {
     z_wait_cond_signal(&(__global_ctx->thread_pool.task_ready));
-    z_mutex_unlock(&(__global_ctx->thread_pool.mutex));
-  }
-}
-
-void z_global_add_tasks (z_task_t *tasks) {
-  return(z_global_add_ntasks(1, tasks));
-}
-
-void z_global_add_ntasks (int count, ...) {
-  int ntasks = 0;
-  va_list ap;
-
-  do {
-    int i;
-    va_start(ap, count);
-    for (i = 0; i < count; ++i) {
-      z_task_t *tasks = va_arg(ap, z_task_t *);
-      ntasks += (tasks != NULL);
-    }
-    va_end(ap);
-  } while (0);
-
-  if (ntasks > 0) {
-    va_start(ap, count);
-    z_mutex_lock(&(__global_ctx->thread_pool.mutex));
-    while (count--) {
-      z_task_t *tasks = va_arg(ap, z_task_t *);
-      z_task_rq_add(&(__global_ctx->rq_fair.rq), tasks);
-    }
-    if (ntasks > 1) {
-      z_wait_cond_broadcast(&(__global_ctx->thread_pool.task_ready));
-    } else {
-      z_wait_cond_signal(&(__global_ctx->thread_pool.task_ready));
-    }
-    z_mutex_unlock(&(__global_ctx->thread_pool.mutex));
-    va_end(ap);
   }
 }

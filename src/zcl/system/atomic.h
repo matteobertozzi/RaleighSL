@@ -20,14 +20,15 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 
-Z_TYPEDEF_STRUCT(z_atomic_stack)
-Z_TYPEDEF_STRUCT(z_atomic_queue)
-
 #if defined(Z_SYS_HAS_ATOMIC_GCC)
   #define z_atomic_set(ptr, v)           (*(ptr)) = (v)
   #define z_atomic_load(ptr)             (*(ptr))
   #define z_atomic_add_and_fetch(ptr, v) __sync_add_and_fetch(ptr, v)
   #define z_atomic_sub_and_fetch(ptr, v) __sync_sub_and_fetch(ptr, v)
+  #define z_atomic_or_and_fetch(ptr, v)  __sync_or_and_fetch(ptr, v)
+  #define z_atomic_and_and_fetch(ptr, v) __sync_and_and_fetch(ptr, v)
+  #define z_atomic_xor_and_fetch(ptr, v) __sync_xor_and_fetch(ptr, v)
+
   #define z_atomic_fetch_and_add(ptr, v) __sync_fetch_and_add(ptr, v)
   #define z_atomic_fetch_and_sub(ptr, v) __sync_fetch_and_sub(ptr, v)
   #define z_atomic_cas(ptr, o, n)        __sync_bool_compare_and_swap(ptr, o, n)
@@ -51,26 +52,8 @@ Z_TYPEDEF_STRUCT(z_atomic_queue)
     }                                                                         \
   } while (0)
 
-
-struct z_atomic_stack {
-  uint8_t data[64];
-};
-
-struct z_atomic_queue {
-  uint8_t data[128];
-};
-
-int   z_atomic_stack_alloc  (z_atomic_stack_t *stack);
-int   z_atomic_stack_free   (z_atomic_stack_t *stack);
-int   z_atomic_stack_push   (z_atomic_stack_t *stack, void *data);
-void *z_atomic_stack_pop    (z_atomic_stack_t *stack);
-
-
-int   z_atomic_queue_alloc  (z_atomic_queue_t *queue);
-int   z_atomic_queue_free   (z_atomic_queue_t *queue);
-int   z_atomic_queue_push   (z_atomic_queue_t *queue, void *data);
-void *z_atomic_queue_pop    (z_atomic_queue_t *queue);
-
+#define z_atomic_cas_retry_loop(ptrval, expval, newval)                       \
+  while (z_atomic_vcas(ptrval, expval, newval) != (expval))
 
 __Z_END_DECLS__
 

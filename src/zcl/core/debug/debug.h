@@ -12,8 +12,8 @@
  *   limitations under the License.
  */
 
-#ifndef __DEBUG_H_
-#define __DEBUG_H_
+#ifndef _Z_DEBUG_H_
+#define _Z_DEBUG_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
@@ -27,18 +27,16 @@ __Z_BEGIN_DECLS__
 #define Z_LOG_DEBUG(format, ...)     Z_LOG(4, format, ##__VA_ARGS__)
 #define Z_LOG_TRACE(format, ...)     Z_LOG(5, format, ##__VA_ARGS__)
 
-#define THZ_FORCE_DEBUG       1
-
-#if THZ_FORCE_DEBUG
-  #define Z_LOG(level, format, ...)                                       \
+#define Z_LOG(level, format, ...)                                       \
     Z_FLOG(stderr, level, format, ##__VA_ARGS__)
 
+#define THZ_FORCE_DEBUG       1
+#if THZ_FORCE_DEBUG
   #define Z_FLOG(fp, level, format, ...)                                  \
     if (level <= z_debug_get_log_level())                                 \
       __z_log(fp, level, __FILE__, __LINE__, __FUNCTION__,                \
               format, ##__VA_ARGS__)
 #else
-  #define Z_LOG(level, format, ...)               while (0)
   #define Z_FLOG(fp, level, format, ...)          while (0)
 #endif
 
@@ -77,4 +75,4 @@ void z_debug_set_log_level (int level);
 
 __Z_END_DECLS__
 
-#endif /* __DEBUG_H_ */
+#endif /* _Z_DEBUG_H_ */

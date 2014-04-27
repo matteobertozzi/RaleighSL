@@ -12,25 +12,27 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_SYSTEM_H_
-#define _Z_SYSTEM_H_
+#ifndef _Z_EXTENT_H_
+#define _Z_EXTENT_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 
-#define Z_CACHELINE               64
-#define Z_CACHELINE_PAD(size)     (z_align_up(size, Z_CACHELINE) - size)
+Z_TYPEDEF_STRUCT(z_extent)
 
-#define z_system_cpu_relax()      asm volatile("pause\n": : :"memory")
+struct z_extent {
+  size_t offset;
+  size_t length;
+};
 
-unsigned int  z_system_processors   (void);
+#define z_extent_set(extent, voffset, vlength)                              \
+  do {                                                                      \
+    (extent)->offset = voffset;                                             \
+    (extent)->length = vlength;                                             \
+  } while (0)
 
-uint64_t      z_system_memory       (void);
-uint64_t      z_system_memory_free  (void);
-uint64_t      z_system_memory_used  (void);
+#define z_extent_reset(extent)             z_extent_set(extent, 0, 0)
 
-__Z_END_DECLS__
-
-#endif /* _Z_SYSTEM_H_ */
+#endif /* !_Z_EXTENT_H_ */

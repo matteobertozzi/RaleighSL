@@ -12,25 +12,35 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_SYSTEM_H_
-#define _Z_SYSTEM_H_
+#ifndef _Z_TASK_H_
+#define _Z_TASK_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
+#include <zcl/vtask.h>
 
-#define Z_CACHELINE               64
-#define Z_CACHELINE_PAD(size)     (z_align_up(size, Z_CACHELINE) - size)
+Z_TYPEDEF_STRUCT(z_task)
 
-#define z_system_cpu_relax()      asm volatile("pause\n": : :"memory")
+typedef void (*z_task_func_t) (z_task_t *task);
 
-unsigned int  z_system_processors   (void);
+// continueWith
+// continueWhen(a, b, c) are done
 
-uint64_t      z_system_memory       (void);
-uint64_t      z_system_memory_free  (void);
-uint64_t      z_system_memory_used  (void);
+struct z_task {
+  z_vtask_t vtask;
+  z_task_func_t func;
+};
+
+#define z_task_reset(self, ufunc)                             \
+  do {                                                        \
+    z_vtask_reset(&((self)->vtask), Z_VTASK_TYPE_TASK);       \
+    (self)->func = ufunc;                                     \
+  } while (0)
+
+#define z_task_exec(self)         (self)->func(self)
 
 __Z_END_DECLS__
 
-#endif /* _Z_SYSTEM_H_ */
+#endif /* _Z_TASK_H_ */

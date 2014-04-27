@@ -12,25 +12,25 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_SYSTEM_H_
-#define _Z_SYSTEM_H_
+#include <zcl/atomic.h>
+#include <zcl/ticket.h>
+#include <zcl/system.h>
+#if 0
+void z_ticket_init (z_ticket_t *ticket) {
+  ticket->s.now_serving = 0;
+  ticket->s.next_ticket = 0;
+}
 
-#include <zcl/config.h>
-__Z_BEGIN_DECLS__
+void z_ticket_acquire (z_ticket_t *ticket) {
+  uint16_t my_ticket;
+  my_ticket = z_atomic_fetch_and_add(&(ticket->s.next_ticket), 1);
+  while (ticket->s.now_serving != my_ticket) {
+    z_system_cpu_relax();
+  }
+}
 
-#include <zcl/macros.h>
-
-#define Z_CACHELINE               64
-#define Z_CACHELINE_PAD(size)     (z_align_up(size, Z_CACHELINE) - size)
-
-#define z_system_cpu_relax()      asm volatile("pause\n": : :"memory")
-
-unsigned int  z_system_processors   (void);
-
-uint64_t      z_system_memory       (void);
-uint64_t      z_system_memory_free  (void);
-uint64_t      z_system_memory_used  (void);
-
-__Z_END_DECLS__
-
-#endif /* _Z_SYSTEM_H_ */
+void z_ticket_release (z_ticket_t *ticket) {
+  z_atomic_synchronize();
+  ticket->s.now_serving += 1;
+}
+#endif

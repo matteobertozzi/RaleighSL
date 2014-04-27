@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <time.h>
 
-#include <zcl/locking.h>
+#include <zcl/mutex.h>
 #include <zcl/debug.h>
 
 struct debug_conf {

@@ -12,25 +12,26 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_SYSTEM_H_
-#define _Z_SYSTEM_H_
+#ifndef _Z_RWLOCK_H_
+#define _Z_RWLOCK_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 
-#define Z_CACHELINE               64
-#define Z_CACHELINE_PAD(size)     (z_align_up(size, Z_CACHELINE) - size)
+typedef struct z_rwlock {
+  uint32_t state;
+} z_rwlock_t;
 
-#define z_system_cpu_relax()      asm volatile("pause\n": : :"memory")
-
-unsigned int  z_system_processors   (void);
-
-uint64_t      z_system_memory       (void);
-uint64_t      z_system_memory_free  (void);
-uint64_t      z_system_memory_used  (void);
+void  z_rwlock_init             (z_rwlock_t *lock);
+void  z_rwlock_read_lock        (z_rwlock_t *lock);
+void  z_rwlock_read_unlock      (z_rwlock_t *lock);
+void  z_rwlock_write_lock       (z_rwlock_t *lock);
+void  z_rwlock_write_unlock     (z_rwlock_t *lock);
+int   z_rwlock_try_read_lock    (z_rwlock_t *lock);
+int   z_rwlock_try_write_lock   (z_rwlock_t *lock);
 
 __Z_END_DECLS__
 
-#endif /* _Z_SYSTEM_H_ */
+#endif /* _Z_RWLOCK_H_ */

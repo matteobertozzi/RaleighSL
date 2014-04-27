@@ -12,25 +12,32 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_SYSTEM_H_
-#define _Z_SYSTEM_H_
+#ifndef _Z_MUTEX_H_
+#define _Z_MUTEX_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 
-#define Z_CACHELINE               64
-#define Z_CACHELINE_PAD(size)     (z_align_up(size, Z_CACHELINE) - size)
+#define Z_USE_TICKET_SPIN_LOCK
+#if defined(Z_SYS_HAS_PTHREAD)
+  #include <pthread.h>
+#endif
 
-#define z_system_cpu_relax()      asm volatile("pause\n": : :"memory")
-
-unsigned int  z_system_processors   (void);
-
-uint64_t      z_system_memory       (void);
-uint64_t      z_system_memory_free  (void);
-uint64_t      z_system_memory_used  (void);
+/* ============================================================================
+ *  Mutex
+ */
+#if defined(Z_SYS_HAS_PTHREAD_MUTEX)
+  #define z_mutex_t                 pthread_mutex_t
+  #define z_mutex_alloc(lock)       pthread_mutex_init(lock, NULL)
+  #define z_mutex_free(lock)        pthread_mutex_destroy(lock)
+  #define z_mutex_lock(lock)        pthread_mutex_lock(lock)
+  #define z_mutex_unlock(lock)      pthread_mutex_unlock(lock)
+#else
+  #error "No mutex support"
+#endif
 
 __Z_END_DECLS__
 
-#endif /* _Z_SYSTEM_H_ */
+#endif /* _Z_MUTEX_H_ */

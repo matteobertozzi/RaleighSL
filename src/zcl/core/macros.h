@@ -80,6 +80,7 @@ __Z_BEGIN_DECLS__
 
 #define z_align_down(x, align)          ((x) & (-(align)))
 #define z_align_up(x, align)            (((x) + ((align) - 1)) & (-(align)))
+#define z_is_pow2(x)                    ((x) && !((x) & ((x) - 1)))
 
 #define z_sizeof(type)                  ((long)sizeof(type))
 #define z_fix_array_size(a)             (sizeof(a) / sizeof(*(a)))

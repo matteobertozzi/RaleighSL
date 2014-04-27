@@ -35,7 +35,7 @@ __Z_BEGIN_DECLS__
 #define z_shl16(x)                      (((uint32_t)(x)) << 16)
 #define z_shl8(x)                       (((uint16_t)(x)) <<  8)
 
-#define z_bits_mask(nbits, pos)         (((1 << (nbits)) - 1) << ((pos) & 0x7))
+#define z_bits_mask(nbits, pos)         (((1 << (nbits)) - 1) << (pos))
 #define z_7bit_mask(pos)                z_bits_mask(7, pos)
 #define z_6bit_mask(pos)                z_bits_mask(6, pos)
 #define z_5bit_mask(pos)                z_bits_mask(5, pos)
@@ -56,7 +56,7 @@ __Z_BEGIN_DECLS__
 #define z_1bit_fetch(byte, pos)         ((byte) & z_1bit_mask(pos))
 
 #define z_bits_change(byte, nbits, pos, value)                                 \
-  (byte) = (((byte) & ~z_bits_mask(nbits, pos)) | ((!!(value)) << ((pos) & 0x7)))
+  (byte) = (((byte) & ~z_bits_mask(nbits, pos)) | ((value) << (pos)))
 
 #define z_7bit_change(byte, pos, v)     z_bits_change(byte, 7, pos, v)
 #define z_6bit_change(byte, pos, v)     z_bits_change(byte, 6, pos, v)

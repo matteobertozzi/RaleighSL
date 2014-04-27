@@ -21,6 +21,7 @@ __Z_BEGIN_DECLS__
 #include <string.h>
 
 #include <zcl/macros.h>
+#include <zcl/extent.h>
 #include <zcl/mem.h>
 
 Z_TYPEDEF_STRUCT(z_memslice)
@@ -31,12 +32,12 @@ Z_TYPEDEF_STRUCT(z_memslice)
 struct z_memslice {
   uint32_t size;
   uint32_t uflags32;
-  const uint8_t *data;
+  uint8_t *data;
 };
 
 #define z_memslice_set(slice, data_, size_)                                  \
   do {                                                                       \
-    (slice)->data = ((uint8_t *)data_);                                      \
+    (slice)->data = ((uint8_t *)(data_));                                    \
     (slice)->size = size_;                                                   \
   } while (0)
 
@@ -47,14 +48,14 @@ struct z_memslice {
   z_memslice_set(slice, NULL, 0)
 
 #define z_memslice_is_empty(slice)                                           \
-  (Z_CONST_BYTE_SLICE(slice)->size == 0)
+  (Z_CONST_MEMSLICE(slice)->size == 0)
 
 #define z_memslice_is_not_empty(slice)                                       \
-  (Z_CONST_BYTE_SLICE(slice)->size > 0)
+  (Z_CONST_MEMSLICE(slice)->size > 0)
 
 #define z_memslice_starts_with(slice, blob, n)                               \
-  ((Z_CONST_BYTE_SLICE(slice)->size >= (n)) &&                               \
-   !z_memcmp(Z_CONST_BYTE_SLICE(slice)->data, blob, n))
+  ((Z_CONST_MEMSLICE(slice)->size >= (n)) &&                                 \
+   !z_memcmp(Z_CONST_MEMSLICE(slice)->data, blob, n))
 
 #define z_memcpy_slice(dst, slice)                                           \
   z_memcpy(dst, (slice)->data, (slice)->size)
@@ -83,6 +84,17 @@ struct z_memslice {
   __cmp2 = z_memslice_compare(b_start, a_end);                    \
   ((cmp2 > 0) - (cmp1 > 0));                                      \
 })
+
+
+#define z_memsearch(src, src_len, needle, needle_len, slice)               \
+  z_memsearch_u8(Z_CONST_UINT8(src), src_len,                              \
+                 Z_CONST_UINT8(needle), needle_len, slice)
+
+int   z_memsearch_u8  (const uint8_t *src,
+                       size_t src_len,
+                       const uint8_t *needle,
+                       size_t needle_len,
+                       z_extent_t *slice);
 
 __Z_END_DECLS__
 

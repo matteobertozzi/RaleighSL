@@ -12,25 +12,35 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_SYSTEM_H_
-#define _Z_SYSTEM_H_
+#ifndef _Z_STRING_H_
+#define _Z_STRING_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 
-#define Z_CACHELINE               64
-#define Z_CACHELINE_PAD(size)     (z_align_up(size, Z_CACHELINE) - size)
+#include <string.h>
 
-#define z_system_cpu_relax()      asm volatile("pause\n": : :"memory")
+#define z_strlen              strlen
+#define z_strcmp              strcmp
+#define z_strncmp             strncmp
 
-unsigned int  z_system_processors   (void);
+#ifdef Z_STRING_HAS_STRLCPY
+  #define z_strlcpy           strlcpy
+#else
+  size_t  z_strlcpy (char *dst, const char *src, size_t size);
+#endif
 
-uint64_t      z_system_memory       (void);
-uint64_t      z_system_memory_free  (void);
-uint64_t      z_system_memory_used  (void);
+char *z_strupper    (char *str);
+char *z_strnupper   (char *str, size_t n);
+
+char *z_strlower    (char *str);
+char *z_strnlower   (char *str, size_t n);
+
+int   z_strcasecmp  (const char *s1, const char *s2);
+int   z_strncasecmp (const char *s1, const char *s2, size_t n);
 
 __Z_END_DECLS__
 
-#endif /* _Z_SYSTEM_H_ */
+#endif /* _Z_STRING_H_ */

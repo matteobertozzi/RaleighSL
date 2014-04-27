@@ -25,7 +25,7 @@ uint8_t z_field_encoded_length (uint16_t field_id, uint64_t length);
 int     z_field_decode (const uint8_t *buf,
                         unsigned int buflen,
                         uint16_t *field_id,
-                        uint64_t *length)
+                        uint64_t *length);
 __Z_END_DECLS__
 
 #endif /* _Z_DATA_FIELD_CODING_H_ */
