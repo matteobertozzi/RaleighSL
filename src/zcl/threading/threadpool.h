@@ -31,20 +31,29 @@ struct z_thread_pool {
   z_wait_cond_t task_ready;
   z_wait_cond_t no_active_threads;
   uint16_t      waiting_threads;
-  uint16_t      total_threads;
+  uint16_t      size;
   uint8_t       is_running;
-  uint8_t       pad[3];
+  uint8_t       pad;
+  uint16_t      balancer;
 };
 
-int   z_thread_pool_open          (z_thread_pool_t *self,
-                                   unsigned int nthreads);
-void  z_thread_pool_wait          (z_thread_pool_t *self);
-void  z_thread_pool_stop          (z_thread_pool_t *self);
-void  z_thread_pool_close         (z_thread_pool_t *self);
+int   z_thread_pool_open           (z_thread_pool_t *self,
+                                    unsigned int nthreads);
+void  z_thread_pool_wait           (z_thread_pool_t *self);
+void  z_thread_pool_stop           (z_thread_pool_t *self);
+void  z_thread_pool_close          (z_thread_pool_t *self);
 
-void  z_thread_pool_worker_close  (z_thread_pool_t *self);
-int   z_thread_pool_worker_wait   (z_thread_pool_t *self);
+void  z_thread_pool_worker_close   (z_thread_pool_t *self);
+int   z_thread_pool_worker_wait_on (z_thread_pool_t *self,
+                                    z_wait_cond_t *wcond,
+                                    unsigned int usec);
+
+#define z_thread_pool_worker_wait(self, usec)                       \
+  z_thread_pool_worker_wait_on(self, &((self)->task_ready), usec)
+
+#define z_thread_pool_balance(self)                                 \
+  (z_atomic_inc(&((self)->balancer)) % (self)->size)
 
 __Z_END_DECLS__
 
-#endif /* _Z_THREAD_POOL_H_ */
+#endif /* !_Z_THREAD_POOL_H_ */

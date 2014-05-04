@@ -51,8 +51,6 @@ static void __uint_unpacker_fetch (z_uint_unpacker_t *self) {
   const uint8_t width_map[9] = { 0, 0, 1, 2, 2, 3, 3, 3, 3 };
   uint8_t width;
 
-  //Z_LOG_TRACE("unpack_next windex=%d ndeltas=%d buf_avail=%d\n",
-  //                self->windex, self->ndeltas, self->buf_avail);
   if (self->windex >= self->ndeltas) {
     uint8_t head;
 
@@ -106,9 +104,6 @@ static void __uint_unpacker_fetch (z_uint_unpacker_t *self) {
       self->buf_avail -= whead_size;
       self->pbuffer += whead_size;
     }
-
-    //Z_LOG_TRACE("unpack head ndeltas=%d fixw=%d width=%d singles=%d\n",
-    //                self->ndeltas, self->fixw, self->width, self->singles);
   } else {
     if (self->fixw) {
       width = self->width;
@@ -178,7 +173,7 @@ static void __uint_unpacker_fetch (z_uint_unpacker_t *self) {
 
 #define __uint_unpacker_has_next(self)        \
   ((self)->buf_avail != 0 ||                  \
-    (self)->count > 0 ||                      \
+   (self)->count > 0 ||                       \
    (self)->windex < (self)->ndeltas)
 
 /* ============================================================================
@@ -201,7 +196,6 @@ void z_uint_unpacker_open (z_uint_unpacker_t *self, const uint8_t *buffer, uint3
 }
 
 int z_uint_unpacker_next (z_uint_unpacker_t *self) {
-  //Z_LOG_TRACE("unpack_next count=%d\n", self->count);
   if (self->count > 0) {
     --self->count;
   } else {
@@ -212,11 +206,9 @@ int z_uint_unpacker_next (z_uint_unpacker_t *self) {
   }
   /* update the value */
   self->value += self->delta;
-
-  //Z_LOG_TRACE("count=%d windex=%d ndeltas=%d buf_avail=%d\n", self->count, self->windex, self->ndeltas, self->buf_avail);
   return(__uint_unpacker_has_next(self));
 }
-#include <stdio.h>
+
 int z_uint_unpacker_ssearch (z_uint_unpacker_t *self, uint64_t key, uint32_t *index) {
   uint64_t kindex = 0;
   uint64_t kdelta;
@@ -304,7 +296,6 @@ static uint8_t *__uint_packer_flush_fix (z_uint_packer_t *self,
 
   while (ndeltas--) {
     int cpy_size = !singles + ibuf[0];
-    //Z_LOG_TRACE("fix %d count %d\n", (int)ibuf[0], (int)ibuf[1]);
     memcpy(obuf, ibuf + 1 + singles, cpy_size);
     obuf += cpy_size;
     ibuf += 2 + ibuf[0];
@@ -328,7 +319,6 @@ static uint8_t *__uint_packer_flush_u16 (z_uint_packer_t *self,
 
   obuf += 1 + ((ndeltas - 1) >> 1);
   for (i = 0; i < ndeltas; ++i) {
-    //Z_LOG_TRACE("u16 WRITE %u count %u\n", ibuf[0], ibuf[1]);
     int cpy_size = !singles + ibuf[0];
     head[i >> 3] |= ((ibuf[0] - 1) << (i & 7));
     memcpy(obuf, ibuf + 1 + singles, cpy_size);
@@ -354,7 +344,6 @@ static uint8_t *__uint_packer_flush_u32 (z_uint_packer_t *self,
 
   obuf += 1 + ((ndeltas - 1) >> 2);
   for (i = 0; i < ndeltas; ++i) {
-    //Z_LOG_TRACE("u32 WRITE %u count %u\n", ibuf[0], ibuf[1]);
     int cpy_size = !singles + ibuf[0];
     head[i >> 2] |= ((ibuf[0] - 1) << ((i & 3) << 1));
     memcpy(obuf, ibuf + 1 + singles, cpy_size);
@@ -419,7 +408,6 @@ static uint8_t *__uint_packer_flush_u64 (z_uint_packer_t *self,
         break;
     }
 
-    //Z_LOG_TRACE("u64 WRITE %u count %u\n", ibuf[0], ibuf[1]);
     memcpy(obuf, ibuf + 1 + singles, cpy_size);
     obuf += cpy_size;
     ibuf += 2 + ibuf[0];
@@ -430,12 +418,10 @@ static uint8_t *__uint_packer_flush_u64 (z_uint_packer_t *self,
 
 static uint8_t *__uint_packer_flush (z_uint_packer_t *self, uint8_t *obuf) {
   uint8_t fixw, singles;
-  uint8_t *obuf_begin;
 
   fixw = (self->min_width == self->max_width);
   singles = self->singles;
 
-  obuf_begin = obuf;
   *obuf++ = (fixw << 7) | ((self->max_width - 1) << 4) | (singles << 3) | (self->ndeltas - 1);
 
   if (fixw) {
@@ -450,9 +436,6 @@ static uint8_t *__uint_packer_flush (z_uint_packer_t *self, uint8_t *obuf) {
     }
   }
 
-  //Z_LOG_TRACE("FLUSH %-4d ndeltas=%d fixw=%d width=%d singles=%d buf_size=%-4lu\n", *obuf_begin,
-  //            self->ndeltas, fixw, self->max_width, singles, obuffer->size);
-
   self->ndeltas = 0;
   self->singles = 1;
 
@@ -460,8 +443,6 @@ static uint8_t *__uint_packer_flush (z_uint_packer_t *self, uint8_t *obuf) {
   self->max_width = self->width;
 
   self->buf_used = 0;
-  //Z_LOG_TRACE("FLUSH last_value=%llu last_delta=%llu width=%u\n",
-  //                self->last_value, self->last_delta, self->width);
   return(obuf);
 }
 
@@ -473,7 +454,6 @@ static void __uint_packer_add_block (z_uint_packer_t *self) {
   self->buf_used += 2 + self->width;
   self->singles &= (self->count == 0);
   ++self->ndeltas;
-  //printf("ADD BLOCK width=%d count=%d delta=%llu\n", self->width, self->count, self->last_delta);
 }
 
 /* ============================================================================
@@ -510,7 +490,6 @@ uint8_t *z_uint_packer_add (z_uint_packer_t *self, uint64_t value, uint8_t *obuf
 
   delta = value - self->last_value;
   self->last_value = value;
-  //Z_LOG_TRACE("ADD VALUE %llu delta %llu count %u\n", value, delta, self->count);
   // TODO: NDELTAS <= 8
   if (delta == self->last_delta && self->count < 0xff && self->ndeltas <= 8) {
     ++self->count;

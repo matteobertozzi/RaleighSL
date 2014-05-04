@@ -26,7 +26,8 @@ static void __task_rq_fifo_open (z_task_rq_t *self) {
 
 static void __task_rq_fifo_close (z_task_rq_t *self) {
   z_task_rq_fifo_t *fifo = z_container_of(self, z_task_rq_fifo_t, rq);
-  Z_LOG_WARN("TODO: Free pending tasks of RQ-FIFO %p", fifo);
+  z_vtask_tree_cancel(&(fifo->pending));
+  z_vtask_queue_cancel(&(fifo->queue));
 }
 
 static void __task_rq_fifo_add (z_task_rq_t *self, z_vtask_t *vtask) {
@@ -39,12 +40,26 @@ static void __task_rq_fifo_readd (z_task_rq_t *self, z_vtask_t *vtask) {
   z_vtask_tree_push(&(fifo->pending), vtask);
 }
 
-static z_vtask_t *__task_rq_fifo_fetch (z_task_rq_t *self) {
+static void __task_rq_fifo_remove (z_task_rq_t *self, z_vtask_t *vtask) {
   z_task_rq_fifo_t *fifo = z_container_of(self, z_task_rq_fifo_t, rq);
   if (fifo->pending.root != NULL)
+    z_vtask_tree_remove(&(fifo->pending), vtask);
+  if (fifo->queue.head != NULL)
+    z_vtask_queue_remove(&(fifo->queue), vtask);
+}
+
+static z_vtask_t *__task_rq_fifo_fetch (z_task_rq_t *self) {
+  z_task_rq_fifo_t *fifo = z_container_of(self, z_task_rq_fifo_t, rq);
+  if (fifo->pending.root != NULL) {
     return(z_vtask_tree_pop(&(fifo->pending)));
-  //z_vtask_t *vtask = fair->queue->min_node;
-  //if (vtask->flags.type == Z_VTASK_TYPE_RQ) {
+  } else {
+    z_vtask_t *vtask = fifo->queue.head;
+    if (vtask->flags.type == Z_VTASK_TYPE_RQ) {
+      vtask->vtime += vtask->priority;
+      self->size += 1;
+      return(vtask);
+    }
+  }
   return(z_vtask_queue_pop(&(fifo->queue)));
 }
 
@@ -53,6 +68,7 @@ const z_vtable_task_rq_t z_task_rq_fifo = {
   .close  = __task_rq_fifo_close,
   .add    = __task_rq_fifo_add,
   .readd  = __task_rq_fifo_readd,
+  .remove = __task_rq_fifo_remove,
   .fetch  = __task_rq_fifo_fetch,
   .fini   = NULL,
 };

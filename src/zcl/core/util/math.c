@@ -27,15 +27,6 @@ unsigned int z_ilog2 (unsigned int n) {
   return(lg2);
 }
 
-double z_percentile (const double *values, size_t size, double percent) {
-  double k = (size - 1) * percent;
-  double f = floor(k);
-  double c = floor(k);
-  double d0 = values[(size_t)f] * (c - k);
-  double d1 = values[(size_t)c] * (k - f);
-  return(d0 + d1);
-}
-
 unsigned int z_rand (unsigned int *seed) {
   unsigned int next = *seed;
   unsigned int result;

@@ -29,20 +29,23 @@ struct task_data {
   int count;
 };
 
-static void __task_func0 (z_task_t *task) {
+static z_task_rstate_t __task_func0 (z_task_t *task) {
   struct task_data *data = z_container_of(task, struct task_data, vtask);
   printf("[S] Exec Task %"PRIu64" Count %d\n", data->vtask.vtask.seqid, data->count);
-  usleep(20 * 1000);
+  usleep(200 * 1000);
   printf("[E] Exec Task %"PRIu64" Count %d\n", data->vtask.vtask.seqid, data->count);
   if (++data->count < 2) {
     z_vtask_resume(&(task->vtask));
+    return(Z_TASK_CONTINUATION);
   }
+  return(Z_TASK_COMPLETED);
 }
 
-static void __task_barrier (z_task_t *task) {
+static z_task_rstate_t __task_barrier (z_task_t *task) {
   printf("[-] Exec Task Barrier %"PRIu64"\n", task->vtask.seqid);
-  usleep(50 * 1000);
+  usleep(500 * 1000);
   printf("[-] Exec Task Barrier %"PRIu64"\n", task->vtask.seqid);
+  return(Z_TASK_COMPLETED);
 }
 
 int main (int argc, char **argv) {
@@ -62,31 +65,32 @@ int main (int argc, char **argv) {
     return(1);
   }
 
-  z_task_group_open(&group, 0);
+  if (argc > 1) {
+    z_task_group_open(&group, 0);
 
-  z_task_reset(&(data[0].vtask), __task_func0);
-  z_task_group_add(&group, &(data[0].vtask.vtask));
+    z_task_reset(&(data[0].vtask), __task_func0);
+    z_task_group_add(&group, &(data[0].vtask.vtask));
 
-  z_task_reset(&(data[1].vtask), __task_func0);
-  z_task_group_add(&group, &(data[1].vtask.vtask));
+    z_task_reset(&(data[1].vtask), __task_func0);
+    z_task_group_add(&group, &(data[1].vtask.vtask));
 
-  z_task_reset(&(data[2].vtask), __task_barrier);
-  z_task_group_add_barrier(&group, &(data[2].vtask.vtask));
+    z_task_reset(&(data[2].vtask), __task_barrier);
+    z_task_group_add_barrier(&group, &(data[2].vtask.vtask));
 
-  z_task_reset(&(data[3].vtask), __task_func0);
-  z_task_group_add(&group, &(data[3].vtask.vtask));
+    z_task_reset(&(data[3].vtask), __task_func0);
+    z_task_group_add(&group, &(data[3].vtask.vtask));
 
-  z_task_reset(&(data[4].vtask), __task_func0);
-  z_task_group_add(&group, &(data[4].vtask.vtask));
+    z_task_reset(&(data[4].vtask), __task_func0);
+    z_task_group_add(&group, &(data[4].vtask.vtask));
 
-  z_task_reset(&(data[5].vtask), __task_barrier);
-  z_task_group_add_barrier(&group, &(data[5].vtask.vtask));
+    z_task_reset(&(data[5].vtask), __task_barrier);
+    z_task_group_add_barrier(&group, &(data[5].vtask.vtask));
 
-  z_task_rq_add(z_global_rq(), &(group.rq.vtask));
-  z_global_new_tasks_broadcast();
+    z_task_rq_add(z_global_rq(), &(group.rq.vtask));
 
-  z_task_group_wait(&group);
-  z_task_group_close(&group);
+    z_task_group_wait(&group);
+    z_task_group_close(&group);
+  }
 
   z_global_context_close();
   z_allocator_close(&allocator);

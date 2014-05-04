@@ -27,10 +27,9 @@ struct z_histogram {
   const uint64_t *bounds;
   uint64_t *events;
   uint64_t sum;
-  uint64_t min;
   uint64_t max;
   uint32_t nbuckets;
-  uint32_t pad;
+  uint32_t max_events;
 };
 
 void     z_histogram_init          (z_histogram_t *self,
@@ -39,14 +38,15 @@ void     z_histogram_init          (z_histogram_t *self,
                                     unsigned int nbounds);
 void     z_histogram_clear         (z_histogram_t *self);
 void     z_histogram_add           (z_histogram_t *self, uint64_t value);
+void     z_histogram_add_atomic    (z_histogram_t *self, uint64_t value);
 uint64_t z_histogram_nevents       (const z_histogram_t *self);
 double   z_histogram_average       (const z_histogram_t *self);
 double   z_histogram_percentile    (const z_histogram_t *self, double p);
 #define  z_histogram_median(self)  z_histogram_percentile(self, 50.0)
 void     z_histogram_dump          (const z_histogram_t *self,
                                     FILE *stream,
-                                    z_human_u64_t key);
+                                    z_human_dbl_t key);
 
 __Z_END_DECLS__
 
-#endif /* _Z_HISTOGRAM_H_ */
+#endif /* !_Z_HISTOGRAM_H_ */

@@ -14,7 +14,7 @@
 
 #include <zcl/rwcsem.h>
 #include <zcl/atomic.h>
-
+#include <zcl/debug.h>
 /* ============================================================================
  *  Read-Write-Commit Semaphore
  */
@@ -136,6 +136,7 @@ int z_rwcsem_try_acquire_lock (z_rwcsem_t *lock) {
     if (curval != Z_RWCSEM_LOCK_FLAG)
       return(0);
 
+    fprintf(stderr, "try-lock curval=%u\n", curval);
     expval = Z_RWCSEM_LOCK_FLAG;
     newval = Z_RWCSEM_LOCK_FLAG | Z_RWCSEM_WRITE_FLAG;
   });
@@ -172,6 +173,9 @@ int z_rwcsem_try_switch (z_rwcsem_t *lock, z_rwcsem_op_t op_current, z_rwcsem_op
       } else {
         return(0);
       }
+    } else if (op_current == Z_RWCSEM_READ && op_next == Z_RWCSEM_COMMIT) {
+      expval = Z_RWCSEM_COMMIT_FLAG | 1;
+      newval = Z_RWCSEM_COMMIT_FLAG | Z_RWCSEM_WRITE_FLAG;
     } else {
       return(0);
     }

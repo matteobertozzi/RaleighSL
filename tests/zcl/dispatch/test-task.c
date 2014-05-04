@@ -32,14 +32,15 @@ struct task_data {
   int count;
 };
 
-static void __task_func (z_task_t *task) {
+static z_task_rstate_t __task_func (z_task_t *task) {
   struct task_data *data = z_container_of(task, struct task_data, vtask);
   //printf("Exec Task %d Count %d\n", data->task_id, data->count);
   usleep(20 * 1000);
   if (data->count++ < 100) {
     z_task_rq_add(z_global_rq(), &(task->vtask));
-    z_global_new_task_signal();
+    return(Z_TASK_CONTINUATION);
   }
+  return(Z_TASK_COMPLETED);
 }
 
 int main (int argc, char **argv) {
@@ -64,7 +65,6 @@ int main (int argc, char **argv) {
     data[i].seed = z_rand(&seed);
     data[i].count = 0;
     z_task_rq_add(z_global_rq(), &(data[i].vtask.vtask));
-    z_global_new_task_signal();
   }
 
   for (i = 0; i < ((argc - 1) * 100); ++i) {

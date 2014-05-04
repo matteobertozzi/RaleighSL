@@ -61,7 +61,7 @@ void z_memref_acquire (z_memref_t *self, const z_memref_t *other) {
 }
 
 void z_memref_release (z_memref_t *self) {
-  if (Z_UNLIKELY(self == NULL)) return;
+  if (self == NULL) return;
 
   if (self->object != NULL) {
     self->vtable->dec_ref(self->object);

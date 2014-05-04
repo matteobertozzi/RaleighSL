@@ -34,4 +34,4 @@ int   z_rwlock_try_write_lock   (z_rwlock_t *lock);
 
 __Z_END_DECLS__
 
-#endif /* _Z_RWLOCK_H_ */
+#endif /* !_Z_RWLOCK_H_ */

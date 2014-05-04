@@ -43,4 +43,4 @@ int   z_strncasecmp (const char *s1, const char *s2, size_t n);
 
 __Z_END_DECLS__
 
-#endif /* _Z_STRING_H_ */
+#endif /* !_Z_STRING_H_ */

@@ -28,9 +28,9 @@ struct z_allocator {
 #define z_system_allocator_open(self)                  0
 #define z_allocator_close(self)
 
-#define z_allocator_raw_alloc(self, size)              malloc(size)
-#define z_allocator_raw_realloc(self, ptr, size)       realloc(ptr, size)
-#define z_allocator_free(self, ptr)                    free(ptr)
+#define z_allocator_raw_alloc(self, size)         malloc(size)
+#define z_allocator_raw_realloc(self, ptr, size)  realloc(ptr, size)
+#define z_allocator_free(self, ptr)               free(ptr)
 
 #define z_allocator_alloc(self, type, size)                                   \
   Z_CAST(type, z_allocator_raw_alloc(self, size))

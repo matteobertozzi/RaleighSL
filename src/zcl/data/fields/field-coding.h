@@ -28,4 +28,4 @@ int     z_field_decode (const uint8_t *buf,
                         uint64_t *length);
 __Z_END_DECLS__
 
-#endif /* _Z_DATA_FIELD_CODING_H_ */
+#endif /* !_Z_DATA_FIELD_CODING_H_ */

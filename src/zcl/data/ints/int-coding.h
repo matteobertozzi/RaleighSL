@@ -36,15 +36,15 @@ uint8_t z_uint64_size (uint64_t value);
 #define z_uint32_encode     z_uint_encode
 #define z_uint64_encode     z_uint_encode
 
-#if Z_CPU_IS_BIG_ENDIAN
-  void z_encode_uint   (uint8_t *buf,
+#if defined(Z_CPU_IS_BIG_ENDIAN)
+  void z_uint_encode   (uint8_t *buf,
                         unsigned int length,
                         uint64_t value);
 
-  void z_decode_uint16 (const uint8_t *buffer,
+  void z_uint16_decode (const uint8_t *buffer,
                         unsigned int length,
                         uint16_t *value);
-  void z_decode_uint32 (const uint8_t *buffer,
+  void z_uint32_decode (const uint8_t *buffer,
                         unsigned int length,
                         uint32_t *value);
   void z_uint64_decode (const uint8_t *buffer,
@@ -82,4 +82,4 @@ int z_4int_decode (const uint8_t *buf,
 
 __Z_END_DECLS__
 
-#endif /* _Z_DATA_INT_CODING_H_ */
+#endif /* !_Z_DATA_INT_CODING_H_ */

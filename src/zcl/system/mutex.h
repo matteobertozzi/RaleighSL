@@ -25,10 +25,21 @@ __Z_BEGIN_DECLS__
   #include <pthread.h>
 #endif
 
-/* ============================================================================
- *  Mutex
- */
-#if defined(Z_SYS_HAS_PTHREAD_MUTEX)
+#if defined(Z_SYS_HAS_FUTEX)
+  typedef union z_mutex {
+    uint32_t u;
+    struct {
+      uint16_t locked;
+      uint16_t contended;
+    } b;
+  } z_mutex_t;
+
+  int z_mutex_alloc (z_mutex_t *self);
+  int z_mutex_free(z_mutex_t *m);
+  int z_mutex_lock(z_mutex_t *m);
+  int z_mutex_unlock(z_mutex_t *m);
+  int z_mutex_try_lock(z_mutex_t *m);
+#elif defined(Z_SYS_HAS_PTHREAD_MUTEX)
   #define z_mutex_t                 pthread_mutex_t
   #define z_mutex_alloc(lock)       pthread_mutex_init(lock, NULL)
   #define z_mutex_free(lock)        pthread_mutex_destroy(lock)
@@ -40,4 +51,4 @@ __Z_BEGIN_DECLS__
 
 __Z_END_DECLS__
 
-#endif /* _Z_MUTEX_H_ */
+#endif /* !_Z_MUTEX_H_ */

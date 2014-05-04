@@ -20,20 +20,22 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 
-#define Z_KB(n)         (n << 10)
-#define Z_MB(n)         (n << 20)
-#define Z_GB(n)         (n << 30)
-#define Z_TB(n)         (n << 40)
-#define Z_PB(n)         (n << 50)
-#define Z_EB(n)         (n << 60)
+#define Z_KB(n)         ((n) << 10)
+#define Z_MB(n)         ((n) << 20)
+#define Z_GB(n)         ((n) << 30)
+#define Z_TB(n)         ((n) << 40)
+#define Z_PB(n)         ((n) << 50)
+#define Z_EB(n)         ((n) << 60)
 
 typedef char *(z_human_u64_t) (char *buffer, size_t bufsize, uint64_t x);
+typedef char *(z_human_dbl_t) (char *buffer, size_t bufsize, double x);
 
 char *z_human_dsize (char *buffer, size_t bufsize, double size);
+char *z_human_dtime (char *buffer, size_t bufsize, double time);
 
-char *z_human_size  (char *buffer, size_t bufsize, uint64_t size);
-char *z_human_time  (char *buffer, size_t bufsize, uint64_t time);
+char *z_human_size (char *buffer, size_t bufsize, uint64_t size);
+char *z_human_time (char *buffer, size_t bufsize, uint64_t time);
 
 __Z_END_DECLS__
 
-#endif /* _Z_HUMANS_H_ */
+#endif /* !_Z_HUMANS_H_ */

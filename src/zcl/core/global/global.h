@@ -34,13 +34,24 @@ void *z_global_cpu_ctx        (void);
 void *z_global_cpu_ctx_id     (int core);
 void  z_global_set_cpu_ctx    (void *udata);
 void  z_global_set_cpu_ctx_id (int core, void *udata);
+z_task_rq_t *z_global_cpu_rq  (int core);
 
-z_task_rq_t *z_global_rq     (void);
-z_memory_t * z_global_memory (void);
+/* getter for global objects */
+z_task_rq_t *  z_global_rq         (void);
+z_memory_t *   z_global_memory     (void);
+z_allocator_t *z_global_allocator  (void);
+const uint8_t *z_global_is_running (void);
+unsigned int   z_global_cpu_count  (void);
+void *         z_global_user_data  (void);
+uint64_t       z_global_uptime     (void);
 
-void z_global_new_task_signal     (void);
+/* global metrics */
+const z_histogram_t *    z_global_histo_memory (int core);
+const z_task_rq_stats_t *z_global_rq_stats     (int core);
+
+/* new task notification */
+void z_global_new_task_signal     (z_task_rq_t *rq);
 void z_global_new_tasks_broadcast (void);
-void z_global_new_tasks_signal    (int ntasks);
 
 __Z_END_DECLS__
 

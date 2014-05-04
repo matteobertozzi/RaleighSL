@@ -32,6 +32,7 @@ Z_TYPEDEF_STRUCT(z_timer)
 #define Z_TIME_SEC(x)             ((x) * 1000000)
 
 #define z_timeval_to_micros(x)    ((x)->tv_sec * 1000000U + (x)->tv_usec)
+#define z_usec_to_sec(t)          ((t) / 1000000.0)
 
 struct z_timer {
   uint64_t start;
@@ -48,12 +49,16 @@ struct z_timer {
                  z_timer_secs(&__ ## name ## _timer__));            \
   } while (0)
 
-uint64_t    z_time_millis       (void);
-uint64_t    z_time_micros       (void);
-uint64_t    z_time_nanos        (void);
+uint32_t z_time_secs    (void);
+uint64_t z_time_millis  (void);
+uint64_t z_time_micros  (void);
+uint64_t z_time_nanos   (void);
+
+void     z_time_usleep  (uint64_t usec);
 
 #define z_timer_start(t)        (t)->start = z_time_micros()
 #define z_timer_stop(t)         (t)->end = z_time_micros()
+#define z_timer_reset(t)        (t)->start = (t)->end
 #define z_timer_micros(t)       ((t)->end - (t)->start)
 #define z_timer_millis(t)       (z_timer_micros(t) / 1000)
 #define z_timer_secs(t)         (z_timer_micros(t) / 1000000.0)

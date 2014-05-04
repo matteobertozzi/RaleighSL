@@ -25,7 +25,6 @@ int main (int argc, char **argv) {
   z_histogram_t histo;
   uint64_t bounds[32];
   uint64_t events[32];
-  unsigned int seed;
   int i;
 
   for (i = 0; i < 31; ++i) {
@@ -33,15 +32,16 @@ int main (int argc, char **argv) {
   }
   bounds[31] = 0xffffffffffffffffll;
 
-  seed = 1;
   z_histogram_init(&histo, bounds, events, 32);
   __verify(&histo);
-#if 0
-  for (i = 0; i < 0x1fffffff; ++i) {
-    unsigned int v = z_rand(&seed) & 31;
-    z_histogram_add(&histo, v);
+
+  if (0) {
+    unsigned int seed = 1;
+    for (i = 0; i < 0x1fffffff; ++i) {
+      unsigned int v = z_rand(&seed) & 31;
+      z_histogram_add(&histo, v);
+    }
   }
-#endif
   //z_histogram_dump(&histo, stdout, z_human_size);
 
   return(0);

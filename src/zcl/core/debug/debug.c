@@ -12,21 +12,22 @@
  *   limitations under the License.
  */
 
+#include <zcl/mutex.h>
+#include <zcl/debug.h>
+
 #include <execinfo.h>
+#include <string.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <time.h>
-
-#include <zcl/mutex.h>
-#include <zcl/debug.h>
 
 struct debug_conf {
   z_mutex_t lock;
   int log_level;
 };
 
-#define __DEFAULT_LOG_LEVEL       5
 static struct debug_conf __current_debug_conf;
 
 static const char __weekday_name[7][3] = {
@@ -42,7 +43,7 @@ static const char *__log_level[6] = {
   "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE",
 };
 
-static void __date_time (char buffer[25]) {
+static void __date_time (char *buffer) {
   struct tm datetime;
   time_t t;
 
@@ -56,26 +57,27 @@ static void __date_time (char buffer[25]) {
            datetime.tm_hour, datetime.tm_min, datetime.tm_sec);
 }
 
-void __z_log (FILE *fp, int level,
+void __z_log (FILE *fp, int level, int errnum,
               const char *file, int line, const char *func,
               const char *format, ...)
 {
   char datetime[25];
   va_list ap;
 
-  if (level > __current_debug_conf.log_level)
-    return;
-
   z_mutex_lock(&(__current_debug_conf.lock));
   __date_time(datetime);
-  fprintf(stderr, "[%s] %-5s %s:%d %s() - ",
+  fprintf(fp, "[%s] %-5s %s:%d %s() - ",
           datetime, __log_level[level], file, line, func);
 
   va_start(ap, format);
-  vfprintf(stderr, format, ap);
+  vfprintf(fp, format, ap);
   va_end(ap);
 
-  fprintf(stderr, "\n");
+  if (errnum != 0) {
+    fprintf(fp, ": errno %d %s", errnum, strerror(errnum));
+  }
+
+  fprintf(fp, "\n");
   z_mutex_unlock(&(__current_debug_conf.lock));
 }
 
@@ -101,10 +103,10 @@ void __z_assert (const char *file, int line, const char *func,
   abort();
 }
 
-void z_dump_stack_trace (FILE *fp, unsigned int levels) {
+void z_dump_stack_trace (FILE *fp, int levels) {
   void *trace[64];
   char **symbols;
-  size_t i, size;
+  int i, size;
 
   if (Z_UNLIKELY(levels == 0 || levels > 64))
     levels = 64;
@@ -127,7 +129,7 @@ void z_dump_stack_trace (FILE *fp, unsigned int levels) {
 
 void z_debug_open (void) {
   z_mutex_alloc(&(__current_debug_conf.lock));
-  __current_debug_conf.log_level = __DEFAULT_LOG_LEVEL;
+  __current_debug_conf.log_level = Z_LOG_LEVEL_DEFAULT;
 }
 
 void z_debug_close (void) {

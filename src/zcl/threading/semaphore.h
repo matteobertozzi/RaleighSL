@@ -49,5 +49,5 @@ void z_semaphore_release           (z_semaphore_t *self, int n);
 
 __Z_END_DECLS__
 
-#endif /* _Z_SEMAPHORE_ */
+#endif /* !_Z_SEMAPHORE_ */
 

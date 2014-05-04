@@ -37,8 +37,8 @@ struct z_memslice {
 
 #define z_memslice_set(slice, data_, size_)                                  \
   do {                                                                       \
-    (slice)->data = ((uint8_t *)(data_));                                    \
     (slice)->size = size_;                                                   \
+    (slice)->data = ((uint8_t *)(data_));                                    \
   } while (0)
 
 #define z_memslice_copy(self, slice)                                         \
@@ -98,4 +98,4 @@ int   z_memsearch_u8  (const uint8_t *src,
 
 __Z_END_DECLS__
 
-#endif /* _Z_DATA_MEM_SLICE_H_ */
+#endif /* !_Z_DATA_MEM_SLICE_H_ */

@@ -20,8 +20,9 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 
-#define Z_CACHELINE               64
-#define Z_CACHELINE_PAD(size)     (z_align_up(size, Z_CACHELINE) - size)
+#define Z_CACHELINE                       64
+#define Z_CACHELINE_PAD(size)             (z_align_up(size, Z_CACHELINE) - size)
+#define Z_CACHELINE_PAD_FIELDS(a, ...)    Z_CACHELINE_PAD(z_sizeof_sum(a, ##__VA_ARGS__))
 
 #define z_system_cpu_relax()      asm volatile("pause\n": : :"memory")
 
@@ -33,4 +34,4 @@ uint64_t      z_system_memory_used  (void);
 
 __Z_END_DECLS__
 
-#endif /* _Z_SYSTEM_H_ */
+#endif /* !_Z_SYSTEM_H_ */

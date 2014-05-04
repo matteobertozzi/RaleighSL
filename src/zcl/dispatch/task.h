@@ -21,12 +21,18 @@ __Z_BEGIN_DECLS__
 #include <zcl/macros.h>
 #include <zcl/vtask.h>
 
+Z_TYPEDEF_ENUM(z_task_rstate)
 Z_TYPEDEF_STRUCT(z_task)
 
-typedef void (*z_task_func_t) (z_task_t *task);
+typedef z_task_rstate_t (*z_task_func_t) (z_task_t *task);
 
-// continueWith
-// continueWhen(a, b, c) are done
+enum z_task_rstate {
+  Z_TASK_COMPLETED,
+  Z_TASK_ABORTED,
+  Z_TASK_CONTINUATION,
+  Z_TASK_CONTINUATION_FUNC,
+  Z_TASK_YIELD,
+};
 
 struct z_task {
   z_vtask_t vtask;
@@ -43,4 +49,4 @@ struct z_task {
 
 __Z_END_DECLS__
 
-#endif /* _Z_TASK_H_ */
+#endif /* !_Z_TASK_H_ */

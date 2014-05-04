@@ -49,4 +49,4 @@ int   z_thread_get_core     (z_thread_t *thread, int *core);
 
 __Z_END_DECLS__
 
-#endif /* _Z_THREAD_H_ */
+#endif /* !_Z_THREAD_H_ */

@@ -21,9 +21,9 @@
  *  Wait condition
  */
 #if defined(Z_SYS_HAS_PTHREAD_WAIT_COND)
-void z_wait_cond_wait (z_wait_cond_t *wcond,
-                       z_mutex_t *mutex,
-                       unsigned long usec)
+void __z_pthread_wait_cond_wait (pthread_cond_t *wcond,
+                                 pthread_mutex_t *mutex,
+                                 unsigned long usec)
 {
   if (usec == 0) {
     pthread_cond_wait(wcond, mutex);

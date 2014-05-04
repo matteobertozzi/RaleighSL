@@ -12,6 +12,8 @@
  *   limitations under the License.
  */
 
+#include <zcl/debug.h>
+#include <zcl/atomic.h>
 #include <zcl/task-rq.h>
 #include <zcl/task.h>
 #include <zcl/mem.h>
@@ -38,19 +40,35 @@ void z_vtask_exec (z_vtask_t *vtask) {
       case Z_VTASK_TYPE_RQ: {
         z_task_rq_t *rq = z_container_of(vtask, z_task_rq_t, vtask);
         vtask = z_task_rq_fetch(rq);
+        z_atomic_dec(&(rq->refs));
         break;
       }
       case Z_VTASK_TYPE_TASK: {
         z_task_rq_t *parent = z_container_of(vtask->parent, z_task_rq_t, vtask);
         z_task_t *task = z_container_of(vtask, z_task_t, vtask);
-        z_task_exec(task);
-        z_task_rq_fini(parent);
-        vtask = NULL;
-        return;
+        switch (z_task_exec(task)) {
+          case Z_TASK_COMPLETED:
+          case Z_TASK_ABORTED:
+            vtask = NULL;
+            break;
+          case Z_TASK_CONTINUATION_FUNC:
+            break;
+          case Z_TASK_CONTINUATION:
+            vtask = NULL;
+            if (parent) {
+              z_task_rq_fini(parent);
+            }
+            break;
+          case Z_TASK_YIELD:
+            vtask = NULL;
+            break;
+        }
+        break;
       }
       default: {
-        fprintf(stderr, "BAD vtask type %d\n", vtask->flags.type);
-        return;
+        Z_LOG_ERROR("BAD vtask type %d\n", vtask->flags.type);
+        vtask = NULL;
+        break;
       }
     }
   } while (vtask != NULL);

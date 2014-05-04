@@ -21,16 +21,17 @@ __Z_BEGIN_DECLS__
 #include <zcl/macros.h>
 
 #if defined(Z_SYS_HAS_ATOMIC_GCC)
-  #define z_atomic_set(ptr, v)           (*(ptr)) = (v)
-  #define z_atomic_load(ptr)             (*(ptr))
+  #define z_atomic_set(ptr, v) ({  __sync_synchronize(); *(ptr) = (v); })
+  #define z_atomic_load(ptr) ({ __sync_synchronize(); *(ptr); })
+
   #define z_atomic_add_and_fetch(ptr, v) __sync_add_and_fetch(ptr, v)
   #define z_atomic_sub_and_fetch(ptr, v) __sync_sub_and_fetch(ptr, v)
   #define z_atomic_or_and_fetch(ptr, v)  __sync_or_and_fetch(ptr, v)
   #define z_atomic_and_and_fetch(ptr, v) __sync_and_and_fetch(ptr, v)
   #define z_atomic_xor_and_fetch(ptr, v) __sync_xor_and_fetch(ptr, v)
-
   #define z_atomic_fetch_and_add(ptr, v) __sync_fetch_and_add(ptr, v)
   #define z_atomic_fetch_and_sub(ptr, v) __sync_fetch_and_sub(ptr, v)
+
   #define z_atomic_cas(ptr, o, n)        __sync_bool_compare_and_swap(ptr, o, n)
   #define z_atomic_vcas(ptr, o, n)       __sync_val_compare_and_swap(ptr, o, n)
   #define z_atomic_synchronize()         __sync_synchronize()
@@ -38,6 +39,11 @@ __Z_BEGIN_DECLS__
   #define z_atomic_dec(ptr)              z_atomic_sub_and_fetch(ptr, 1)
   #define z_atomic_add                   z_atomic_add_and_fetch
   #define z_atomic_sum                   z_atomic_sub_and_fetch
+
+  #define z_busy_init(ptr)               *(ptr) = 0
+  #define z_busy_try_lock(ptr)           !__sync_lock_test_and_set(ptr, 1)
+  #define z_busy_lock(ptr)               while (!z_busy_try_lock(ptr));
+  #define z_busy_unlock(ptr)             __sync_lock_release(ptr)
 #else
   #error "No atomic support"
 #endif
@@ -45,11 +51,9 @@ __Z_BEGIN_DECLS__
 #define z_atomic_cas_loop(ptrval, curval, expval, newval, __code__)           \
   do {                                                                        \
     (curval) = z_atomic_load(ptrval);                                         \
-    while (1) {                                                               \
+    do {                                                                      \
       do __code__ while (0);                                                  \
-      if (((curval) = z_atomic_vcas(ptrval, expval, newval)) == (expval))     \
-        break;                                                                \
-    }                                                                         \
+    } while (((curval) = z_atomic_vcas(ptrval, expval, newval)) != (expval)); \
   } while (0)
 
 #define z_atomic_cas_retry_loop(ptrval, expval, newval)                       \

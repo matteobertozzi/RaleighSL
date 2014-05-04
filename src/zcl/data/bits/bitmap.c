@@ -75,7 +75,7 @@ int z_bitmap_find_first (const uint8_t *bitmap,
   if ((bit = offset & 0x7)) {
     for (; bit < 8 && num_bits > 0; ++bit) {
       if (z_bitmap_test(p, bit) == value) {
-        *idx = ((p - bitmap) << 3) + bit;
+        *idx = (size_t) ((p - bitmap) << 3) + bit;
         return(1);
       }
 
@@ -102,7 +102,7 @@ int z_bitmap_find_first (const uint8_t *bitmap,
   // Find a 'value' bit at the beginning of the last byte
   for (bit = 0; num_bits > 0; ++bit) {
     if (z_bitmap_test(p, bit) == value) {
-      *idx = ((p - bitmap) << 3) + bit;
+      *idx = (size_t) ((p - bitmap) << 3) + bit;
       return(1);
     }
     num_bits--;

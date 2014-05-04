@@ -81,4 +81,4 @@ uint8_t *z_uint_packer_add     (z_uint_packer_t *self,
 
 __Z_END_DECLS__
 
-#endif /* _Z_DATA_INT_PACKING_H_ */
+#endif /* !_Z_DATA_INT_PACKING_H_ */

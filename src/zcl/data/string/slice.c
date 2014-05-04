@@ -1,0 +1,324 @@
+/*
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
+#include <zcl/global.h>
+#include <zcl/slice.h>
+
+#include <stdio.h>
+
+/* ===========================================================================
+ *  PRIVATE Slice Macros
+ */
+#define __slice_node_blocks_scan(node, block, __ucode__)                    \
+  do {                                                                      \
+    unsigned int __p_index = Z_SLICE_NBLOCKS;                               \
+    block = (node)->blocks;                                                 \
+    while (__p_index--) {                                                   \
+      do __ucode__ while (0);                                               \
+      block++;                                                              \
+    }                                                                       \
+  } while (0)
+
+/* ===========================================================================
+ *  PRIVATE Slice Utils
+ */
+static void __slice_node_init (z_slice_node_t *node) {
+#if 0
+  z_memslice_t *bslice;
+  node->next = NULL;
+  __slice_node_blocks_scan(node, bslice, {
+    z_memslice_clear(bslice);
+  });
+#else
+  z_memzero(node, sizeof(z_slice_node_t));
+#endif
+}
+
+static z_slice_node_t *__slice_node_alloc (z_slice_t *slice) {
+  z_slice_node_t *node;
+
+  node = z_memory_struct_alloc(z_global_memory(), z_slice_node_t);
+  if (Z_MALLOC_IS_NULL(node))
+    return(NULL);
+
+  __slice_node_init(node);
+  return(node);
+}
+
+static void __slice_node_free (z_slice_t *slice, z_slice_node_t *node) {
+  z_memory_struct_free(z_global_memory(), z_slice_node_t, node);
+}
+
+static z_memslice_t *__slice_pick_tail_free_buffer (z_slice_node_t *node) {
+  unsigned int index = Z_SLICE_NBLOCKS;
+  z_memslice_t *bslice = NULL;
+  while (index--) {
+    if (z_memslice_is_not_empty(&(node->blocks[index])))
+      break;
+    bslice = &(node->blocks[index]);
+  }
+  return(bslice);
+}
+
+static z_memslice_t *__slice_pick_head_free_buffer (z_slice_node_t *node) {
+  z_memslice_t *bslice;
+  __slice_node_blocks_scan(node, bslice, {
+    if (z_memslice_is_empty(bslice))
+      return(bslice);
+  });
+  return(NULL);
+}
+
+/* ===========================================================================
+ *  PUBLIC Slice methods
+ */
+void z_slice_clear (z_slice_t *self) {
+  z_slice_node_t *node;
+  z_slice_node_t *next;
+
+  for (node = self->head.next; node != NULL; node = next) {
+    next = node->next;
+    __slice_node_free(self, node);
+  }
+
+  self->tail = &(self->head);
+  __slice_node_init(self->tail);
+}
+
+int z_slice_add (z_slice_t *self, const z_slice_t *slice) {
+  const z_memslice_t *bslice;
+  const z_slice_node_t *node;
+
+  for (node = &(self->head); node != NULL; node = node->next) {
+    __slice_node_blocks_scan(node, bslice, {
+      if (bslice->size != 0) {
+        if (z_slice_append(self, bslice->data, bslice->size))
+          return(1);
+      }
+    });
+  }
+
+  return(0);
+}
+
+int z_slice_append (z_slice_t *self, const void *data, size_t size) {
+  z_memslice_t *bslice;
+
+  if ((bslice = __slice_pick_tail_free_buffer(self->tail)) == NULL) {
+    z_slice_node_t *node;
+
+    node = __slice_node_alloc(self);
+    if (Z_MALLOC_IS_NULL(node))
+      return(-1);
+
+    self->tail->next = node;
+    self->tail = node;
+    bslice = &(node->blocks[0]);
+  }
+
+  z_memslice_set(bslice, data, size);
+  return(0);
+}
+
+int z_slice_prepend (z_slice_t *self, const void *data, size_t size) {
+  z_memslice_t *bslice = &(self->head.blocks[0]);
+  if (!z_memslice_is_empty(bslice)) {
+    bslice = __slice_pick_head_free_buffer(&(self->head));
+    if (bslice != NULL) {
+      z_memmove(&(self->head.blocks[1]), &(self->head.blocks[0]), bslice - &(self->head.blocks[0]));
+    } else {
+      z_slice_node_t *node;
+
+      node = __slice_node_alloc(self);
+      if (Z_MALLOC_IS_NULL(node))
+        return(-1);
+
+      z_memcpy(node->blocks, self->head.blocks, Z_SLICE_NBLOCKS * sizeof(z_memslice_t));
+      z_memzero(self->head.blocks, Z_SLICE_NBLOCKS * sizeof(z_memslice_t));
+
+      node->next = self->head.next;
+      self->head.next = node;
+      if (self->tail == &(self->head))
+        self->tail = node;
+
+      bslice = &(self->head.blocks[0]);
+    }
+  }
+
+  z_memslice_set(bslice, data, size);
+  return(0);
+}
+
+int z_slice_ltrim (z_slice_t *self, size_t size) {
+  z_memslice_t *bslice;
+  z_slice_node_t *node;
+
+  for (node = &(self->head); node != NULL; node = node->next) {
+    __slice_node_blocks_scan(node, bslice, {
+      size_t n = z_min(size, bslice->size);
+      size -= n;
+
+      bslice->data += n;
+      bslice->size -= n;
+    });
+  }
+
+  return(0);
+}
+
+void z_slice_to_lower (z_slice_t *self) {
+  const z_memslice_t *bslice;
+  const z_slice_node_t *node;
+  for (node = &(self->head); node != NULL; node = node->next) {
+    __slice_node_blocks_scan(node, bslice, {
+      z_strnlower((char *)bslice->data, bslice->size);
+    });
+  }
+}
+
+void z_slice_to_upper (z_slice_t *self) {
+  const z_memslice_t *bslice;
+  const z_slice_node_t *node;
+  for (node = &(self->head); node != NULL; node = node->next) {
+    __slice_node_blocks_scan(node, bslice, {
+      z_strnupper((char *)bslice->data, bslice->size);
+    });
+  }
+}
+
+size_t z_slice_length (const z_slice_t *self) {
+  const z_memslice_t *bslice;
+  const z_slice_node_t *node;
+  size_t length = 0;
+
+  for (node = &(self->head); node != NULL; node = node->next) {
+    __slice_node_blocks_scan(node, bslice, {
+      if (bslice->size == 0)
+        return(length);
+      length += bslice->size;
+    });
+  }
+
+  return(length);
+}
+
+int z_slice_is_empty (const z_slice_t *self) {
+  return(z_memslice_is_empty(&(self->head.blocks[0])));
+}
+
+int z_slice_equals (const z_slice_t *self, const void *data, size_t size) {
+  const uint8_t *pdata = (const uint8_t *)data;
+  const z_memslice_t *bslice;
+  const z_slice_node_t *node;
+
+  for (node = &(self->head); node != NULL; node = node->next) {
+    __slice_node_blocks_scan(node, bslice, {
+      size_t n;
+
+      if (size < bslice->size)
+        return(0);
+
+      if ((n = z_min(size, bslice->size)) == 0)
+        return(size == 0);
+
+      if (!z_memslice_starts_with(bslice, pdata, n))
+        return(0);
+
+      pdata += n;
+      size -= n;
+    });
+  }
+
+  return(size == 0);
+}
+
+int z_slice_starts_with (const z_slice_t *self, const void *data, size_t size) {
+  const uint8_t *pdata = (const uint8_t *)data;
+  const z_memslice_t *bslice;
+  const z_slice_node_t *node;
+
+  for (node = &(self->head); node != NULL; node = node->next) {
+    __slice_node_blocks_scan(node, bslice, {
+      size_t n;
+
+      if ((n = z_min(size, bslice->size)) == 0)
+        return(size == 0);
+
+      if (!z_memslice_starts_with(bslice, pdata, size))
+        return(0);
+
+      pdata += n;
+      size -= n;
+    });
+  }
+
+  return(size == 0);
+}
+
+size_t z_slice_dump (FILE *stream, const z_slice_t *self) {
+  const z_memslice_t *bslice;
+  const z_slice_node_t *node;
+  size_t length = 0;
+  int i, j;
+
+  fprintf(stream, "%zu:", z_slice_length(self));
+  for (node = &(self->head); node != NULL; node = node->next) {
+    for (i = 0; i < Z_SLICE_NBLOCKS; ++i) {
+      bslice = &(node->blocks[i]);
+      if (bslice->size == 0) {
+        fputc('\n', stream);
+        return(length);
+      }
+
+      length += bslice->size;
+      for (j = 0; j < bslice->size; ++j) {
+        fputc(bslice->data[j], stream);
+      }
+    }
+  }
+  fputc('\n', stream);
+  return(length);
+}
+
+size_t z_slice_copy (const z_slice_t *self, void *buf, size_t size) {
+  uint8_t *pbuf = (uint8_t *)buf;
+  const z_memslice_t *bslice;
+  const z_slice_node_t *node;
+
+  for (node = &(self->head); node != NULL; node = node->next) {
+    __slice_node_blocks_scan(node, bslice, {
+      size_t n = z_min(size, bslice->size);
+      size -= n;
+
+      z_memcpy(pbuf, bslice->data, n);
+      pbuf += n;
+    });
+  }
+
+  *pbuf = '\0';
+  return(pbuf - (uint8_t *)buf);
+}
+
+/* ===========================================================================
+*  PUBLIC Slice constructor/destructor
+*/
+z_slice_t *z_slice_alloc (z_slice_t *self) {
+  self->tail = &(self->head);
+  __slice_node_init(self->tail);
+  return(self);
+}
+
+void z_slice_free (z_slice_t *self) {
+  z_slice_clear(self);
+}

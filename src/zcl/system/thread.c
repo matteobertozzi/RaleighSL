@@ -21,21 +21,29 @@
 /* ============================================================================
  *  Threads
  */
+#define __THREAD_MIN_STACK_SIZE          (8192)
+
 int z_thread_start (z_thread_t *tid, z_thread_func_t func, void *args) {
 #if defined(Z_SYS_HAS_PTHREAD_THREAD)
-#if 0
   pthread_attr_t attr;
+  size_t stacksize;
   int res;
 
   pthread_attr_init(&attr);
+
+  /*
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
   pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
+  */
+
+  pthread_attr_getstacksize(&attr, &stacksize);
+  if (stacksize < __THREAD_MIN_STACK_SIZE) {
+    pthread_attr_setstacksize(&attr, stacksize);
+  }
+
   res = pthread_create(tid, &attr, func, args);
   pthread_attr_destroy(&attr);
   return(res);
-#else
-  return(pthread_create(tid, NULL, func, args));
-#endif
 #else
   #error "No thread support"
 #endif

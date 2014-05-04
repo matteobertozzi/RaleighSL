@@ -45,7 +45,7 @@ uint8_t z_uint64_size (uint64_t value) {
 /* ============================================================================
  *  Encode/Decode unsigned integer
  */
-#if Z_CPU_IS_BIG_ENDIAN
+#if defined(Z_CPU_IS_BIG_ENDIAN)
 void z_uint_encode (uint8_t *buf, unsigned int length, uint64_t value) {
   switch (length) {
     case 8: buf[7] = (value >> 56) & 0xff;

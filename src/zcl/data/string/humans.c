@@ -34,18 +34,23 @@ char *z_human_dsize (char *buffer, size_t bufsize, double size) {
   return(buffer);
 }
 
+char *z_human_dtime (char *buffer, size_t bufsize, double usec) {
+  if (usec >= 60000000)
+    snprintf(buffer, bufsize, "%.2fmin", usec / 60000000.0);
+  else if (usec >= 1000000)
+    snprintf(buffer, bufsize, "%.2fsec", usec / 1000000.0);
+  else if (usec >= 1000U)
+    snprintf(buffer, bufsize, "%.2fmsec", usec / 1000.0);
+  else
+    snprintf(buffer, bufsize, "%.2fusec", usec);
+  return(buffer);
+}
+
+
 char *z_human_size (char *buffer, size_t bufsize, uint64_t size) {
   return(z_human_dsize(buffer, bufsize, size));
 }
 
-char *z_human_time (char *buffer, size_t bufsize, uint64_t msec) {
-  if (msec >= 60000000)
-    snprintf(buffer, bufsize, "%.2fmin", msec / 60000000.0);
-  else if (msec >= 1000000)
-    snprintf(buffer, bufsize, "%.2fsec", msec / 1000000.0);
-  else if (msec >= 1000U)
-    snprintf(buffer, bufsize, "%.2fmsec", msec / 1000.0);
-  else
-    snprintf(buffer, bufsize, "%"PRIu64"usec", msec);
-  return(buffer);
+char *z_human_time (char *buffer, size_t bufsize, uint64_t usec) {
+  return(z_human_dtime(buffer, bufsize, usec));
 }

@@ -29,6 +29,12 @@
 #define __USEC_PER_SEC         ((uint64_t)1000000U)
 #define __MSEC_PER_SEC         ((uint64_t)1000U)
 
+uint32_t z_time_secs (void) {
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  return(now.tv_sec);
+}
+
 uint64_t z_time_millis (void) {
   struct timeval now;
   gettimeofday(&now, NULL);
@@ -44,10 +50,12 @@ uint64_t z_time_micros (void) {
 uint64_t z_time_nanos (void) {
 #if defined(Z_SYS_HAS_CLOCK_GETTIME)
   struct timespec now;
-  #if defined(CLOCK_UPTIME)
-    clock_gettime(CLOCK_UPTIME, &now);
-  #elif defined(CLOCK_MONOTONIC)
+  #if defined(CLOCK_MONOTONIC)
     clock_gettime(CLOCK_MONOTONIC, &now);
+  #elif defined(CLOCK_MONOTONIC_COARSE)
+    clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+  #elif defined(CLOCK_UPTIME)
+    clock_gettime(CLOCK_UPTIME, &now);
   #else
     #error "clock_gettime() has no clocks UPTIME/MONOTONIC"
   #endif
@@ -64,4 +72,11 @@ uint64_t z_time_nanos (void) {
   gettimeofday(&now, NULL);
   return(now.tv_sec * __NSEC_PER_SEC + (now.tv_usec * __NSEC_PER_USEC));
 #endif
+}
+
+void z_time_usleep (uint64_t usec) {
+  struct timespec ts;
+  ts.tv_sec = usec / __USEC_PER_SEC;
+  ts.tv_nsec = (usec % __USEC_PER_SEC) * 1000;
+  nanosleep(&ts, NULL);
 }

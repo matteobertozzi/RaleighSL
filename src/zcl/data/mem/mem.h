@@ -42,4 +42,4 @@ size_t      z_memrshared    (const void *a,
 
 __Z_END_DECLS__
 
-#endif /* _Z_DATA_MEM_H_ */
+#endif /* !_Z_DATA_MEM_H_ */

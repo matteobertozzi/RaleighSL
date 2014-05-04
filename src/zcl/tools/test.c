@@ -1,0 +1,50 @@
+/*
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
+#include <stdio.h>
+
+#include <zcl/test.h>
+
+int z_test_run (z_test_t *test, const char *name, void *user_data) {
+  z_test_func_t *f;
+  int failure = 0;
+
+  if (user_data != NULL)
+    test->user_data = user_data;
+
+  for (f = test->funcs; *f != NULL; ++f) {
+    if (test->setup != NULL && test->setup(test)) {
+      fprintf(stderr, "[ !! ] %s - failed on setup %ld\n", name, f - test->funcs);
+      return(-1);
+    }
+
+    if ((*f)(test)) {
+      fprintf(stderr, "[ !! ] %s - failed test %ld\n", name, f - test->funcs);
+      failure++;
+    }
+
+    if (test->tear_down != NULL && test->tear_down(test)) {
+      fprintf(stderr, "[ !! ] %s - failed on teardown %ld\n", name, f - test->funcs);
+      return(-2);
+    }
+  }
+
+  if (failure != 0) {
+    fprintf(stderr, "[ !! ] %s - failed %ld tests\n", name, f - test->funcs);
+  } else {
+    fprintf(stderr, "[ ok ] %s\n", name);
+  }
+
+  return(failure);
+}

@@ -140,8 +140,15 @@ __Z_BEGIN_DECLS__
 #define __zin_6(x, a, b, c, d, e, f)    __zin_0(x, a, __zin_5(x, b, c, d, e, f))
 #define z_in(x, ...)                    (Z_FOLD(__zin_, x, __VA_ARGS__))
 
+#define __zszof_sum1(a, b)              ((a) + z_sizeof(b))
+#define __zszof_sum2(a, b, c)           __zszof_sum1(__zszof_sum1(a, b), c)
+#define __zszof_sum3(a, b, c, d)        __zszof_sum1(__zszof_sum2(a, b, c), d)
+#define __zszof_sum4(a, b, c, d, e)     __zszof_sum1(__zszof_sum3(a, b, c, d), e)
+#define __zszof_sum5(a, b, c, d, e, f)  __zszof_sum1(__zszof_sum4(a, b, c, d, e), f)
+#define z_sizeof_sum(a, ...)            (Z_FOLD(__zszof_sum, z_sizeof(a), __VA_ARGS__))
+
 #define z_between(v, a, b)              ((v) >= (a) && (v) <= (b))
 
 __Z_END_DECLS__
 
-#endif /* _Z_MACROS_H_ */
+#endif /* !_Z_MACROS_H_ */

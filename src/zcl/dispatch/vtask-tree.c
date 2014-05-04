@@ -29,14 +29,14 @@
 static void __tree_rb_insert_color (z_vtask_t **root, z_vtask_t *vtask) {
   z_vtask_t *parent, *gparent, *tmp;
   z_vtask_t *memo;
-  while ((parent = vtask->link.parent) && parent->flags.rblink == 1) {
+  while ((parent = vtask->link.parent) && parent->link_flags.rblink == 1) {
     gparent = parent->link.parent;
     if (parent == gparent->link.child[0]) {
       tmp = gparent->link.child[1];
-      if (tmp && tmp->flags.rblink == 1) {
-        tmp->flags.rblink = 0;
-        parent->flags.rblink = 0;
-        gparent->flags.rblink = 1;
+      if (tmp && tmp->link_flags.rblink == 1) {
+        tmp->link_flags.rblink = 0;
+        parent->link_flags.rblink = 0;
+        gparent->link_flags.rblink = 1;
         vtask = gparent;
         continue;
       }
@@ -61,8 +61,8 @@ static void __tree_rb_insert_color (z_vtask_t **root, z_vtask_t *vtask) {
         vtask = tmp;
       }
 
-      parent->flags.rblink = 0;
-      gparent->flags.rblink = 1;
+      parent->link_flags.rblink = 0;
+      gparent->link_flags.rblink = 1;
 
       tmp = gparent->link.child[0];
       memo = tmp->link.child[1];
@@ -81,10 +81,10 @@ static void __tree_rb_insert_color (z_vtask_t **root, z_vtask_t *vtask) {
       gparent->link.parent = tmp;
     } else {
       tmp = gparent->link.child[0];
-      if (tmp && tmp->flags.rblink == 1) {
-        tmp->flags.rblink = 0;
-        parent->flags.rblink = 0;
-        gparent->flags.rblink = 1;
+      if (tmp && tmp->link_flags.rblink == 1) {
+        tmp->link_flags.rblink = 0;
+        parent->link_flags.rblink = 0;
+        gparent->link_flags.rblink = 1;
         vtask = gparent;
         continue;
       }
@@ -111,8 +111,8 @@ static void __tree_rb_insert_color (z_vtask_t **root, z_vtask_t *vtask) {
         vtask = tmp;
       }
 
-      parent->flags.rblink = 0;
-      gparent->flags.rblink = 1;
+      parent->link_flags.rblink = 0;
+      gparent->link_flags.rblink = 1;
 
       tmp = gparent->link.child[1];
       memo = tmp->link.child[0];
@@ -131,18 +131,18 @@ static void __tree_rb_insert_color (z_vtask_t **root, z_vtask_t *vtask) {
       gparent->link.parent = tmp;
     }
   }
-  (*root)->flags.rblink = 0;
+  (*root)->link_flags.rblink = 0;
 }
 
 static void __tree_rb_remove_color (z_vtask_t **root, z_vtask_t *parent, z_vtask_t *vtask) {
   z_vtask_t *memo;
   z_vtask_t *tmp;
-  while ((vtask == NULL || vtask->flags.rblink == 0) && vtask != *root) {
+  while ((vtask == NULL || vtask->link_flags.rblink == 0) && vtask != *root) {
     if (parent->link.child[0] == vtask) {
       tmp = parent->link.child[1];
-      if (tmp->flags.rblink == 1) {
-        tmp->flags.rblink = 0;
-        parent->flags.rblink = 1;
+      if (tmp->link_flags.rblink == 1) {
+        tmp->link_flags.rblink = 0;
+        parent->link_flags.rblink = 1;
 
         tmp = parent->link.child[1];
         memo = tmp->link.child[0];
@@ -162,18 +162,18 @@ static void __tree_rb_remove_color (z_vtask_t **root, z_vtask_t *parent, z_vtask
         tmp = parent->link.child[1];
       }
 
-      if ((tmp->link.child[0] == NULL || tmp->link.child[0]->flags.rblink == 0) &&
-          (tmp->link.child[1] == NULL || tmp->link.child[1]->flags.rblink == 0))
+      if ((tmp->link.child[0] == NULL || tmp->link.child[0]->link_flags.rblink == 0) &&
+          (tmp->link.child[1] == NULL || tmp->link.child[1]->link_flags.rblink == 0))
       {
-        tmp->flags.rblink = 1;
+        tmp->link_flags.rblink = 1;
         vtask = parent;
         parent = vtask->link.parent;
       } else {
-        if (tmp->link.child[1] == NULL || tmp->link.child[1]->flags.rblink == 0) {
+        if (tmp->link.child[1] == NULL || tmp->link.child[1]->link_flags.rblink == 0) {
           z_vtask_t *oleft;
           if ((oleft = tmp->link.child[0]))
-            oleft->flags.rblink = 0;
-          tmp->flags.rblink = 1;
+            oleft->link_flags.rblink = 0;
+          tmp->link_flags.rblink = 1;
 
           oleft = tmp->link.child[0];
           memo = oleft->link.child[1];
@@ -193,10 +193,10 @@ static void __tree_rb_remove_color (z_vtask_t **root, z_vtask_t *parent, z_vtask
           tmp = parent->link.child[1];
         }
 
-        tmp->flags.rblink = parent->flags.rblink;
-        parent->flags.rblink = 0;
+        tmp->link_flags.rblink = parent->link_flags.rblink;
+        parent->link_flags.rblink = 0;
         if ((memo = tmp->link.child[1]))
-          memo->flags.rblink = 0;
+          memo->link_flags.rblink = 0;
 
         tmp = parent->link.child[1];
         memo = tmp->link.child[0];
@@ -218,9 +218,9 @@ static void __tree_rb_remove_color (z_vtask_t **root, z_vtask_t *parent, z_vtask
       }
     } else {
       tmp = parent->link.child[0];
-      if (tmp->flags.rblink == 1) {
-        tmp->flags.rblink = 0;
-        parent->flags.rblink = 1;
+      if (tmp->link_flags.rblink == 1) {
+        tmp->link_flags.rblink = 0;
+        parent->link_flags.rblink = 1;
 
         tmp = parent->link.child[0];
         memo = tmp->link.child[1];
@@ -238,18 +238,18 @@ static void __tree_rb_remove_color (z_vtask_t **root, z_vtask_t *parent, z_vtask
         tmp->link.child[1] = parent;
         parent->link.parent = tmp;
         tmp = parent->link.child[0];
-      } if ((tmp->link.child[0] == NULL || tmp->link.child[0]->flags.rblink == 0) &&
-            (tmp->link.child[1] == NULL || tmp->link.child[1]->flags.rblink == 0))
+      } if ((tmp->link.child[0] == NULL || tmp->link.child[0]->link_flags.rblink == 0) &&
+            (tmp->link.child[1] == NULL || tmp->link.child[1]->link_flags.rblink == 0))
       {
-        tmp->flags.rblink = 1;
+        tmp->link_flags.rblink = 1;
         vtask = parent;
         parent = vtask->link.parent;
       } else {
-        if (tmp->link.child[0] == NULL || tmp->link.child[0]->flags.rblink == 0) {
+        if (tmp->link.child[0] == NULL || tmp->link.child[0]->link_flags.rblink == 0) {
           z_vtask_t *oright;
           if ((oright = tmp->link.child[1]))
-            oright->flags.rblink = 0;
-          tmp->flags.rblink = 1;
+            oright->link_flags.rblink = 0;
+          tmp->link_flags.rblink = 1;
 
           oright = tmp->link.child[1];
           memo = oright->link.child[0];
@@ -269,10 +269,10 @@ static void __tree_rb_remove_color (z_vtask_t **root, z_vtask_t *parent, z_vtask
           tmp = parent->link.child[0];
         }
 
-        tmp->flags.rblink = parent->flags.rblink;
-        parent->flags.rblink = 0;
+        tmp->link_flags.rblink = parent->link_flags.rblink;
+        parent->link_flags.rblink = 0;
         if ((memo = tmp->link.child[0]))
-          memo->flags.rblink = 0;
+          memo->link_flags.rblink = 0;
 
         tmp = parent->link.child[0];
         memo = tmp->link.child[1];
@@ -295,7 +295,7 @@ static void __tree_rb_remove_color (z_vtask_t **root, z_vtask_t *parent, z_vtask
     }
   }
   if (vtask) {
-    vtask->flags.rblink = 0;
+    vtask->link_flags.rblink = 0;
   }
 }
 
@@ -314,7 +314,7 @@ static z_vtask_t *__vtask_tree_remove(z_vtask_t **root, z_vtask_t *vtask) {
       vtask = left;
     child = vtask->link.child[1];
     parent = vtask->link.parent;
-    color = vtask->flags.rblink;
+    color = vtask->link_flags.rblink;
     if (child)
       child->link.parent = parent;
     if (parent) {
@@ -338,7 +338,7 @@ static z_vtask_t *__vtask_tree_remove(z_vtask_t **root, z_vtask_t *vtask) {
     goto color;
   }
   parent = vtask->link.parent;
-  color = vtask->flags.rblink;
+  color = vtask->link_flags.rblink;
   if (child)
     child->link.parent = parent;
   if (parent) {
@@ -350,7 +350,12 @@ static z_vtask_t *__vtask_tree_remove(z_vtask_t **root, z_vtask_t *vtask) {
 color:
   if (color == 0)
     __tree_rb_remove_color(root, parent, child);
-  return (old);
+
+  old->link.parent = NULL;
+  old->link.child[0] = NULL;
+  old->link.child[1] = NULL;
+  old->link_flags.attached = 0;
+  return(old);
 }
 
 static int __vtask_tree_insert(z_vtask_t **root, z_vtask_t *task) {
@@ -375,7 +380,8 @@ static int __vtask_tree_insert(z_vtask_t **root, z_vtask_t *task) {
 
   task->link.parent = parent;
   task->link.child[0] = task->link.child[1] = NULL;
-  task->flags.rblink = 1;
+  task->link_flags.rblink = 1;
+  task->link_flags.attached = 1;
   if (parent != NULL) {
     parent->link.child[comp >= 0] = task;
   } else {
@@ -435,5 +441,30 @@ void z_vtask_tree_push (z_vtask_tree_t *self, z_vtask_t *vtask) {
 z_vtask_t *z_vtask_tree_pop (z_vtask_tree_t *self) {
   z_vtask_t *vtask = self->min_node;
   self->min_node = z_vtask_tree_next(vtask);
-  return(__vtask_tree_remove(&(self->root), vtask));
+  __vtask_tree_remove(&(self->root), vtask);
+  return vtask;
+}
+
+void z_vtask_tree_remove (z_vtask_tree_t *self, z_vtask_t *vtask) {
+  if (vtask == self->min_node)
+    self->min_node = z_vtask_tree_next(vtask);
+  __vtask_tree_remove(&(self->root), vtask);
+}
+
+void z_vtask_tree_cancel (z_vtask_tree_t *self) {
+  z_vtask_t *vtask = self->min_node;
+  while (vtask != NULL) {
+    vtask->cancel = 1;
+    vtask = z_vtask_tree_next(vtask);
+  }
+}
+
+void z_vtask_tree_dump (z_vtask_tree_t *self, FILE *stream) {
+  z_vtask_t *vtask = self->min_node;
+  fprintf(stream, "Task-Tree: ");
+  while (vtask != NULL) {
+    fprintf(stream, "%"PRIu64" -> ", vtask->seqid);
+    vtask = z_vtask_tree_next(vtask);
+  }
+  fprintf(stream, "X\n");
 }

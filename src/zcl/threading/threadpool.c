@@ -35,28 +35,25 @@ int z_thread_pool_open (z_thread_pool_t *self, unsigned int nthreads) {
   }
 
   self->waiting_threads = 0;
-  self->total_threads = nthreads & 0xffff;
+  self->size = nthreads & 0xffff;
   self->is_running = 1;
+  self->balancer = 0;
   return(0);
 }
 
 void z_thread_pool_wait (z_thread_pool_t *self) {
   z_mutex_lock(&(self->mutex));
-  if (self->waiting_threads < self->total_threads) {
+  if (self->waiting_threads < self->size) {
     z_wait_cond_wait(&(self->no_active_threads), &(self->mutex), 0);
   }
   z_mutex_unlock(&(self->mutex));
 }
 
 void z_thread_pool_stop (z_thread_pool_t *self) {
-  /* Send close notification and wait */
   z_mutex_lock(&(self->mutex));
   if (self->is_running) {
     self->is_running = 0;
     z_wait_cond_broadcast(&(self->task_ready));
-    if (self->waiting_threads < self->total_threads) {
-      z_wait_cond_wait(&(self->no_active_threads), &(self->mutex), 0);
-    }
   }
   z_mutex_unlock(&(self->mutex));
 }
@@ -70,21 +67,24 @@ void z_thread_pool_close (z_thread_pool_t *self) {
 
 void z_thread_pool_worker_close (z_thread_pool_t *self) {
   z_mutex_lock(&(self->mutex));
-  if (++self->waiting_threads == self->total_threads) {
+  if (++self->waiting_threads == self->size) {
     z_wait_cond_broadcast(&(self->no_active_threads));
   }
   z_mutex_unlock(&(self->mutex));
 }
 
-int z_thread_pool_worker_wait (z_thread_pool_t *self) {
+int z_thread_pool_worker_wait_on (z_thread_pool_t *self,
+                                  z_wait_cond_t *task_ready,
+                                  unsigned int usec)
+{
   int is_running;
   z_mutex_lock(&(self->mutex));
-    if (++self->waiting_threads == self->total_threads) {
-      z_wait_cond_broadcast(&(self->no_active_threads));
-    }
-    z_wait_cond_wait(&(self->task_ready), &(self->mutex), 750);
-    self->waiting_threads -= 1;
-    is_running = self->is_running;
+  if (Z_UNLIKELY(++self->waiting_threads == self->size)) {
+    z_wait_cond_broadcast(&(self->no_active_threads));
+  }
+  z_wait_cond_wait(task_ready, &(self->mutex), usec);
+  self->waiting_threads -= 1;
+  is_running = self->is_running;
   z_mutex_unlock(&(self->mutex));
   return(is_running);
 }

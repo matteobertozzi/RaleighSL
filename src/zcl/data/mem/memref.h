@@ -23,8 +23,8 @@ __Z_BEGIN_DECLS__
 #include <zcl/macros.h>
 #include <zcl/memslice.h>
 
-#define Z_CONST_BYTES_REF(x)              Z_CONST_CAST(z_memref_t, x)
-#define Z_BYTES_REF(x)                    Z_CAST(z_memref_t, x)
+#define Z_CONST_MEMREF(x)              Z_CONST_CAST(z_memref_t, x)
+#define Z_MEMREF(x)                    Z_CAST(z_memref_t, x)
 
 Z_TYPEDEF_STRUCT(z_vtable_refs)
 Z_TYPEDEF_STRUCT(z_memref)
@@ -50,18 +50,18 @@ struct z_memref {
 
 void z_memref_reset    (z_memref_t *self);
 void z_memref_set      (z_memref_t *self,
-                           const z_memslice_t *slice,
-                           const z_vtable_refs_t *vtable,
-                           void *object);
+                        const z_memslice_t *slice,
+                        const z_vtable_refs_t *vtable,
+                        void *object);
 void z_memref_set_data (z_memref_t *self,
-                           const void *data,
-                           unsigned int size,
-                           const z_vtable_refs_t *vtable,
-                           void *object);
+                        const void *data,
+                        unsigned int size,
+                        const z_vtable_refs_t *vtable,
+                        void *object);
 void z_memref_acquire  (z_memref_t *self,
-                           const z_memref_t *other);
+                        const z_memref_t *other);
 void z_memref_release  (z_memref_t *self);
 
 __Z_END_DECLS__
 
-#endif /* _Z_DATA_MEMREF_H_ */
+#endif /* !_Z_DATA_MEMREF_H_ */

@@ -1,0 +1,34 @@
+ IPC-Msg header
+===================
+
+0              3       5      6          8
++----------------------+------+----------+
+|       version        |   msg-len-len   |
++--------------+--------------+----------+ 1 byte
+| msg-type-len |  req-id-len  | req-type |
++--------------+--------------+----------+ 2 byte
+|             Message Length             |          (v0 max 3byte)
++----------------------------------------+ 5 byte
+|              Message Type              |
++----------------------------------------+ 13 byte
+|               Request Id               |
++----------------------------------------+ 21 byte
+|                                        |
+|                                        |
+|                  Data                  |
+|                                        |
+|                                        |
++----------------------------------------+
+
+
+Field Min 1byte Max 13bytes (1 + 8 + 4)
+Int Max 8
+
+Base Types
+ - int: [int8, int16, int32, int64]
+ - uint: [uint8, uint16, uint32, uint64]
+ - string: read-only bytes with '\0' as terminator
+ - bytes: read-only bytes
+
+
+

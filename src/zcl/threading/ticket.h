@@ -21,31 +21,26 @@ __Z_BEGIN_DECLS__
 #include <zcl/macros.h>
 #include <zcl/atomic.h>
 #include <zcl/system.h>
-typedef union z_ticket {
-  uint32_t data;
-  struct {
-    uint16_t next_ticket;
-    uint16_t now_serving;
-  } s;
+
+#define Z_TICKET_INLINE     1
+
+typedef struct z_ticket {
+  uint16_t next_ticket;
+  uint16_t now_serving;
 } z_ticket_t;
 
-#if 0
-void  z_ticket_init      (z_ticket_t *ticket);
-void  z_ticket_acquire   (z_ticket_t *ticket);
-void  z_ticket_release   (z_ticket_t *ticket);
-#else
-
+#if Z_TICKET_INLINE
 #define z_ticket_init(self)           \
   do {                                \
-    (self)->s.now_serving = 0;        \
-    (self)->s.next_ticket = 0;        \
+    (self)->now_serving = 0;          \
+    (self)->next_ticket = 0;          \
   } while (0)
 
-#define z_ticket_acquire(self)                                           \
+#define z_ticket_acquire(self)                                          \
   do {                                                                  \
     uint16_t my_ticket;                                                 \
-    my_ticket = z_atomic_fetch_and_add(&((self)->s.next_ticket), 1);    \
-    while ((self)->s.now_serving != my_ticket) {                        \
+    my_ticket = z_atomic_fetch_and_add(&((self)->next_ticket), 1);      \
+    while ((self)->now_serving != my_ticket) {                          \
       z_system_cpu_relax();                                             \
     }                                                                   \
   } while (0)
@@ -53,10 +48,14 @@ void  z_ticket_release   (z_ticket_t *ticket);
 #define z_ticket_release(self)          \
   do {                                  \
     z_atomic_synchronize();             \
-    (self)->s.now_serving += 1;         \
+    (self)->now_serving += 1;           \
   } while (0)
+#else
+void  z_ticket_init      (z_ticket_t *ticket);
+void  z_ticket_acquire   (z_ticket_t *ticket);
+void  z_ticket_release   (z_ticket_t *ticket);
 #endif
 
 __Z_END_DECLS__
 
-#endif /* _Z_TICKET_H_ */
+#endif /* !_Z_TICKET_H_ */

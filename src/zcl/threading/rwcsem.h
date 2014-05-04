@@ -71,4 +71,4 @@ int   z_rwcsem_try_switch   (z_rwcsem_t *lock,
 
 __Z_END_DECLS__
 
-#endif /* _Z_RWCSEM_H_ */
+#endif /* !_Z_RWCSEM_H_ */

@@ -25,11 +25,13 @@ __Z_BEGIN_DECLS__
 
 Z_TYPEDEF_STRUCT(z_memory)
 
+#define Z_MALLOC_IS_NULL(x)           (Z_UNLIKELY((x) == NULL))
+
 struct z_memory {
   z_allocator_t *allocator;
 
   z_histogram_t histo;
-  uint64_t histo_events[25];
+  uint64_t histo_events[26];
   //uint64_t pool_alloc;
   //uint64_t sys_alloc;
 };
@@ -48,13 +50,13 @@ void *z_memory_raw_alloc   (z_memory_t *self, const char *type_name, size_t size
 void *z_memory_raw_realloc (z_memory_t *self, void *ptr, size_t size);
 
 #define z_memory_alloc(self, type, size)                                      \
-  Z_CAST(type, z_memory_raw_alloc(self, "raw", size))
+  Z_CAST(type, z_memory_raw_alloc(self, #type, size))
 
 #define z_memory_realloc(self, type, ptr, size)                               \
   Z_CAST(type, z_memory_raw_realloc(self, ptr, size))
 
 #define z_memory_free(self, ptr)                                              \
-  z_allocator_free(memory->allocator, ptr)
+  z_allocator_free(self->allocator, ptr);
 
 /* struct alloc/free */
 #define z_memory_struct_alloc(self, type)                                     \
@@ -65,13 +67,19 @@ void *z_memory_raw_realloc (z_memory_t *self, void *ptr, size_t size);
 
 /* array alloc/realloc/free */
 #define z_memory_array_alloc(self, type, n)                                   \
-  Z_CAST(type, z_memory_raw_alloc(self, (n) * sizeof(type)))
+  Z_CAST(type, z_memory_raw_alloc(self, #type "[]", (n) * sizeof(type)))
 
 #define z_memory_array_realloc(self, ptr, type, n)                            \
   z_memory_realloc(self, type, ptr, (n) * sizeof(type))
 
 #define z_memory_array_free(self, ptr)                                        \
   z_memory_free(self, ptr)
+
+#if __Z_DEBUG__
+  #define z_memory_set_dirty_debug(ptr, size)     z_memset(ptr, 0xff, size)
+#else
+  #define z_memory_set_dirty_debug(ptr, size)     while (0)
+#endif
 
 __Z_END_DECLS__
 
