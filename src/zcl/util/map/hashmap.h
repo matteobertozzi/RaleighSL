@@ -12,20 +12,46 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_HASHMAP_H_
-#define _Z_HASHMAP_H_
+#ifndef _Z_HASH_MAP_H_
+#define _Z_HASH_MAP_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
+#include <zcl/array.h>
 
-typedef struct z_hash_map {
-  uint32_t  version;
-  uint32_t  free_list;
-  uint32_t  count;
-} z_hash_map_t;
+typedef struct z_hash_map z_hash_map_t;
+
+struct z_hash_map {
+  z_array_t   buckets;
+  z_array_t   entries;
+  uint32_t    items;
+  uint32_t    free_list;
+};
+
+int   z_hash_map_open     (z_hash_map_t *self,
+                           uint16_t isize,
+                           uint32_t capacity,
+                           uint32_t bucket_pagesz,
+                           uint32_t entries_pagesz);
+void  z_hash_map_close    (z_hash_map_t *self);
+void *z_hash_map_get      (const z_hash_map_t *self,
+                           uint32_t hash,
+                           z_compare_t key_cmp,
+                           const void *key,
+                           void *udata);
+void *z_hash_map_put      (z_hash_map_t *self,
+                           uint32_t hash,
+                           z_compare_t key_cmp,
+                           const void *key,
+                           void *udata);
+void *z_hash_map_remove   (z_hash_map_t *self,
+                           uint32_t hash,
+                           z_compare_t key_cmp,
+                           const void *key,
+                           void *udata);
 
 __Z_END_DECLS__
 
-#endif /* !_Z_HASHMAP_H_ */
+#endif /* !_Z_HASH_MAP_H_ */

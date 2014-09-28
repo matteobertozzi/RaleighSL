@@ -19,11 +19,10 @@
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
-#include <zcl/debug.h>
 
-uint32_t z_hash32_murmur3  (uint32_t seed, const void * key, size_t len);
-uint64_t z_hash64_murmur3  (uint64_t seed, const void * key, size_t len);
-void     z_hash128_murmur3 (const void * key, const size_t len, uint64_t digest[2]);
+uint32_t z_hash32_murmur3  (uint32_t seed, const void *key, size_t len);
+uint64_t z_hash64_murmur3  (uint64_t seed, const void *key, size_t len);
+void     z_hash128_murmur3 (const void *key, size_t len, uint64_t digest[2]);
 
 __Z_END_DECLS__
 

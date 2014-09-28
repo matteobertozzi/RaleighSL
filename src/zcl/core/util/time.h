@@ -19,7 +19,6 @@
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
-#include <zcl/debug.h>
 
 #if defined(Z_SYS_HAS_CLOCK_GETTIME)
   #include <time.h>
@@ -38,16 +37,6 @@ struct z_timer {
   uint64_t start;
   uint64_t end;
 };
-
-#define Z_TRACE_TIME(name, code)                                    \
-  do {                                                              \
-    z_timer_t __ ## name ## _timer__;                               \
-    z_timer_start(&__ ## name ## _timer__);                         \
-    do code while (0);                                              \
-    z_timer_stop(&__ ## name ## _timer__);                          \
-    Z_LOG_TRACE("TIMING %s executed in %.5fsec", # name,            \
-                 z_timer_secs(&__ ## name ## _timer__));            \
-  } while (0)
 
 uint32_t z_time_secs    (void);
 uint64_t z_time_millis  (void);

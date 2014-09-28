@@ -12,8 +12,8 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_RAND_H_
-#define _Z_RAND_H_
+#ifndef _Z_SHA1_H_
+#define _Z_SHA1_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
@@ -35,4 +35,4 @@ void z_rand_sha1   (uint64_t *seed, uint8_t digest[20]);
 
 __Z_END_DECLS__
 
-#endif /* _Z_RAND_H_ */
+#endif /* _Z_SHA1_H_ */

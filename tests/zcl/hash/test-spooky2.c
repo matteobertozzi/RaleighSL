@@ -1,8 +1,14 @@
 #include <zcl/spooky2.h>
+#include <zcl/debug.h>
 #include <zcl/time.h>
+#include <zcl/rand.h>
 
-#define M(x)        (x) * 1000000ul
-#define NITEMS      M(10)
+#include <string.h>
+
+#define M(x)          (x) * 1000000ul
+#define NITEMS        M(10)
+#define NITEMS_DIST   10000
+
 
 uint32_t H32_EXPECTED[512] = {
   0x6bf50919,0x70de1d26,0xa2b37298,0x35bc5fbf,0x8223b279,0x5bcb315e,0x53fe88a1,0xf9f1a233,
@@ -78,50 +84,109 @@ uint32_t H32_EXPECTED[512] = {
   0x27c2e04b,0x0b7523bd,0x07305776,0xc6be7503,0x918fa7c9,0xaf2e2cd9,0x82046f8e,0xcc1c8250
 };
 
-int main (int argc, char **argv) {
-  uint64_t digest[2];
-  uint64_t i, seed;
-  uint64_t st, et;
-  double sec;
+static void test_perf (void) {
+  Z_DEBUG_TOPS(SPOOKYv2_32, NITEMS, {
+    uint64_t i;
+    for (i = 0; i < NITEMS; ++i) {
+      z_hash32_spooky2(0, &i, 8);
+    }
+  });
 
-  seed = 0;
-  st = z_time_micros();
-  for (i = 0; i < NITEMS; ++i) {
-    z_hash32_spooky2(i, &seed, 8);
-  }
-  et = (z_time_micros() - st);
-  sec = et / 1000000.0f;
-  printf("[SPOOKYv2-32] %llu %.3fM/sec\n", et, (NITEMS / sec) / 1000.0 / 1000.0);
+  Z_DEBUG_TOPS(SPOOKYv2_64, NITEMS, {
+    uint64_t i;
+    for (i = 0; i < NITEMS; ++i) {
+      z_hash64_spooky2(0, &i, 8);
+    }
+  });
 
-  seed = 0;
-  st = z_time_micros();
-  for (i = 0; i < NITEMS; ++i) {
-    z_hash64_spooky2(i, &seed, 8);
-  }
-  et = (z_time_micros() - st);
-  sec = et / 1000000.0f;
-  printf("[SPOOKYv2-64] %llu %.3fM/sec\n", et, (NITEMS / sec) / 1000.0 / 1000.0);
+  Z_DEBUG_TOPS(SPOOKYv2_128, NITEMS, {
+    uint64_t digest[2];
+    uint64_t i;
+    for (i = 0; i < NITEMS; ++i) {
+      digest[0] = 0;
+      digest[1] = 0;
+      z_hash128_spooky2(&i, 8, digest);
+    }
+  });
+}
 
-  seed = 0;
-  st = z_time_micros();
-  for (i = 0; i < NITEMS; ++i) {
-    z_hash128_spooky2(&seed, 8, digest);
-  }
-  et = (z_time_micros() - st);
-  sec = et / 1000000.0f;
-  printf("[SPOOKYv2-128] %llu %.3fM/sec\n", et, (NITEMS / sec) / 1000.0 / 1000.0);
+static void test_validate (void) {
+  uint8_t buffer[512];
+  uint32_t i, h32;
 
-  {
-    uint8_t buffer[512];
-    uint32_t h32;
-
-    for (i = 0; i < 512; ++i) {
-      buffer[i] = 128 + i;
-      h32 = z_hash32_spooky2(0, buffer, i);
-      if (h32 != H32_EXPECTED[i]) {
-        printf("0x%08x != 0x%08x\n", h32, H32_EXPECTED[i]);
-      }
+  for (i = 0; i < 512; ++i) {
+    buffer[i] = 128 + i;
+    h32 = z_hash32_spooky2(0, buffer, i);
+    if (h32 != H32_EXPECTED[i]) {
+      printf("0x%08x != 0x%08x\n", h32, H32_EXPECTED[i]);
     }
   }
-  return 0;
+  /* TODO */
 }
+
+static void test_distribution (void) {
+  uint64_t buckets[128];
+  int i, b;
+
+  for (b = 2; b < 128; ++b) {
+    uint64_t x, seed;
+
+    memset(buckets, 0, sizeof(buckets));
+    for (x = 0; x < NITEMS_DIST; ++x)
+      buckets[z_hash32_spooky2(0, &x, 8) % b]++;
+    Z_DEBUG("spooky2 32bit seq-distribution buckets=%d", b);
+    for (i = 0; i < b; ++i) {
+      double d = (i == 0) ? 0 :
+        (buckets[i] > buckets[i-1]) ? (double)buckets[i-1] / buckets[i]
+          : (double)buckets[i] / buckets[i-1];
+      Z_DEBUG(" - bucket[%d] = %"PRIu64" diff=%.3f%%", i, buckets[i], d);
+    }
+
+    memset(buckets, 0, sizeof(buckets));
+    for (x = 0; x < NITEMS_DIST; ++x)
+      buckets[z_hash64_spooky2(0, &x, 8) % b]++;
+    Z_DEBUG("spooky2 64bit seq-distribution buckets=%d", b);
+    for (i = 0; i < b; ++i) {
+      double d = (i == 0) ? 0 :
+        (buckets[i] > buckets[i-1]) ? (double)buckets[i-1] / buckets[i]
+          : (double)buckets[i] / buckets[i-1];
+      Z_DEBUG(" - bucket[%d] = %"PRIu64" diff=%.3f%%", i, buckets[i], d);
+    }
+
+    memset(buckets, 0, sizeof(buckets));
+    seed = NITEMS_DIST;
+    for (x = 0; x < NITEMS_DIST; ++x) {
+      uint64_t x = z_rand64(&seed);
+      buckets[z_hash32_spooky2(0, &x, 8) % b]++;
+    }
+    Z_DEBUG("spooky2 32bit rand-distribution buckets=%d", b);
+    for (i = 0; i < b; ++i) {
+      double d = (i == 0) ? 0 :
+        (buckets[i] > buckets[i-1]) ? (double)buckets[i-1] / buckets[i]
+          : (double)buckets[i] / buckets[i-1];
+      Z_DEBUG(" - bucket[%d] = %"PRIu64" diff=%.3f%%", i, buckets[i], d);
+    }
+
+    memset(buckets, 0, sizeof(buckets));
+    seed = NITEMS_DIST;
+    for (x = 0; x < NITEMS_DIST; ++x) {
+      uint64_t x = z_rand64(&seed);
+      buckets[z_hash64_spooky2(0, &x, 8) % b]++;
+    }
+    Z_DEBUG("spooky2 64bit rand-distribution buckets=%d", b);
+    for (i = 0; i < b; ++i) {
+      double d = (i == 0) ? 0 :
+        (buckets[i] > buckets[i-1]) ? (double)buckets[i-1] / buckets[i]
+          : (double)buckets[i] / buckets[i-1];
+      Z_DEBUG(" - bucket[%d] = %"PRIu64" diff=%.3f%%", i, buckets[i], d);
+    }
+  }
+}
+
+int main (int argc, char **argv) {
+  test_perf();
+  test_validate();
+  test_distribution();
+  return(0);
+}
+

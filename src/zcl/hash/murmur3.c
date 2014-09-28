@@ -29,7 +29,7 @@
 
 //-----------------------------------------------------------------------------
 
-uint32_t z_hash32_murmur3 (uint32_t seed, const void * key, size_t len) {
+uint32_t z_hash32_murmur3 (uint32_t seed, const void *key, size_t len) {
   const uint8_t * data = (const uint8_t*)key;
   const int nblocks = len / 4;
   int i;
@@ -75,13 +75,13 @@ uint32_t z_hash32_murmur3 (uint32_t seed, const void * key, size_t len) {
   return h1;
 }
 
-uint64_t z_hash64_murmur3 (uint64_t seed, const void * key, const size_t len) {
+uint64_t z_hash64_murmur3 (uint64_t seed, const void *key, const size_t len) {
   uint64_t digest[2] = { seed, seed };
   z_hash128_murmur3(key, len, digest);
   return digest[0];
 }
 
-void z_hash128_murmur3 (const void * key, const size_t len, uint64_t digest[2]) {
+void z_hash128_murmur3 (const void *key, const size_t len, uint64_t digest[2]) {
   const uint8_t * data = (const uint8_t*)key;
   const int nblocks = len / 16;
   int i;

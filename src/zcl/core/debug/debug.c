@@ -12,8 +12,10 @@
  *   limitations under the License.
  */
 
+#include <zcl/humans.h>
 #include <zcl/mutex.h>
 #include <zcl/debug.h>
+#include <zcl/time.h>
 
 #include <execinfo.h>
 #include <string.h>
@@ -21,7 +23,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
-#include <time.h>
 
 struct debug_conf {
   z_mutex_t lock;
@@ -30,42 +31,19 @@ struct debug_conf {
 
 static struct debug_conf __current_debug_conf;
 
-static const char __weekday_name[7][3] = {
-  "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+static const char *__log_level[7] = {
+  "CODER", "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE",
 };
-
-static const char __month_name[12][3] = {
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
-
-static const char *__log_level[6] = {
-  "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE",
-};
-
-static void __date_time (char *buffer) {
-  struct tm datetime;
-  time_t t;
-
-  t = time(NULL);
-  localtime_r(&t, &datetime);
-
-  snprintf(buffer, 25, "%.3s %.3s %.2d %d %.2d:%.2d:%.2d ",
-           __weekday_name[datetime.tm_wday],
-           __month_name[datetime.tm_mon],
-           datetime.tm_mday, 1900 + datetime.tm_year,
-           datetime.tm_hour, datetime.tm_min, datetime.tm_sec);
-}
 
 void __z_log (FILE *fp, int level, int errnum,
               const char *file, int line, const char *func,
               const char *format, ...)
 {
-  char datetime[25];
+  char datetime[32];
   va_list ap;
 
   z_mutex_lock(&(__current_debug_conf.lock));
-  __date_time(datetime);
+  z_human_date(datetime, 32, z_time_micros());
   fprintf(fp, "[%s] %-5s %s:%d %s() - ",
           datetime, __log_level[level], file, line, func);
 
@@ -85,11 +63,11 @@ void __z_assert (const char *file, int line, const char *func,
                  int vcond, const char *condition,
                  const char *format, ...)
 {
-  char datetime[25];
+  char datetime[32];
   va_list ap;
 
   z_mutex_lock(&(__current_debug_conf.lock));
-  __date_time(datetime);
+  z_human_date(datetime, 32, z_time_micros());
   fprintf(stderr, "[%s] ASSERTION (%s) at %s:%d in function %s() failed. ",
           datetime, condition, file, line, func);
 

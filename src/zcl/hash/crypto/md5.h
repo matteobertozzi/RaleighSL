@@ -27,11 +27,12 @@ typedef struct z_md5 {
   uint8_t  buffer[64];
 } z_md5_t;
 
-void z_md5_init   (z_md5_t *self);
-void z_md5_update (z_md5_t *self, const void *data, size_t size);
-void z_md5_final  (z_md5_t *self, uint8_t digest[16]);
+void z_md5_init     (z_md5_t *self);
+void z_md5_update   (z_md5_t *self, const void *data, size_t size);
+void z_md5_final    (z_md5_t *self, uint8_t digest[16]);
 
-void z_rand_md5   (uint64_t *seed, uint8_t digest[16]);
+void z_hash128_md5  (const void *data, size_t size, uint8_t digest[16]);
+void z_rand_md5     (uint64_t *seed, uint8_t digest[16]);
 
 __Z_END_DECLS__
 

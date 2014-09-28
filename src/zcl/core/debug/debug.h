@@ -18,16 +18,21 @@
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
+#include <zcl/humans.h>
+
 #include <errno.h>
 #include <stdio.h>
 
-#define Z_LOG_LEVEL_FATAL            0
-#define Z_LOG_LEVEL_ERROR            1
-#define Z_LOG_LEVEL_WARN             2
-#define Z_LOG_LEVEL_INFO             3
-#define Z_LOG_LEVEL_DEBUG            4
-#define Z_LOG_LEVEL_TRACE            5
+#define Z_LOG_LEVEL_CODER            0
+#define Z_LOG_LEVEL_FATAL            1
+#define Z_LOG_LEVEL_ERROR            2
+#define Z_LOG_LEVEL_WARN             3
+#define Z_LOG_LEVEL_INFO             4
+#define Z_LOG_LEVEL_DEBUG            5
+#define Z_LOG_LEVEL_TRACE            6
 #define Z_LOG_LEVEL_DEFAULT          Z_LOG_LEVEL_TRACE
+
+#define Z_DEBUG(frmt, ...)         Z_LOG(Z_LOG_LEVEL_CODER, frmt, ##__VA_ARGS__)
 
 #define Z_LOG_FATAL(frmt, ...)     Z_LOG(Z_LOG_LEVEL_FATAL, frmt, ##__VA_ARGS__)
 #define Z_LOG_ERROR(frmt, ...)     Z_LOG(Z_LOG_LEVEL_ERROR, frmt, ##__VA_ARGS__)
@@ -83,6 +88,40 @@ __Z_BEGIN_DECLS__
   #define Z_ASSERT_IF(ifcond, cond, format, ...)  while (0) { (void)(cond); }
   #define Z_PRINT_DEBUG(format, ...)              while (0)
 #endif
+
+#define Z_TRACE_TIME(log_func, name, code)                                \
+  do {                                                                    \
+    z_timer_t __ ## name ## _timer__;                                     \
+    z_timer_start(&__ ## name ## _timer__);                               \
+    do code while (0);                                                    \
+    z_timer_stop(&__ ## name ## _timer__);                                \
+    log_func("TIMING %s executed in %.5fsec (%"PRIu64")", # name,         \
+             z_timer_secs(&__ ## name ## _timer__),                       \
+             z_timer_micros(&__ ## name ## _timer__));                    \
+  } while (0)
+
+#define Z_DUMP_TOPS(log_func, name, nops, code)                           \
+  do {                                                                    \
+    char __sbuf_ ## name ## __[32];                                       \
+    z_timer_t __ ## name ## _timer__;                                     \
+    z_timer_start(&__ ## name ## _timer__);                               \
+    do code while (0);                                                    \
+    z_timer_stop(&__ ## name ## _timer__);                                \
+    z_human_ops(__sbuf_ ## name ## __, 32,                                \
+                (nops) / z_timer_secs(&__ ## name ## _timer__));          \
+    log_func("TIMING %s executed in %.5fsec %sops/sec "                   \
+             "(nitems=%"PRIu64" %"PRIu64"usec)", # name,                  \
+             z_timer_secs(&__ ## name ## _timer__),                       \
+             __sbuf_ ## name ## __, (uint64_t)nops,                       \
+             z_timer_micros(&__ ## name ## _timer__));                    \
+  } while (0)
+
+#define Z_TRACE_TOPS(name, nops, code)                                    \
+  Z_DUMP_TOPS(Z_LOG_TRACE, name, nops, code)
+
+#define Z_DEBUG_TOPS(name, nops, code)                                    \
+  Z_DUMP_TOPS(Z_DEBUG, name, nops, code)
+
 
 void __z_log    (FILE *fp, int level, int errnum,
                  const char *file, int line, const char *func,

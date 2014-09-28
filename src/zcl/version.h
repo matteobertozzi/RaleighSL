@@ -12,25 +12,23 @@
  *   limitations under the License.
  */
 
-#include <zcl/math.h>
+#ifndef _Z_VERSION_H_
+#define _Z_VERSION_H_
 
-uint32_t z_align_pow2 (uint32_t n) {
-  --n;
-  n |= n >> 1;
-  n |= n >> 2;
-  n |= n >> 4;
-  n |= n >> 8;
-  n |= n >> 16;
-  return(n + 1);
-}
+#include <zcl/config.h>
+__Z_BEGIN_DECLS__
 
-uint32_t z_ilog2 (uint32_t n) {
-  uint32_t lg2 = 0U;
-  if (n & (n - 1)) lg2 += 1;
-  if (n >> 16) { lg2 += 16; n >>= 16; }
-  if (n >>  8) { lg2 +=  8; n >>= 8; }
-  if (n >>  4) { lg2 +=  4; n >>= 4; }
-  if (n >>  2) { lg2 +=  2; n >>= 2; }
-  if (n >>  1) { lg2 +=  1; }
-  return(lg2);
-}
+#include <zcl/macros.h>
+#include <stdio.h>
+
+const char *zcl_info_name(void);
+uint32_t    zcl_info_version(void);
+const char *zcl_info_version_str(void);
+const char *zcl_info_build_number (void);
+const char *zcl_info_git_rev (void);
+
+void        zcl_info_dump (FILE *stream);
+
+__Z_END_DECLS__
+
+#endif /* !_Z_VERSION_H_ */

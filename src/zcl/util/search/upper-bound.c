@@ -12,12 +12,25 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_MATH_H_
-#define _Z_MATH_H_
+#include <zcl/search.h>
 
-#include <zcl/macros.h>
-
-uint32_t z_align_pow2 (uint32_t n);
-uint32_t z_ilog2      (uint32_t n);
-
-#endif /* !_Z_MATH_H_ */
+uint32_t z_upper_bound (void *base,
+                        uint32_t end,
+                        uint32_t stride,
+                        const void *key,
+                        z_compare_t key_cmp,
+                        void *udata)
+{
+  uint32_t start = 0;
+  while (start < end) {
+    uint32_t mid = (start + end) >> 1;
+    uint8_t *mitem = ((uint8_t *)base) + (mid * stride);
+    int cmp = key_cmp(udata, mitem, key);
+    if (cmp > 0) {
+      end = mid;
+    } else {
+      start = mid + 1;
+    }
+  }
+  return(start);
+}

@@ -20,17 +20,17 @@ __Z_BEGIN_DECLS__
 
 #include <stdint.h>
 
-#define z_bswap16(x) ((uint16_t)(                                 \
+#define z_bswap16(x) ((uint16_t)(                                \
   ((((uint16_t)(x)) & (uint16_t)0x00ffU) << 8) |                  \
   ((((uint16_t)(x)) & (uint16_t)0xff00U) >> 8)))
 
-#define z_bswap32(x) ((uint32_t)(                                 \
+#define z_bswap32(x) ((uint32_t)(                                \
   ((((uint32_t)(x)) & (uint32_t)0x000000ffUL) << 24) |            \
   ((((uint32_t)(x)) & (uint32_t)0x0000ff00UL) <<  8) |            \
   ((((uint32_t)(x)) & (uint32_t)0x00ff0000UL) >>  8) |            \
   ((((uint32_t)(x)) & (uint32_t)0xff000000UL) >> 24)))
 
-#define z_bswap64(x) ((uint64_t)(                                 \
+#define z_bswap64(x) ((uint64_t)(                                \
   ((((uint64_t)(x)) & (uint64_t)0x00000000000000ffULL) << 56) |   \
   ((((uint64_t)(x)) & (uint64_t)0x000000000000ff00ULL) << 40) |   \
   ((((uint64_t)(x)) & (uint64_t)0x0000000000ff0000ULL) << 24) |   \
@@ -73,18 +73,18 @@ __Z_BEGIN_DECLS__
 #ifdef Z_CPU_IS_BIG_ENDIAN
   #define z_get_uint32_le(n, b, i)                  \
     do {                                            \
-      (n) = ( (uint32_t) (b)[(i)    ]       )       \
-          | ( (uint32_t) (b)[(i) + 1] <<  8 )       \
-          | ( (uint32_t) (b)[(i) + 2] << 16 )       \
-          | ( (uint32_t) (b)[(i) + 3] << 24 );      \
+      (n) = ((uint32_t) (b)[(i) + 0])               \
+          | ((uint32_t) (b)[(i) + 1] <<  8)         \
+          | ((uint32_t) (b)[(i) + 2] << 16)         \
+          | ((uint32_t) (b)[(i) + 3] << 24);        \
     } while (0)
 
   #define z_put_uint32_le(n,b,i)                    \
     do {                                            \
-      (b)[(i)    ] = (uint8_t) ( (n)       );       \
-      (b)[(i) + 1] = (uint8_t) ( (n) >>  8 );       \
-      (b)[(i) + 2] = (uint8_t) ( (n) >> 16 );       \
-      (b)[(i) + 3] = (uint8_t) ( (n) >> 24 );       \
+      (b)[(i) + 0] = (uint8_t) ((n));               \
+      (b)[(i) + 1] = (uint8_t) ((n) >>  8);         \
+      (b)[(i) + 2] = (uint8_t) ((n) >> 16);         \
+      (b)[(i) + 3] = (uint8_t) ((n) >> 24);         \
     } while (0)
 
   #define z_get_uint32_be(n, b, i)      (n) = *((uint32_t *)((b) + (i)))
@@ -99,42 +99,42 @@ __Z_BEGIN_DECLS__
 
   #define z_get_uint32_be(n,b,i)                          \
     do {                                                  \
-      (n) = ( (uint32_t) (b)[(i)    ] << 24 )             \
-          | ( (uint32_t) (b)[(i) + 1] << 16 )             \
-          | ( (uint32_t) (b)[(i) + 2] <<  8 )             \
-          | ( (uint32_t) (b)[(i) + 3]       );            \
+      (n) = ((uint32_t) (b)[(i) + 0] << 24)               \
+          | ((uint32_t) (b)[(i) + 1] << 16)               \
+          | ((uint32_t) (b)[(i) + 2] <<  8)               \
+          | ((uint32_t) (b)[(i) + 3]);                    \
     } while (0)
 
   #define z_put_uint32_be(n,b,i)                          \
     do {                                                  \
-      (b)[(i)    ] = (uint8_t) ( (n) >> 24 );             \
-      (b)[(i) + 1] = (uint8_t) ( (n) >> 16 );             \
-      (b)[(i) + 2] = (uint8_t) ( (n) >>  8 );             \
-      (b)[(i) + 3] = (uint8_t) ( (n)       );             \
+      (b)[(i) + 0] = (uint8_t) ((n) >> 24);               \
+      (b)[(i) + 1] = (uint8_t) ((n) >> 16);               \
+      (b)[(i) + 2] = (uint8_t) ((n) >>  8);               \
+      (b)[(i) + 3] = (uint8_t) ((n));                     \
     } while (0)
 
   #define z_get_uint64_be(n,b,i)                          \
     do {                                                  \
-      (n) = ( (uint64_t) (b)[(i)    ] << 56 )             \
-          | ( (uint64_t) (b)[(i) + 1] << 48 )             \
-          | ( (uint64_t) (b)[(i) + 2] << 40 )             \
-          | ( (uint64_t) (b)[(i) + 3] << 32 )             \
-          | ( (uint64_t) (b)[(i) + 4] << 24 )             \
-          | ( (uint64_t) (b)[(i) + 5] << 16 )             \
-          | ( (uint64_t) (b)[(i) + 6] <<  8 )             \
-          | ( (uint64_t) (b)[(i) + 7]       );            \
+      (n) = ((uint64_t) (b)[(i) + 0] << 56)               \
+          | ((uint64_t) (b)[(i) + 1] << 48)               \
+          | ((uint64_t) (b)[(i) + 2] << 40)               \
+          | ((uint64_t) (b)[(i) + 3] << 32)               \
+          | ((uint64_t) (b)[(i) + 4] << 24)               \
+          | ((uint64_t) (b)[(i) + 5] << 16)               \
+          | ((uint64_t) (b)[(i) + 6] <<  8)               \
+          | ((uint64_t) (b)[(i) + 7]);                    \
     } while (0)
 
   #define z_put_uint64_be(n,b,i)                          \
     do {                                                  \
-      (b)[(i)    ] = (uint8_t) ( (n) >> 56 );             \
-      (b)[(i) + 1] = (uint8_t) ( (n) >> 48 );             \
-      (b)[(i) + 2] = (uint8_t) ( (n) >> 40 );             \
-      (b)[(i) + 3] = (uint8_t) ( (n) >> 32 );             \
-      (b)[(i) + 4] = (uint8_t) ( (n) >> 24 );             \
-      (b)[(i) + 5] = (uint8_t) ( (n) >> 16 );             \
-      (b)[(i) + 6] = (uint8_t) ( (n) >>  8 );             \
-      (b)[(i) + 7] = (uint8_t) ( (n)       );             \
+      (b)[(i) + 0] = (uint8_t) ((n) >> 56);               \
+      (b)[(i) + 1] = (uint8_t) ((n) >> 48);               \
+      (b)[(i) + 2] = (uint8_t) ((n) >> 40);               \
+      (b)[(i) + 3] = (uint8_t) ((n) >> 32);               \
+      (b)[(i) + 4] = (uint8_t) ((n) >> 24);               \
+      (b)[(i) + 5] = (uint8_t) ((n) >> 16);               \
+      (b)[(i) + 6] = (uint8_t) ((n) >>  8);               \
+      (b)[(i) + 7] = (uint8_t) ((n));                     \
     } while (0)
 #endif
 

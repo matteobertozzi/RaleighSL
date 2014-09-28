@@ -19,7 +19,6 @@
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
-#include <zcl/debug.h>
 
 typedef struct z_spooky2 {
   uint64_t data[24];

@@ -1,3 +1,17 @@
+/*
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #include <zcl/debug.h>
 #include <zcl/avl.h>
 
@@ -6,8 +20,6 @@ struct avl16_head {
   uint16_t root;
   uint16_t next;
   uint16_t free_list;
-  uint16_t items;
-  uint16_t pad;
 } __attribute__((packed));
 
 struct avl16_node {
@@ -16,32 +28,34 @@ struct avl16_node {
   uint8_t  key[1];
 } __attribute__((packed));
 
-
+/* ============================================================================
+ *  PRIVATE AVL Macros
+ */
 #define __AVL_HEAD(x)             Z_CAST(struct avl16_head, x)
 
 #define __AVL16_HEAD_SIZE         sizeof(struct avl16_head)
-#define __AVL16_NODE_SIZE         sizeof(struct avl16_node)
+#define __AVL16_NODE_SIZE         (sizeof(struct avl16_node) - 1)
 
-#define __AVL_BLK_NODE_DIFF(block, node)                              \
+#define __AVL_BLK_NODE_DIFF(block, node)                                      \
   (((uint8_t *)(node)) - (block))
 
-#define __AVL_STRIDE_BLK(stride, block, pos)                          \
-  (__AVL16_HEAD_SIZE + (block) + ((pos)) * (stride))
+#define __AVL_STRIDE_BLK(stride, block, pos)                                  \
+  ((block) + __AVL16_HEAD_SIZE + ((pos) - 1) * (stride))
 
-#define __AVL_POS(stride, block, node)                                \
-  ((__AVL_BLK_NODE_DIFF(block, node) - __AVL16_HEAD_SIZE) / (stride))
+#define __AVL_POS(stride, block, node)                                        \
+  (1 + ((__AVL_BLK_NODE_DIFF(block, node) - __AVL16_HEAD_SIZE) / (stride)))
 
-#define __AVL_NODE(stride, block, pos)                                \
+#define __AVL_NODE(stride, block, pos)                                        \
   Z_CAST(struct avl16_node, __AVL_STRIDE_BLK(stride, block, pos))
 
 /* ============================================================================
  *  PRIVATE AVL Insert/Balance
  */
-static void __avl_ibalance (uint8_t *block,
-                            struct avl16_node *parent,
-                            struct avl16_node *node,
-                            uint16_t *top,
-                            uint32_t dstack)
+static void __avl16_ibalance (uint8_t *block,
+                              struct avl16_node *parent,
+                              struct avl16_node *node,
+                              uint16_t *top,
+                              uint32_t dstack)
 {
   const uint16_t stride = __AVL_HEAD(block)->stride;
   const uint16_t parent_pos = __AVL_POS(stride, block, parent);
@@ -124,11 +138,11 @@ static void __avl_ibalance (uint8_t *block,
 /* ============================================================================
  *  PRIVATE AVL Delete/Balance
  */
-static void __avl64k_dbalance (uint8_t *block,
-                               struct avl16_node *node,
-                               struct avl16_node *stack[16],
-                               uint8_t dstack[16],
-                               int k)
+static void __avl16_dbalance (uint8_t *block,
+                              const struct avl16_node *node,
+                              struct avl16_node *stack[20],
+                              uint8_t dstack[20],
+                              int k)
 {
   const uint16_t stride = __AVL_HEAD(block)->stride;
 
@@ -260,16 +274,33 @@ static void __avl64k_dbalance (uint8_t *block,
   }
 }
 
+static uint16_t __alloc_node (struct avl16_head *head, uint8_t *block) {
+  uint16_t node_pos = head->next;
+  if (head->stride > 1) {
+    if (head->free_list == 0) {
+      head->next += 1;
+    } else {
+      const struct avl16_node *node;
+      node_pos = head->free_list;
+      node = __AVL_NODE(head->stride, block, node_pos);
+      head->free_list = node->child[0];
+    }
+  } else {
+    head->next += __AVL16_NODE_SIZE;
+  }
+  return node_pos;
+}
+
 /* ============================================================================
  *  PUBLIC API
  */
-void z_avl16_init (uint8_t *block, uint32_t size, uint16_t stride) {
+uint32_t z_avl16_init (uint8_t *block, uint32_t size, uint16_t stride) {
   struct avl16_head *head = __AVL_HEAD(block);
-  head->stride    = (stride > 0) ? (__AVL16_NODE_SIZE - 1 + stride) : 1;
+  head->stride    = (stride > 0) ? (__AVL16_NODE_SIZE + stride) : 1;
   head->root      = 0;
   head->next      = 1;
   head->free_list = 0;
-  head->items     = 0;
+  return((size - __AVL16_HEAD_SIZE) / head->stride);
 }
 
 void z_avl16_expand (uint8_t *block, uint32_t size) {
@@ -283,95 +314,13 @@ uint32_t z_avl16_avail (const uint8_t *block) {
   return 0xffff - head->next;
 }
 
-uint32_t z_avl16_overhead (const uint8_t *block) {
-  struct avl16_head *head = __AVL_HEAD(block);
-  return head->items * (__AVL16_NODE_SIZE - 1);
-}
-
-static uint16_t __alloc_node (struct avl16_head *head, uint8_t *block, uint16_t ksize) {
-  uint16_t node_pos = head->next;
-  if (head->stride > 1) {
-    if (head->free_list == 0) {
-      head->next += 1;
-    } else {
-      const struct avl16_node *node = __AVL_NODE(head->stride, block, node_pos);
-      head->free_list = node->child[0];
-    }
-  } else {
-    head->next += __AVL16_NODE_SIZE + ksize - 1;
-  }
-  head->items++;
-  return node_pos;
-}
-
-uint8_t *z_avl16_insert (uint8_t *block, z_memcmp_t kcmp, const void *key, uint16_t ksize) {
+void *z_avl16_append (uint8_t *block) {
   struct avl16_head *head = __AVL_HEAD(block);
   struct avl16_node *node;
   uint16_t node_pos;
 
-  Z_ASSERT(head->stride == 1 || head->stride > 1 && ksize < head->stride,
-           "Invalid key size, stride=%u", head->stride);
-
   /* prepare new node */
-  node_pos = __alloc_node(head, block, ksize);
-  node = __AVL_NODE(head->stride, block, node_pos);
-  node->child[0] = 0;
-  node->child[1] = 0;
-  node->balance  = 0;
-
-  /* lookup the insertion point */
-  if (head->root != 0) {
-    struct avl16_node *parent;
-    uint32_t dstack;
-    uint16_t *top;
-    uint16_t *q;
-    uint16_t pp;
-    int k, dir;
-
-    dstack = 0;
-    k = dir = 0;
-    pp = head->root;
-    top = q = &(head->root);
-    parent = __AVL_NODE(head->stride, block, pp);
-    while (pp != 0) {
-      struct avl16_node *p = __AVL_NODE(head->stride, block, pp);
-      const int cmp = kcmp(p->key, key, ksize);
-      if (cmp == 0) {
-        head->next -= (head->stride > 1) ? 1 : (__AVL16_NODE_SIZE + ksize - 1);
-        head->items--;
-        return(p->key);
-      }
-
-      if (p->balance != 0) {
-        k = 0;
-        top = q;
-        parent = p;
-        dstack = 0;
-      }
-
-      dir = cmp < 0;
-      q  = p->child;
-      pp = p->child[dir];
-      dstack |= (dir << k++);
-    }
-    q[dir] = node_pos;
-    __avl_ibalance(block, parent, node, top, dstack);
-  } else {
-    head->root = node_pos;
-  }
-  return node->key;
-}
-
-uint8_t *z_avl16_append (uint8_t *block, const void *key, uint16_t ksize) {
-  struct avl16_head *head = __AVL_HEAD(block);
-  struct avl16_node *node;
-  uint16_t node_pos;
-
-  Z_ASSERT(head->stride == 1 || head->stride > 1 && ksize < head->stride,
-           "Invalid key size, stride=", head->stride);
-
-  /* prepare new node */
-  node_pos = __alloc_node(head, block, ksize);
+  node_pos = __alloc_node(head, block);
   node = __AVL_NODE(head->stride, block, node_pos);
   node->child[0] = 0;
   node->child[1] = 0;
@@ -405,18 +354,86 @@ uint8_t *z_avl16_append (uint8_t *block, const void *key, uint16_t ksize) {
     }
 
     q[1] = node_pos;
-    __avl_ibalance(block, parent, node, top, dstack);
+    __avl16_ibalance(block, parent, node, top, dstack);
   } else {
     head->root = node_pos;
   }
   return node->key;
 }
 
-uint8_t *z_avl16_remove (uint8_t *block, z_memcmp_t kcmp, const void *key, uint16_t ksize) {
+void *z_avl16_insert (uint8_t *block,
+                      z_compare_t key_cmp,
+                      const void *key,
+                      void *udata)
+{
   struct avl16_head *head = __AVL_HEAD(block);
-  struct avl16_node *stack[16];
-  struct avl16_node *p;
-  uint8_t dstack[16];
+  struct avl16_node *node;
+  uint16_t node_pos;
+
+  /* prepare new node */
+  node_pos = __alloc_node(head, block);
+  node = __AVL_NODE(head->stride, block, node_pos);
+  node->child[0] = 0;
+  node->child[1] = 0;
+  node->balance  = 0;
+
+  /* lookup the insertion point */
+  if (head->root != 0) {
+    struct avl16_node *parent;
+    uint32_t dstack;
+    uint16_t *top;
+    uint16_t *q;
+    uint16_t pp;
+    int k, dir;
+
+    dstack = 0;
+    k = dir = 0;
+    pp = head->root;
+    top = q = &(head->root);
+    parent = __AVL_NODE(head->stride, block, pp);
+    while (pp != 0) {
+      struct avl16_node *p = __AVL_NODE(head->stride, block, pp);
+      const int cmp = key_cmp(udata, p->key, key);
+      if (Z_UNLIKELY(cmp == 0)) {
+        if (head->stride > 1) {
+          node->child[0] = head->free_list;
+          head->free_list = node_pos;
+        } else {
+          head->next -= __AVL16_NODE_SIZE;
+        }
+        return(p->key);
+      }
+
+      if (p->balance != 0) {
+        k = 0;
+        top = q;
+        parent = p;
+        dstack = 0;
+      }
+
+      dir = cmp < 0;
+      q  = p->child;
+      pp = p->child[dir];
+      dstack |= (dir << k++);
+    }
+
+    q[dir] = node_pos;
+    __avl16_ibalance(block, parent, node, top, dstack);
+  } else {
+    head->root = node_pos;
+  }
+  return node->key;
+}
+
+void *z_avl16_remove (uint8_t *block,
+                      z_compare_t key_cmp,
+                      const void *key,
+                      void *udata)
+{
+  struct avl16_head *head = __AVL_HEAD(block);
+  struct avl16_node *stack[20];
+  struct avl16_node *node;
+  uint8_t dstack[20];
   uint16_t node_pos;
   int istack;
   int cmp;
@@ -426,30 +443,32 @@ uint8_t *z_avl16_remove (uint8_t *block, z_memcmp_t kcmp, const void *key, uint1
 
   cmp = 1;
   istack = 0;
-  p = (struct avl16_node *)(&(head->root));
+  node = (struct avl16_node *)(&(head->root));
   do {
     const int dir = cmp < 0;
 
-    stack[istack] = p;
+    stack[istack] = node;
     dstack[istack++] = dir;
-
-    if (p->child[dir] == 0)
+    if (node->child[dir] == 0)
       return(NULL);
 
-    node_pos = p->child[dir];
-    p = __AVL_NODE(head->stride, block, node_pos);
-  } while ((cmp = kcmp(p->key, key, ksize)) != 0);
+    node_pos = node->child[dir];
+    node = __AVL_NODE(head->stride, block, node_pos);
+  } while ((cmp = key_cmp(udata, node->key, key)) != 0);
 
-  __avl64k_dbalance(block, p, stack, dstack, istack);
-  p->child[0] = head->free_list;
-  p->child[1] = 0;
+  __avl16_dbalance(block, node, stack, dstack, istack);
+  node->child[0] = head->free_list;
+  node->child[1] = 0;
 
   head->free_list = node_pos;
-  head->items--;
-  return(p->key);
+  return(node->key);
 }
 
-uint8_t *z_avl16_lookup (uint8_t *block, z_memcmp_t kcmp, const void *key, uint16_t ksize) {
+void *z_avl16_lookup (uint8_t *block,
+                      z_compare_t key_cmp,
+                      const void *key,
+                      void *udata)
+{
   const struct avl16_head *head = __AVL_HEAD(block);
   const uint16_t stride = head->stride;
   uint16_t root;
@@ -457,10 +476,10 @@ uint8_t *z_avl16_lookup (uint8_t *block, z_memcmp_t kcmp, const void *key, uint1
   root = head->root;
   while (root != 0) {
     struct avl16_node *node = __AVL_NODE(stride, block, root);
-    const int cmp = kcmp(node->key, key, ksize);
-    if (cmp > 0) {
+    const int cmp = key_cmp(udata, key, node->key);
+    if (cmp < 0) {
       root = node->child[0];
-    } else if (cmp < 0) {
+    } else if (cmp > 0) {
       root = node->child[1];
     } else {
       return(node->key);
@@ -469,9 +488,7 @@ uint8_t *z_avl16_lookup (uint8_t *block, z_memcmp_t kcmp, const void *key, uint1
   return(NULL);
 }
 
-#include <sys/time.h>
-
-void __dump_bytes (const void *bytes, size_t length) {
+static void __dump_bytes (const void *bytes, size_t length) {
   const uint8_t *p = (const uint8_t *)bytes;
   while (length--)
     printf("%02x", *p++);
@@ -493,7 +510,7 @@ static void __avl_dump (const uint8_t *block, uint16_t root) {
 
 void z_avl16_dump (const uint8_t *block) {
   const struct avl16_head *head = (const struct avl16_head *)block;
-  printf("HEAD root=%u next=%u items=%u: ", head->root, head->next, head->items);
+  printf("HEAD root=%u next=%u: ", head->root, head->next);
   __avl_dump(block, head->root);
   printf("\n");
 }

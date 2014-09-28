@@ -196,6 +196,13 @@ void z_md5_final (z_md5_t *ctx, uint8_t output[16]) {
   z_put_uint32_le(ctx->state[3], output, 12);
 }
 
+void z_hash128_md5 (const void *data, size_t size, uint8_t digest[16]) {
+  z_md5_t ctx;
+  z_md5_init(&ctx);
+  z_md5_update(&ctx, data, size);
+  z_md5_final(&ctx, digest);
+}
+
 void z_rand_md5 (uint64_t *seed, uint8_t digest[16]) {
   z_md5_t ctx;
   z_md5_init(&ctx);
