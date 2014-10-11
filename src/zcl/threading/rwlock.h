@@ -12,24 +12,26 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_RAND_H_
-#define _Z_RAND_H_
+#ifndef _Z_RWLOCK_H_
+#define _Z_RWLOCK_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
-#include <zcl/debug.h>
 
-uint32_t z_rand32     (uint64_t *seed);
-uint64_t z_rand64     (uint64_t *seed);
+typedef struct z_rwlock {
+  uint32_t state;
+} z_rwlock_t;
 
-uint32_t z_rand32_bounded (uint64_t *seed, uint32_t vmin, uint32_t vmax);
-uint64_t z_rand64_bounded (uint64_t *seed, uint64_t vmin, uint64_t vmax);
-
-void     z_rand_bytes (uint64_t *seed, uint8_t *bytes, size_t length);
-void     z_rand_uuid  (uint64_t *seed, uint8_t uuid[16]);
+void  z_rwlock_init             (z_rwlock_t *lock);
+void  z_rwlock_read_lock        (z_rwlock_t *lock);
+void  z_rwlock_read_unlock      (z_rwlock_t *lock);
+void  z_rwlock_write_lock       (z_rwlock_t *lock);
+void  z_rwlock_write_unlock     (z_rwlock_t *lock);
+int   z_rwlock_try_read_lock    (z_rwlock_t *lock);
+int   z_rwlock_try_write_lock   (z_rwlock_t *lock);
 
 __Z_END_DECLS__
 
-#endif /* _Z_RAND_H_ */
+#endif /* !_Z_RWLOCK_H_ */

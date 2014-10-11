@@ -27,7 +27,7 @@ import re
 
 #cpu_count = lambda: 1
 BASE_DIR = os.path.split(os.path.abspath(__file__))[0]
-ZCL_COMPILER = os.path.join(BASE_DIR, 'zcl-compiler.py')
+ZCL_COMPILER = os.path.join(BASE_DIR, 'rpc-compiler.py')
 
 def execCommand(cmd, no_output=True):
   import subprocess

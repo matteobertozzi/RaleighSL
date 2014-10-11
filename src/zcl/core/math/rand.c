@@ -34,6 +34,22 @@ uint64_t z_rand64 (uint64_t *seed) {
   return rslt;
 }
 
+uint32_t z_rand32_bounded (uint64_t *seed, uint32_t vmin, uint32_t vmax) {
+  uint32_t r;
+  do {
+    r = z_rand32(seed);
+  } while (r < vmin || r > vmax);
+  return(r);
+}
+
+uint64_t z_rand64_bounded (uint64_t *seed, uint64_t vmin, uint64_t vmax) {
+  uint64_t r;
+  do {
+    r = z_rand64(seed);
+  } while (r < vmin || r > vmax);
+  return(r);
+}
+
 void z_rand_bytes (uint64_t *seed, uint8_t *bytes, size_t length) {
   uint8_t *p = bytes;
 

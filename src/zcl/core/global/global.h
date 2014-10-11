@@ -12,24 +12,17 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_RAND_H_
-#define _Z_RAND_H_
+#ifndef _Z_GLOBAL_H_
+#define _Z_GLOBAL_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
-#include <zcl/debug.h>
+#include <zcl/memory.h>
 
-uint32_t z_rand32     (uint64_t *seed);
-uint64_t z_rand64     (uint64_t *seed);
-
-uint32_t z_rand32_bounded (uint64_t *seed, uint32_t vmin, uint32_t vmax);
-uint64_t z_rand64_bounded (uint64_t *seed, uint64_t vmin, uint64_t vmax);
-
-void     z_rand_bytes (uint64_t *seed, uint8_t *bytes, size_t length);
-void     z_rand_uuid  (uint64_t *seed, uint8_t uuid[16]);
+z_memory_t *z_global_memory (void);
 
 __Z_END_DECLS__
 
-#endif /* _Z_RAND_H_ */
+#endif /* _Z_GLOBAL_H_ */

@@ -14,6 +14,9 @@
 
 #include <zcl/hashmap.h>
 #include <zcl/debug.h>
+#include <zcl/math.h>
+
+#include <string.h>
 
 struct map_slot {
   uint32_t hash;
@@ -28,19 +31,23 @@ static void __hash_map_resize (z_hash_map_t *self) {
   z_array_resize(&(self->entries), 1 + z_array_length(&(self->entries)));
 
   /* resize the bucket-table if necessary (this is slow) */
-  if ((self->items >> 2) >= z_array_length(&(self->buckets))) {
-    z_array_t *buckets = &(self->buckets);
+  if ((self->items >> 1) >= self->nbuckets) {
     z_array_iter_t iter;
     uint32_t index = 0;
+    uint32_t *buckets;
+    uint32_t nbuckets;
     uint32_t items;
+    uint32_t mask;
 
-    //printf("RESIZE %u vs %u\n", self->items, z_array_length(&(self->buckets)));
-    z_array_resize(buckets, 1 + z_array_length(buckets));
-    z_array_zero_all(buckets);
+    nbuckets = z_align_pow2(1 + self->nbuckets);
+    mask = nbuckets - 1;
+    buckets = (uint32_t *) malloc(nbuckets * sizeof(uint32_t));
+    if (Z_UNLIKELY(buckets == NULL))
+      return;
 
-    /* TODO: Insead of iterating the entries, iter the buckets */
+    memset(buckets, 0, nbuckets * sizeof(uint32_t));
+
     items = self->items;
-    const uint32_t buckets_length = z_array_length(buckets);
     z_array_iter_init(&iter, &(self->entries));
     do {
       const uint32_t isize = self->entries.isize;
@@ -52,10 +59,10 @@ static void __hash_map_resize (z_hash_map_t *self) {
 
         index++;
         if (Z_LIKELY(pslot->hash > 0)) {
-          const uint32_t target = pslot->hash % buckets_length;
+          const uint32_t target = pslot->hash & mask;
           uint32_t *bucket;
 
-          bucket = z_array_get(buckets, target, uint32_t);
+          bucket = buckets + target;
           pslot->next = *bucket;
           *bucket = index;
 
@@ -65,6 +72,11 @@ static void __hash_map_resize (z_hash_map_t *self) {
         pblob += isize;
       }
     } while (z_array_iter_next(&iter));
+
+    free(self->buckets);
+    self->buckets = buckets;
+    self->nbuckets = nbuckets;
+    self->mask = mask;
   }
 }
 
@@ -74,32 +86,35 @@ int z_hash_map_open (z_hash_map_t *self,
                      uint32_t bucket_pagesz,
                      uint32_t entries_pagesz)
 {
+  uint32_t nbuckets;
   int errnum;
 
   capacity = z_align_up(capacity, 64);
+  nbuckets = z_align_pow2(capacity);
 
-  errnum = z_array_open(&(self->buckets), 4,
-                        __BUCKETS_FANOUT, bucket_pagesz, capacity);
-  if (Z_UNLIKELY(errnum))
-    return(errnum);
+  self->buckets = (uint32_t *) malloc(nbuckets * sizeof(uint32_t));
+  if (Z_UNLIKELY(self->buckets == NULL))
+    return(1);
 
   errnum = z_array_open(&(self->entries), isize + 8,
                         __ENTRIES_FANOUT, entries_pagesz, capacity);
   if (Z_UNLIKELY(errnum)) {
-    z_array_close(&(self->buckets));
+    free(self->buckets);
     return(errnum);
   }
 
+  self->nbuckets = nbuckets;
+  self->mask = nbuckets - 1;
   self->items = 0;
   self->free_list = 0;
 
-  z_array_zero_all(&(self->buckets));
+  memset(self->buckets, 0, nbuckets * sizeof(uint32_t));
   return(0);
 }
 
 void z_hash_map_close (z_hash_map_t *self) {
   z_array_close(&(self->entries));
-  z_array_close(&(self->buckets));
+  free(self->buckets);
 }
 
 void *z_hash_map_get (const z_hash_map_t *self,
@@ -108,11 +123,11 @@ void *z_hash_map_get (const z_hash_map_t *self,
                       const void *key,
                       void *udata)
 {
-  const z_array_t *buckets = &(self->buckets);
   const z_array_t *entries = &(self->entries);
+  const uint32_t *buckets = self->buckets;
   uint32_t index;
 
-  index = z_array_get_u32(buckets, hash % z_array_length(buckets));
+  index = buckets[hash & self->mask];
   while (index > 0) {
     struct map_slot *slot = z_array_get(entries, index - 1, struct map_slot);
     if (hash == slot->hash && !key_cmp(udata, key, slot->data)) {
@@ -129,15 +144,15 @@ void *z_hash_map_put (z_hash_map_t *self,
                       const void *key,
                       void *udata)
 {
-  z_array_t *buckets = &(self->buckets);
   z_array_t *entries = &(self->entries);
+  uint32_t *buckets = self->buckets;
   struct map_slot *slot;
   uint32_t target;
   uint32_t index;
 
   Z_ASSERT(hash > 0, "hash must be greater than 0");
-  target = hash % z_array_length(buckets);
-  index = z_array_get_u32(buckets, target);
+  target = hash & self->mask;
+  index = buckets[target];
   while (index > 0) {
     slot = z_array_get(entries, index - 1, struct map_slot);
     if (hash == slot->hash && !key_cmp(udata, key, slot->data)) {
@@ -153,17 +168,16 @@ void *z_hash_map_put (z_hash_map_t *self,
   } else {
     if (self->items == z_array_length(entries)) {
       __hash_map_resize(self);
-      target = hash % z_array_length(buckets);
+      target = hash & self->mask;
     }
     index = self->items++;
   }
 
   slot = z_array_get(entries, index, struct map_slot);
   slot->hash = hash;
-  slot->next = z_array_get_u32(buckets, target);
+  slot->next = buckets[target];
 
-  index++;
-  z_array_set_ptr(buckets, target, &index);
+  buckets[target] = 1 + index;
   return slot->data;
 }
 
@@ -173,19 +187,19 @@ void *z_hash_map_remove (z_hash_map_t *self,
                          const void *key,
                          void *udata)
 {
-  z_array_t *buckets = &(self->buckets);
   z_array_t *entries = &(self->entries);
+  uint32_t *buckets = self->buckets;
   struct map_slot *last = NULL;
   uint32_t target;
   uint32_t index;
 
-  target = hash % z_array_length(buckets);
-  index = z_array_get_u32(buckets, target);
+  target = hash & self->mask;
+  index = buckets[target];
   while (index > 0) {
     struct map_slot *slot = z_array_get(entries, index - 1, struct map_slot);
     if (hash == slot->hash && !key_cmp(udata, key, slot->data)) {
       if (last == NULL) {
-        z_array_set_ptr(buckets, target, &(slot->next));
+        buckets[target] = slot->next;
       } else {
         last->next = slot->next;
       }

@@ -12,24 +12,18 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_RAND_H_
-#define _Z_RAND_H_
+#include <zcl/bits.h>
 
-#include <zcl/config.h>
-__Z_BEGIN_DECLS__
+int z_bit_set_count32 (uint32_t v) {
+  v = v - ((v >> 1) & 0x55555555);
+  v = (v & 0x33333333) + ((v >> 2) & 0x33333333);
+  v = (v + (v >> 4)) & 0x0F0F0F0F;
+  return (v * 0x01010101) >> 24;
+}
 
-#include <zcl/macros.h>
-#include <zcl/debug.h>
-
-uint32_t z_rand32     (uint64_t *seed);
-uint64_t z_rand64     (uint64_t *seed);
-
-uint32_t z_rand32_bounded (uint64_t *seed, uint32_t vmin, uint32_t vmax);
-uint64_t z_rand64_bounded (uint64_t *seed, uint64_t vmin, uint64_t vmax);
-
-void     z_rand_bytes (uint64_t *seed, uint8_t *bytes, size_t length);
-void     z_rand_uuid  (uint64_t *seed, uint8_t uuid[16]);
-
-__Z_END_DECLS__
-
-#endif /* _Z_RAND_H_ */
+int z_bit_set_count64 (uint64_t v) {
+  v = v - ((v >> 1) & 0x5555555555555555ull);
+  v = (v & 0x3333333333333333ull) + ((v >> 2) & 0x3333333333333333ull);
+  v = (v + (v >> 4)) & 0x0F0F0F0F0F0F0F0Full;
+  return (v * 0x0101010101010101ull) >> 56;
+}

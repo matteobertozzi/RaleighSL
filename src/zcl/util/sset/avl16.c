@@ -488,29 +488,175 @@ void *z_avl16_lookup (uint8_t *block,
   return(NULL);
 }
 
-static void __dump_bytes (const void *bytes, size_t length) {
-  const uint8_t *p = (const uint8_t *)bytes;
-  while (length--)
-    printf("%02x", *p++);
+/* ============================================================================
+ *  PRIVATE Tree Iterator
+ */
+static void *__avl_iter_lookup_near (z_avl16_iter_t *self,
+                                     z_compare_t key_cmp,
+                                     const void *key,
+                                     void *udata,
+                                     const int ceil_entry)
+{
+  const struct avl16_head *head = __AVL_HEAD(self->block);
+  const uint16_t stride = head->stride;
+  const int nceil_entry = !ceil_entry;
+  uint16_t node_pos;
+
+  self->height = 0;
+  self->current = 0;
+  node_pos = head->root;
+
+  while (node_pos > 0) {
+    struct avl16_node *node;
+    node = __AVL_NODE(stride, self->block, node_pos);
+    int cmp = key_cmp(udata, node->key, key);
+    if (cmp == 0) {
+      self->current = node_pos;
+      return(node->key);
+    }
+
+    if (ceil_entry ? (cmp > 0) : (cmp < 0)) {
+      if (node->child[nceil_entry] > 0) {
+        self->stack[(self->height)++] = node_pos;
+        node_pos = node->child[nceil_entry];
+      } else {
+        self->current = node_pos;
+        return(node->key);
+      }
+    } else {
+      if (node->child[ceil_entry] > 0) {
+        self->stack[(self->height)++] = node_pos;
+        node_pos = node->child[ceil_entry];
+      } else {
+        if (self->height > 0) {
+          struct avl16_node *parent;
+          uint16_t parent_pos;
+
+          parent_pos = self->stack[--(self->height)];
+          parent = __AVL_NODE(stride, self->block, parent_pos);
+          while (node_pos == parent->child[ceil_entry]) {
+            if (self->height == 0) {
+              self->current = 0;
+              return(NULL);
+            }
+
+            node_pos = parent_pos;
+            parent_pos = self->stack[--(self->height)];
+            parent = __AVL_NODE(stride, self->block, parent_pos);
+          }
+          self->current = parent_pos;
+          return(parent->key);
+        }
+
+        self->current = 0;
+        return(NULL);
+      }
+    }
+  }
+
+  return(NULL);
 }
 
-static void __avl_dump (const uint8_t *block, uint16_t root) {
-  const struct avl16_head *head = (const struct avl16_head *)block;
-  const struct avl16_node *node;
-  if (root == 0)
-    return;
+static void *__avl_iter_trav (z_avl16_iter_t *self, const int child) {
+  const uint16_t stride = __AVL_HEAD(self->block)->stride;
+  struct avl16_node *node;
+  uint16_t node_pos;
 
-  node = __AVL_NODE(head->stride, block, root);
-  __avl_dump(block, node->child[0]);
-  printf("%03u[%03u/", root, node->child[0]);
-  __dump_bytes(node->key, 4);
-  printf("/%03u] ", node->child[1]);
-  __avl_dump(block, node->child[1]);
+  if (self->current == 0)
+    return(NULL);
+
+  node_pos = self->current;
+  node = __AVL_NODE(stride, self->block, node_pos);
+  if (node->child[child] > 0) {
+    const int nchild = !child;
+
+    self->stack[(self->height)++] = node_pos;
+    node_pos = node->child[child];
+    node = __AVL_NODE(stride, self->block, node_pos);
+    while (node->child[nchild] > 0) {
+      self->stack[(self->height)++] = node_pos;
+      node_pos = node->child[nchild];
+      node = __AVL_NODE(stride, self->block, node_pos);
+    }
+  } else {
+    uint16_t pos;
+    do {
+      if (self->height == 0) {
+        self->current = 0;
+        return(NULL);
+      }
+
+      pos = node_pos;
+      node_pos = self->stack[--(self->height)];
+      node = __AVL_NODE(stride, self->block, node_pos);
+    } while (node->child[child] == pos);
+  }
+
+  self->current = node_pos;
+  return(node->key);
 }
 
-void z_avl16_dump (const uint8_t *block) {
-  const struct avl16_head *head = (const struct avl16_head *)block;
-  printf("HEAD root=%u next=%u: ", head->root, head->next);
-  __avl_dump(block, head->root);
-  printf("\n");
+static void *__avl_iter_edge (z_avl16_iter_t *self, const int child) {
+  const struct avl16_head *head = __AVL_HEAD(self->block);
+
+  self->height = 0;
+  if (head->root > 0) {
+    const uint16_t stride = head->stride;
+    struct avl16_node *node;
+    uint16_t node_pos;
+
+    node_pos = head->root;
+    node = __AVL_NODE(stride, self->block, node_pos);
+    while (node->child[child] > 0) {
+      self->stack[(self->height)++] = node_pos;
+      node_pos = node->child[child];
+      node = __AVL_NODE(stride, self->block, node_pos);
+    }
+    self->current = node_pos;
+    return(node->key);
+  }
+
+  self->current = 0;
+  return(NULL);
+}
+
+/* ============================================================================
+ *  PUBLIC Tree Iterator
+ */
+void z_avl16_iter_init (z_avl16_iter_t *self, uint8_t *block) {
+  self->block = block;
+  self->current = 0;
+  self->height = 0;
+}
+
+void *z_avl16_iter_seek_begin (z_avl16_iter_t *self) {
+  return __avl_iter_edge(self, 0);
+}
+
+void *z_avl16_iter_seek_end (z_avl16_iter_t *self) {
+  return __avl_iter_edge(self, 1);
+}
+
+void *z_tree_iter_seek_le (z_avl16_iter_t *iter,
+                           z_compare_t key_cmp,
+                           const void *key,
+                           void *udata)
+{
+  return __avl_iter_lookup_near(iter, key_cmp, key, udata, 0);
+}
+
+void *z_tree_iter_seek_ge (z_avl16_iter_t *iter,
+                           z_compare_t key_cmp,
+                           const void *key,
+                           void *udata)
+{
+  return(__avl_iter_lookup_near(iter, key_cmp, key, udata, 1));
+}
+
+void *z_avl16_iter_next (z_avl16_iter_t *self) {
+  return __avl_iter_trav(self, 1);
+}
+
+void *z_avl16_iter_prev (z_avl16_iter_t *self) {
+  return __avl_iter_trav(self, 0);
 }

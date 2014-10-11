@@ -76,9 +76,87 @@ static void test_validate (uint32_t isize) {
   });
 }
 
+static void test_iter_validate (uint32_t isize) {
+  z_test_sset_entry_t *pentry;
+  z_test_sset_entry_t entry;
+  uint8_t block[64 << 10];
+  uint32_t i, max_items;
+  z_avl16_iter_t iter;
+
+  max_items = z_avl16_init(block, sizeof(block), isize);
+  Z_DEBUG("============================ VALIDATE ITER block=%u items=%u isize=%u",
+          block, max_items, isize);
+
+  for (i = 0; i < max_items; i += 2) {
+    uint8_t *pkey;
+    entry.key = z_bswap32(i);
+    entry.value = (entry.key | 0x49249249);
+    entry.step = i;
+
+    pkey = z_avl16_insert(block, CMPFUNC, &(entry.key), NULL);
+    memcpy(pkey, &entry, isize);
+  }
+
+  z_avl16_iter_init(&iter, block);
+
+  /* Validate next */
+  pentry = z_avl16_iter_seek_begin(&iter);
+  for (i = 0; pentry != NULL; i += 2) {
+    entry.key = z_bswap32(i);
+    entry.value = (entry.key | 0x49249249);
+    entry.step = i;
+
+    z_test_sset_validate_entry("iter-next", isize, pentry, &entry);
+    pentry = z_avl16_iter_next(&iter);
+  }
+
+  /* Validate prev */
+  pentry = z_avl16_iter_seek_end(&iter);
+  for (i -= 2; pentry != NULL; i -= 2) {
+    entry.key = z_bswap32(i);
+    entry.value = (entry.key | 0x49249249);
+    entry.step = i;
+
+    z_test_sset_validate_entry("iter-prev", isize, pentry, &entry);
+    pentry = z_avl16_iter_prev(&iter);
+  }
+
+  /* Validate near */
+  for (i = 1; i < max_items - 1; i += 2) {
+    entry.key = z_bswap32(i);
+    entry.value = (entry.key | 0x49249249);
+    entry.step = i;
+
+    pentry = z_tree_iter_seek_le(&iter, CMPFUNC, &entry, NULL);
+    if (pentry == NULL) {
+      Z_DEBUG(" - iter-le %u VALUE NOT FOUND %u (i=%u)",
+              z_bswap32(i), z_bswap32(i-1), i);
+      abort();
+    } else if (pentry->key != z_bswap32(i-1)) {
+      Z_DEBUG(" - iter-le FOUND A BAD VALUE %u != %u",
+              pentry->key, z_bswap32(i-1));
+      abort();
+    }
+
+    pentry = z_tree_iter_seek_ge(&iter, CMPFUNC, &entry, NULL);
+    if (pentry == NULL) {
+      Z_DEBUG(" - iter-ge %u VALUE NOT FOUND %u (i=%u)",
+              z_bswap32(i), z_bswap32(i+1), i);
+      abort();
+    } else if (pentry->key != z_bswap32(i+1)) {
+      Z_DEBUG(" - iter-ge FOUND A BAD VALUE %u != %u",
+              pentry->key, z_bswap32(i+1));
+      abort();
+    }
+  }
+}
+
 int main (int argc, char **argv) {
   test_validate(4);
   test_validate(8);
+
+  test_iter_validate(4);
+  test_iter_validate(8);
 
   test_perf(4);
   test_perf(8);

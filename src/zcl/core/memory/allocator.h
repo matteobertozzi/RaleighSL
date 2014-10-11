@@ -12,24 +12,31 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_RAND_H_
-#define _Z_RAND_H_
+#ifndef _Z_ALLOCATOR_H_
+#define _Z_ALLOCATOR_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
-#include <zcl/debug.h>
 
-uint32_t z_rand32     (uint64_t *seed);
-uint64_t z_rand64     (uint64_t *seed);
+Z_TYPEDEF_STRUCT(z_allocator)
 
-uint32_t z_rand32_bounded (uint64_t *seed, uint32_t vmin, uint32_t vmax);
-uint64_t z_rand64_bounded (uint64_t *seed, uint64_t vmin, uint64_t vmax);
+struct z_allocator {
+};
 
-void     z_rand_bytes (uint64_t *seed, uint8_t *bytes, size_t length);
-void     z_rand_uuid  (uint64_t *seed, uint8_t uuid[16]);
+#define z_system_allocator()                      NULL
+
+#define z_allocator_raw_alloc(self, size)         malloc(size)
+#define z_allocator_raw_realloc(self, ptr, size)  realloc(ptr, size)
+#define z_allocator_free(self, ptr)               free(ptr)
+
+#define z_allocator_alloc(self, type, size)                                   \
+  Z_CAST(type, z_allocator_raw_alloc(self, size))
+
+#define z_allocator_realloc(self, type, size)                                 \
+  Z_CAST(type, z_allocator_raw_realloc(self, ptr, size))
 
 __Z_END_DECLS__
 
-#endif /* _Z_RAND_H_ */
+#endif /* _Z_ALLOCATOR_H_ */

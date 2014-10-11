@@ -88,6 +88,9 @@ __Z_BEGIN_DECLS__
 #define z_2bit_set(byte, pos)           z_bits_set(byte, 2, pos)
 #define z_1bit_set(byte, pos)           z_bits_set(byte, 1, pos)
 
+int z_bit_set_count32 (uint32_t v);
+int z_bit_set_count64 (uint64_t v);
+
 __Z_END_DECLS__
 
 #endif /* _Z_BITS_H_ */

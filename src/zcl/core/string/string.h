@@ -12,24 +12,35 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_RAND_H_
-#define _Z_RAND_H_
+#ifndef _Z_STRING_H_
+#define _Z_STRING_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
-#include <zcl/debug.h>
 
-uint32_t z_rand32     (uint64_t *seed);
-uint64_t z_rand64     (uint64_t *seed);
+#include <string.h>
 
-uint32_t z_rand32_bounded (uint64_t *seed, uint32_t vmin, uint32_t vmax);
-uint64_t z_rand64_bounded (uint64_t *seed, uint64_t vmin, uint64_t vmax);
+#define z_strlen              strlen
+#define z_strcmp              strcmp
+#define z_strncmp             strncmp
 
-void     z_rand_bytes (uint64_t *seed, uint8_t *bytes, size_t length);
-void     z_rand_uuid  (uint64_t *seed, uint8_t uuid[16]);
+#ifdef Z_STRING_HAS_STRLCPY
+  #define z_strlcpy           strlcpy
+#else
+  size_t  z_strlcpy (char *dst, const char *src, size_t size);
+#endif
+
+char *z_strupper    (char *str);
+char *z_strnupper   (char *str, size_t n);
+
+char *z_strlower    (char *str);
+char *z_strnlower   (char *str, size_t n);
+
+int   z_strcasecmp  (const char *s1, const char *s2);
+int   z_strncasecmp (const char *s1, const char *s2, size_t n);
 
 __Z_END_DECLS__
 
-#endif /* _Z_RAND_H_ */
+#endif /* !_Z_STRING_H_ */

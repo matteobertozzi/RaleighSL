@@ -24,8 +24,10 @@ __Z_BEGIN_DECLS__
 typedef struct z_hash_map z_hash_map_t;
 
 struct z_hash_map {
-  z_array_t   buckets;
   z_array_t   entries;
+  uint32_t *  buckets;
+  uint32_t    nbuckets;
+  uint32_t    mask;
   uint32_t    items;
   uint32_t    free_list;
 };
