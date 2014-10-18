@@ -51,11 +51,11 @@ uint8_t z_uint64_size (uint64_t value);
                         unsigned int length,
                         uint64_t *value);
 #else
-  #define z_uint_encode(buf, len, val)       z_memcpy(buf, &(val), len)
+  #define z_uint_encode(buf, len, val)     z_memcpy64(buf, &(val), len)
 
-  #define z_uint16_decode                    z_uint64_decode
-  #define z_uint32_decode                    z_uint64_decode
-  #define z_uint64_decode(buf, len, val)     *(val) = 0; z_memcpy(val, buf, len)
+  #define z_uint16_decode(buf, len, val)   *(val) = 0; z_memcpy16(val, buf, len)
+  #define z_uint32_decode(buf, len, val)   *(val) = 0; z_memcpy32(val, buf, len)
+  #define z_uint64_decode(buf, len, val)   *(val) = 0; z_memcpy64(val, buf, len)
 #endif
 
 

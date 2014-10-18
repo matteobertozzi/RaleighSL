@@ -24,11 +24,13 @@ __Z_BEGIN_DECLS__
 #include <zcl/stailq.h>
 #include <zcl/opaque.h>
 
+Z_TYPEDEF_STRUCT(z_ipc_msg_rdbuf)
 Z_TYPEDEF_STRUCT(z_ipc_msg)
-Z_TYPEDEF_STRUCT(z_ipc_msgbuf)
+
 Z_TYPEDEF_STRUCT(z_ipc_msg_head)
 Z_TYPEDEF_STRUCT(z_ipc_msg_client)
 Z_TYPEDEF_STRUCT(z_ipc_msg_writer)
+Z_TYPEDEF_STRUCT(z_ipc_msg_protocol)
 Z_TYPEDEF_STRUCT(z_ipc_protocol)
 Z_TYPEDEF_STRUCT(z_ipc_server)
 Z_TYPEDEF_STRUCT(z_ipc_client)
@@ -40,25 +42,17 @@ Z_TYPEDEF_STRUCT(z_ipc_client)
 #define __Z_IPC_CLIENT__             z_ipc_client_t __ipc_client__;
 #define __Z_IPC_MSG_CLIENT__         z_ipc_msg_client_t __ipc_client__;
 
-typedef void *  (*z_ipc_msg_alloc_t)   (z_ipc_msg_client_t *client,
+typedef int     (*z_ipc_msg_alloc_t)   (z_ipc_msg_client_t *client,
                                         z_ipc_msg_head_t *msg_head);
 typedef int     (*z_ipc_msg_parse_t)   (z_ipc_msg_client_t *client,
-                                        void *msg_ctx,
-                                        z_memslice_t *buffer);
+                                        z_ipc_msg_head_t *msg_head);
 typedef int     (*z_ipc_msg_exec_t)    (z_ipc_msg_client_t *client,
-                                        void *msg_ctx);
+                                        z_ipc_msg_head_t *msg_head);
 typedef int     (*z_ipc_msg_respond_t) (void *msg_ctx);
 typedef void    (*z_ipc_msg_free_t)    (z_ipc_msg_client_t *client,
                                         void *msg_ctx);
 
 struct z_ipc_protocol {
-  /* msg-client protocol */
-  z_ipc_msg_alloc_t   msg_alloc;
-  z_ipc_msg_parse_t   msg_parse;
-  z_ipc_msg_exec_t    msg_exec;
-  z_ipc_msg_respond_t msg_respond;
-  z_ipc_msg_free_t    msg_free;
-
   /* raw-client protocol */
   int    (*read)          (z_ipc_client_t *client);
   int    (*write)         (z_ipc_client_t *client);
@@ -74,10 +68,18 @@ struct z_ipc_protocol {
   int    (*setup)         (z_ipc_server_t *server);
 };
 
+struct z_ipc_msg_protocol {
+  z_ipc_msg_alloc_t   msg_alloc;
+  z_ipc_msg_parse_t   msg_parse;
+  z_ipc_msg_exec_t    msg_exec;
+  z_ipc_msg_respond_t msg_respond;
+  z_ipc_msg_free_t    msg_free;
+};
+
 struct z_ipc_server {
   __Z_IOPOLL_ENTITY__
   const z_ipc_protocol_t *protocol;
-  const z_iopoll_entity_vtable_t *client_vtable;
+  const z_ipc_msg_protocol_t *msg_protocol;
   const char *name;
   z_opaque_t  data;
   z_iopoll_entity_t timer;
@@ -92,52 +94,57 @@ struct z_ipc_client {
 };
 
 struct z_ipc_msg_head {
-  uint8_t  req_type;
-  uint32_t msg_len;
-  uint64_t msg_type;
-  uint64_t req_id;
+  uint32_t msg_type;
+  uint64_t msg_id;
+  uint16_t body_length;
+  uint32_t blob_length;
+  uint8_t  pkt_type;
 };
 
-#define Z_IPC_MSG_IBUF      (64 + 22 + 7)
+#define Z_IPC_MSG_IBUF      (64 + 26 + Z_DBUF_IBUFLEN)
 struct z_ipc_msg {
   z_slink_node_t node;
-  uint64_t wtime;
-  uint32_t latency;
-  uint32_t hoffset;
-  z_dbuf_node_t dnode;
-  uint8_t  data[Z_IPC_MSG_IBUF - 7];
-  uint8_t  rhead;
-  uint8_t  hskip;
+  uint32_t       hoffset;
+  uint32_t       wtime;
+  z_dbuf_node_t  dnode;
+  uint8_t        data[Z_IPC_MSG_IBUF - Z_DBUF_IBUFLEN];
+  uint8_t        rhead;
+  uint8_t        hskip;
+  uint32_t       latency;
 };
 
-struct z_ipc_msgbuf {
-  struct ibuffer {
-    struct ibuf_flags {
-      uint32_t has_blob   : 1;
-      uint32_t pad        : 1;
-      uint32_t bufsize    : 6;
-      uint32_t msg_length : 24;
-    } flags;
-    uint8_t data[36];
-    void *msg_ctx;
-  } ibuffer;
-  z_stailq_t  omsgq;
+struct z_ipc_msg_rdbuf {
+  uint16_t parsed  : 1;
+  uint16_t rd_data : 1;
+  uint16_t hlength : 5;
+  uint16_t rdcount : 9;
+  uint16_t body_remaining;
+  uint32_t blob_remaining;
+  uint8_t *body_buffer;
+  uint8_t *blob_buffer;
+  uint8_t  head[20];
+  uint32_t first_rd_usec;
 };
 
 struct z_ipc_msg_client {
   __Z_IPC_CLIENT__
-  z_ipc_msgbuf_t msgbuf;
-  int refs;
-  z_ticket_t  lock;
+  z_ipc_msg_rdbuf_t rdbuf;
+  z_stailq_t        wmsgq;
+  uint32_t          _pad;
+  int32_t           refs;
 };
 
-#define z_ipc_client_set_writable(client, value)                             \
+#define z_ipc_client_set_writable(client, value)                               \
   z_iopoll_set_writable(Z_IOPOLL_ENTITY(client), value)
 
-#define z_ipc_plug(proto, name, client_type, addr, service)                 \
-  __z_ipc_plug(proto, name, sizeof(client_type), addr, service)
+#define z_ipc_client_set_data_available(client, value)                         \
+  z_iopoll_set_data_available(Z_IOPOLL_ENTITY(client), value)
+
+#define z_ipc_plug(proto, msg_proto, name, client_type, addr, service)         \
+  __z_ipc_plug(proto, msg_proto, name, sizeof(client_type), addr, service)
 
 z_ipc_server_t *__z_ipc_plug             (const z_ipc_protocol_t *proto,
+                                          const z_ipc_msg_protocol_t *msg_proto,
                                           const char *name,
                                           unsigned int csize,
                                           const void *address,
@@ -149,6 +156,11 @@ z_ipc_server_t *z_ipc_get_server         (const z_ipc_client_t *client);
 int             z_ipc_bind_tcp           (const void *hostname,
                                           const void *service);
 int             z_ipc_accept_tcp         (z_ipc_server_t *server);
+
+int             z_ipc_bind_udp           (const void *hostname,
+                                          const void *service);
+int             z_ipc_bind_udp_broadcast (const void *hostname,
+                                          const void *service);
 
 #ifdef Z_SOCKET_HAS_UNIX
 int             z_ipc_bind_unix          (const void *path,
@@ -166,20 +178,23 @@ void            z_ipc_msg_writer_open    (z_ipc_msg_t *self,
                                           z_dbuf_writer_t *writer,
                                           z_memory_t *memory);
 void            z_ipc_msg_writer_close   (z_ipc_msg_t *self,
-                                          z_dbuf_writer_t *writer);
+                                          z_dbuf_writer_t *writer,
+                                          uint16_t body_length,
+                                          uint32_t blob_length);
+void            z_ipc_msg_reader_open    (z_ipc_msg_t *self,
+                                          z_dbuf_reader_t *reader,
+                                          z_memory_t *memory);
 
-void            z_ipc_msgbuf_open        (z_ipc_msgbuf_t *self);
-void            z_ipc_msgbuf_close       (z_ipc_msg_client_t *client,
-                                          z_ipc_msg_free_t msg_free);
-int             z_ipc_msg_client_fetch   (z_ipc_msg_client_t *client,
-                                          z_ipc_msg_alloc_t msg_alloc_func,
-                                          z_ipc_msg_parse_t msg_parse_func,
-                                          z_ipc_msg_exec_t msg_exec_func);
+void            z_ipc_msg_client_open    (z_ipc_msg_client_t *self,
+                                          const z_ipc_msg_protocol_t *proto);
+void            z_ipc_msg_client_close   (z_ipc_msg_client_t *self,
+                                          const z_ipc_msg_protocol_t *proto);
+int             z_ipc_msg_client_read    (z_ipc_msg_client_t *self,
+                                          const z_ipc_msg_protocol_t *proto);
 void            z_ipc_msg_client_push    (z_ipc_msg_client_t *self,
                                           z_ipc_msg_t *msg);
-int             z_ipc_msg_client_flush   (z_ipc_msg_client_t *client);
-
-int             z_ipc_msg_client_respond (z_ipc_msg_client_t *client, void *ctx);
+int             z_ipc_msg_client_flush   (z_ipc_msg_client_t *self,
+                                          const z_ipc_msg_protocol_t *proto);
 
 __Z_END_DECLS__
 

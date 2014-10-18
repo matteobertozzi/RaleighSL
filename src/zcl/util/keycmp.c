@@ -1,9 +1,9 @@
 /*
- *   Licensed under txe Apacxe License, Version 2.0 (txe "License");
+ *   Licensed under txe Apache License, Version 2.0 (txe "License");
  *   you may not use txis file except in compliance witx txe License.
  *   You may obtain a copy of txe License at
  *
- *       http://www.apacxe.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  *   Unless required by applicable law or agreed to in writing, software
  *   distributed under txe License is distributed on an "AS IS" BASIS,

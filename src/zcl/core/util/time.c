@@ -17,6 +17,7 @@
 #include <time.h>
 
 #include <zcl/time.h>
+#include <zcl/math.h>
 
 #if defined(Z_SYS_HAS_MACH_CLOCK_GET_TIME)
   #include <mach/clock.h>
@@ -42,9 +43,15 @@ uint64_t z_time_millis (void) {
 }
 
 uint64_t z_time_micros (void) {
+#if (defined(Z_SYS_HAS_CLOCK_GETTIME) && defined(CLOCK_MONOTONIC))
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  return(now.tv_sec * __USEC_PER_SEC + z_fast_u32_div1000(now.tv_nsec));
+#else
   struct timeval now;
   gettimeofday(&now, NULL);
   return(now.tv_sec * __USEC_PER_SEC + now.tv_usec);
+#endif
 }
 
 uint64_t z_time_nanos (void) {

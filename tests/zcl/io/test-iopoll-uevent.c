@@ -14,14 +14,37 @@
  *   limitations under the License.
  */
 
-#include <zcl/iopoll.h>
+#include <zcl/global.h>
+#include <zcl/humans.h>
 #include <zcl/debug.h>
 #include <zcl/time.h>
 #include <stdio.h>
 
+#define __TEST_PERF    10000000
+
 static int __is_running = 1;
+static uint64_t __nevents = 0;
+static uint64_t __stime = 0;
 
 static int __user_event (z_iopoll_entity_t *entity) {
+#if __TEST_PERF
+  if (__nevents++ < __TEST_PERF) {
+    if ((__nevents & 1048575) == 0) {
+      char buffer[64];
+      float sec = (z_time_micros() - __stime) / 1000000.0f;
+      z_human_dops(buffer, sizeof(buffer), __nevents / sec);
+      Z_DEBUG("NEVENTS %.3fsec %s/sec", sec, buffer);
+    }
+    z_iopoll_notify(entity);
+  } else {
+    char buffer[64];
+    float sec = (z_time_micros() - __stime) / 1000000.0f;
+    z_human_dops(buffer, sizeof(buffer), __nevents / sec);
+    Z_DEBUG("NEVENTS %.3fsec %s/sec", sec, buffer);
+    __is_running = 0;
+  }
+
+#else
   Z_DEBUG("TEST ENTITY %d UEVENT %u", entity->fd, entity->uflags8);
   if (entity->uflags8 < 10) {
     entity->uflags8++;
@@ -30,6 +53,7 @@ static int __user_event (z_iopoll_entity_t *entity) {
     z_iopoll_uevent(entity, 0);
     __is_running = 0;
   }
+#endif
   return(0);
 }
 
@@ -45,11 +69,8 @@ int main (int argc, char **argv) {
   z_iopoll_entity_t entity;
 
   /* Initialize global context */
-  z_debug_open();
-
-  /* Initialize I/O Poll */
-  if (z_iopoll_open(1)) {
-    Z_LOG_FATAL("z_iopoll_open(): failed\n");
+  if (z_global_context_open_default(1)) {
+    Z_LOG_FATAL("z_global_context_open(): failed\n");
     return(1);
   }
 
@@ -57,13 +78,15 @@ int main (int argc, char **argv) {
   entity.uflags8 = 0;
 
   z_iopoll_uevent(&entity, 1);
+
+  __stime = z_time_micros();
   z_iopoll_notify(&entity);
 
   /* Start spinning... */
-  z_iopoll_poll(0, &__is_running);
+  z_global_context_poll(0, &__is_running);
 
   /* ...and we're done */
-  z_iopoll_close();
+  z_global_context_close();
   z_debug_close();
   return(0);
 }

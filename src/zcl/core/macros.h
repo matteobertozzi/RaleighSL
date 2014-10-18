@@ -28,7 +28,6 @@ __Z_BEGIN_DECLS__
 typedef int   (*z_compare_t)  (void *udata, const void *a, const void *b);
 typedef int   (*z_closest_t)  (void *udata, const void *a, const void *b, uint64_t *delta);
 typedef int   (*z_swap_t)     (void *udata, const void *a, const void *b);
-typedef void  (*z_mem_free_t) (void *udata, void *object);
 
 #define Z_TYPEDEF_STRUCT(name)          typedef struct name name ## _t;
 #define Z_TYPEDEF_UNION(name)           typedef union name name ## _t;
@@ -105,6 +104,7 @@ typedef void  (*z_mem_free_t) (void *udata, void *object);
 #define Z_FOLD(f, x, ...)       __ZFOLD_(f, x, Z_ARGN(__VA_ARGS__), __VA_ARGS__)
 
 #define z_cmp(a, b)                     (((a) > (b)) - ((a) < (b)))
+#define z_abs_diff(a, b)                ((a) > (b) ? (a) - (b) : (b) - (a))
 
 #define __zmin_1(a, b)                  ((a) < (b) ? (a) : (b))
 #define __zmin_2(a, b, c)               __zmin_1(__zmin_1(a, b), c)

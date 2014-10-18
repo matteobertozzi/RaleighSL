@@ -30,6 +30,7 @@ typedef void *(*z_thread_func_t) (void *);
   #define z_thread_t                       pthread_t
   #define z_thread_join(tid)               pthread_join(*(tid), NULL)
   #define z_thread_self(tid)               *(tid) = pthread_self()
+  #define z_thread_equal(a, b)             pthread_equal(*(a), *(b))
 
   #if defined(Z_SYS_HAS_PTHREAD_YIELD)
     #define z_thread_yield()                 pthread_yield()

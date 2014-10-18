@@ -21,8 +21,16 @@ __Z_BEGIN_DECLS__
 #include <zcl/macros.h>
 
 #if defined(Z_SYS_HAS_ATOMIC_GCC)
-  #define z_atomic_set(ptr, v) ({  __sync_synchronize(); *(ptr) = (v); })
-  #define z_atomic_load(ptr) ({ __sync_synchronize(); *(ptr); })
+  #define z_atomic_set(p, v) ({                               \
+    __asm__ volatile("" ::: "memory");                        \
+    *(p) = (v);                                               \
+    __asm__ volatile("lock addl $0x0,(%rsp)");                \
+  })
+
+  #define z_atomic_load(v) ({                                 \
+    __asm__ __volatile__("" : : : "memory");                  \
+    (*(volatile uint64_t *)(v));                              \
+  })
 
   #define z_atomic_add_and_fetch(ptr, v) __sync_add_and_fetch(ptr, v)
   #define z_atomic_sub_and_fetch(ptr, v) __sync_sub_and_fetch(ptr, v)

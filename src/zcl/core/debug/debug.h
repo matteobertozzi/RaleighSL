@@ -19,6 +19,7 @@
 __Z_BEGIN_DECLS__
 
 #include <zcl/humans.h>
+#include <zcl/time.h>
 
 #include <errno.h>
 #include <stdio.h>
@@ -88,6 +89,11 @@ __Z_BEGIN_DECLS__
   #define Z_ASSERT_IF(ifcond, cond, format, ...)  while (0) { (void)(cond); }
   #define Z_PRINT_DEBUG(format, ...)              while (0)
 #endif
+
+#define Z_ASSERT_BUG(cond, format, ...)                                   \
+  if (Z_UNLIKELY(!(cond)))                                                \
+      __z_assert(__FILE__, __LINE__, __FUNCTION__,                        \
+                 cond, #cond, format, ##__VA_ARGS__)
 
 #define Z_TRACE_TIME(log_func, name, code)                                \
   do {                                                                    \

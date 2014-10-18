@@ -43,8 +43,10 @@ static uint8_t __ipc_server_register (z_ipc_server_t *server) {
 /* ============================================================================
  *  IPC client iopoll entity
  */
+static const z_iopoll_entity_vtable_t __ipc_raw_client_vtable;
+static const z_iopoll_entity_vtable_t __ipc_msg_client_vtable;
+
 static z_ipc_client_t *__ipc_client_alloc (z_ipc_server_t *server, int csock) {
-  const z_ipc_protocol_t *proto = server->protocol;
   z_ipc_client_t *client;
 
   /* Allocate client */
@@ -52,22 +54,20 @@ static z_ipc_client_t *__ipc_client_alloc (z_ipc_server_t *server, int csock) {
   if (Z_MALLOC_IS_NULL(client))
     return(NULL);
 
-  /* Initialize client */
-  z_iopoll_entity_open(Z_IOPOLL_ENTITY(client), server->client_vtable, csock);
+  if (server->msg_protocol != NULL) {
+    /* Initialize msg-client */
+    z_iopoll_entity_open(Z_IOPOLL_ENTITY(client), &__ipc_msg_client_vtable, csock);
+    z_ipc_msg_client_open(Z_IPC_MSG_CLIENT(client), server->msg_protocol);
+  } else {
+    /* Initialize raw-client */
+    z_iopoll_entity_open(Z_IOPOLL_ENTITY(client), &__ipc_raw_client_vtable, csock);
+  }
   Z_IOPOLL_ENTITY(client)->uflags8 = Z_IOPOLL_ENTITY(server)->uflags8;
 
-  /* Initialize mgsbuf if the client is a msg-client */
-  if (proto->msg_exec != NULL) {
-    z_ipc_msg_client_t *msg_client = Z_IPC_MSG_CLIENT(client);
-    z_ipc_msgbuf_open(&(msg_client->msgbuf));
-    msg_client->refs = 1;
-    z_ticket_init(&(msg_client->lock));
-  }
-
   /* Ask the protocol to do its own stuff before starting up */
-  if (proto->connected != NULL) {
-    if (proto->connected(client)) {
-      z_memory_free(z_global_memory(), client);
+  if (server->protocol->connected != NULL) {
+    if (server->protocol->connected(client)) {
+      z_memory_free(z_global_memory(), z_ipc_client_t, client, server->csize);
       return(NULL);
     }
   }
@@ -77,9 +77,8 @@ static z_ipc_client_t *__ipc_client_alloc (z_ipc_server_t *server, int csock) {
 
 static void __ipc_client_close (z_iopoll_entity_t *entity) {
   z_ipc_server_t *server = __ipc_server[entity->uflags8];
-  const z_ipc_protocol_t *proto = server->protocol;
 
-  if (proto->msg_parse != NULL) {
+  if (server->msg_protocol != NULL) {
     if (z_atomic_dec(&(Z_IPC_MSG_CLIENT(entity)->refs)) > 0) {
       Z_LOG_TRACE("client %d disconnect-delayed", entity->fd);
       return;
@@ -87,8 +86,8 @@ static void __ipc_client_close (z_iopoll_entity_t *entity) {
   }
 
   /* Ask the protocol to do its own stuff before closing down */
-  if (proto->disconnected != NULL) {
-    if (proto->disconnected(Z_IPC_CLIENT(entity)))
+  if (server->protocol->disconnected != NULL) {
+    if (server->protocol->disconnected(Z_IPC_CLIENT(entity)))
       return;
   }
 
@@ -96,13 +95,13 @@ static void __ipc_client_close (z_iopoll_entity_t *entity) {
   z_iopoll_entity_close(entity, 0);
 
   /* Uninitialize mgsbuf if the client is a msg-client */
-  if (proto->msg_parse != NULL) {
-    z_ipc_msgbuf_close(Z_IPC_MSG_CLIENT(entity), proto->msg_free);
+  if (server->msg_protocol != NULL) {
+    z_ipc_msg_client_close(Z_IPC_MSG_CLIENT(entity), server->msg_protocol);
   }
 
   /* Deallocate client */
   z_memory_set_dirty_debug(entity, __ipc_server[entity->uflags8]->csize);
-  z_memory_free(z_global_memory(), entity);
+  z_memory_free(z_global_memory(), z_ipc_client_t, entity, server->csize);
 
   z_atomic_dec(&(server->connections));
 }
@@ -121,29 +120,31 @@ static int __ipc_raw_client_write (z_iopoll_entity_t *entity) {
 }
 
 static const z_iopoll_entity_vtable_t __ipc_raw_client_vtable = {
-  .read  = __ipc_raw_client_read,
-  .write = __ipc_raw_client_write,
-  .close = __ipc_client_close,
+  .read     = __ipc_raw_client_read,
+  .write    = __ipc_raw_client_write,
+  .uevent   = NULL,
+  .timeout  = NULL,
+  .close    = __ipc_client_close,
 };
 
 /* ============================================================================
  *  IPC msg-client iopoll entity
  */
 static int __ipc_msg_client_read (z_iopoll_entity_t *entity) {
-  const z_ipc_protocol_t *proto = __ipc_server[entity->uflags8]->protocol;
-  return(z_ipc_msg_client_fetch(Z_IPC_MSG_CLIENT(entity),
-                                proto->msg_alloc,
-                                proto->msg_parse,
-                                proto->msg_exec));
+  return(z_ipc_msg_client_read(Z_IPC_MSG_CLIENT(entity),
+                               __ipc_server[entity->uflags8]->msg_protocol));
 }
 
 static int __ipc_msg_client_write (z_iopoll_entity_t *entity) {
-  return(z_ipc_msg_client_flush(Z_IPC_MSG_CLIENT(entity)));
+  return(z_ipc_msg_client_flush(Z_IPC_MSG_CLIENT(entity),
+                                __ipc_server[entity->uflags8]->msg_protocol));
 }
 
 static const z_iopoll_entity_vtable_t __ipc_msg_client_vtable = {
   .read  = __ipc_msg_client_read,
   .write = __ipc_msg_client_write,
+  .uevent   = NULL,
+  .timeout  = NULL,
   .close = __ipc_client_close,
 };
 
@@ -153,6 +154,7 @@ static const z_iopoll_entity_vtable_t __ipc_msg_client_vtable = {
 static const z_iopoll_entity_vtable_t __ipc_server_vtable;
 
 static z_ipc_server_t *__ipc_server_alloc (const z_ipc_protocol_t *proto,
+                                           const z_ipc_msg_protocol_t *msg_proto,
                                            const void *hostname,
                                            const void *service)
 {
@@ -177,12 +179,7 @@ static z_ipc_server_t *__ipc_server_alloc (const z_ipc_protocol_t *proto,
   z_iopoll_entity_open(Z_IOPOLL_ENTITY(server), &__ipc_server_vtable, socket);
   Z_IOPOLL_ENTITY(server)->uflags8 = __ipc_server_register(server);
   server->protocol = proto;
-
-  if (proto->msg_parse != NULL) {
-    server->client_vtable = &__ipc_msg_client_vtable;
-  } else {
-    server->client_vtable = &__ipc_raw_client_vtable;
-  }
+  server->msg_protocol = msg_proto;
 
   z_iopoll_timer_open(&(server->timer), &__ipc_server_vtable, socket);
   z_iopoll_uevent_open(&(server->event), &__ipc_server_vtable, socket);
@@ -208,13 +205,11 @@ static void __ipc_server_close (z_iopoll_entity_t *entity) {
 
 static int __ipc_server_accept (z_iopoll_entity_t *entity) {
   z_ipc_server_t *server = Z_IPC_SERVER(entity);
-  const z_ipc_protocol_t *proto;
   int csock;
 
-  proto = server->protocol;
-  csock = proto->accept(server);
-  if (Z_UNLIKELY(csock < 0))
-    return(-1);
+  csock = server->protocol->accept(server);
+  if (Z_UNLIKELY(csock <= 0))
+    return(csock);
 
   return(z_ipc_server_add(server, csock));
 }
@@ -241,6 +236,7 @@ static const z_iopoll_entity_vtable_t __ipc_server_vtable = {
  *  PUBLIC IPC methods
  */
 z_ipc_server_t *__z_ipc_plug (const z_ipc_protocol_t *proto,
+                              const z_ipc_msg_protocol_t *msg_proto,
                               const char *name,
                               unsigned int csize,
                               const void *address,
@@ -248,7 +244,7 @@ z_ipc_server_t *__z_ipc_plug (const z_ipc_protocol_t *proto,
 {
   z_ipc_server_t *server;
 
-  server = __ipc_server_alloc(proto, address, service);
+  server = __ipc_server_alloc(proto, msg_proto, address, service);
   if (Z_MALLOC_IS_NULL(server))
     return(NULL);
 
@@ -295,10 +291,35 @@ z_ipc_server_t *z_ipc_get_server (const z_ipc_client_t *client) {
 }
 
 /* ============================================================================
- *  PUBLIC  IPC Msg-Client methods
+ *  PUBLIC IPC Msg-Client methods
  */
+void z_ipc_msg_client_open (z_ipc_msg_client_t *self,
+                            const z_ipc_msg_protocol_t *proto)
+{
+  memset(&(self->rdbuf), 0, sizeof(z_ipc_msg_rdbuf_t));
+  z_stailq_init(&(self->wmsgq));
+  self->refs = 0;
+}
+
+void z_ipc_msg_client_close (z_ipc_msg_client_t *self,
+                            const z_ipc_msg_protocol_t *proto)
+{
+  z_memory_t *memory = z_global_memory();
+  z_ipc_msg_t *msg;
+  z_stailq_for_each_safe_entry(&(self->wmsgq), msg, z_ipc_msg_t, node, {
+    z_stailq_remove(&(self->wmsgq));
+    z_dbuffer_clear(memory, &(msg->dnode));
+    z_memory_struct_free(memory, z_ipc_msg_t, msg);
+  });
+#if 0
+  if (self->ibuffer.msg_ctx != NULL) {
+    proto->msg_free(client, self->ibuffer.msg_ctx);
+  }
+#endif
+}
+
 int z_ipc_msg_client_respond (z_ipc_msg_client_t *client, void *ctx) {
-  const z_ipc_protocol_t *proto = __ipc_server[Z_IOPOLL_ENTITY(client)->uflags8]->protocol;
+  const z_ipc_msg_protocol_t *proto = __ipc_server[Z_IOPOLL_ENTITY(client)->uflags8]->msg_protocol;
   if (z_atomic_dec(&(client->refs)) == 0) {
     proto->msg_free(client, ctx);
     __ipc_client_close(Z_IOPOLL_ENTITY(client));

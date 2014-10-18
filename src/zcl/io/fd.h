@@ -25,15 +25,16 @@ __Z_BEGIN_DECLS__
 int     z_fd_set_blocking (int fd, int blocking);
 int     z_fd_get_path     (int fd, char *path, int size);
 
-ssize_t z_fd_write        (int fd, const void *buf, size_t bufsize);
-ssize_t z_fd_writev       (int fd, const struct iovec *iov, int iovcnt);
+ssize_t z_fd_read    (int fd, void *buf, size_t bufsize);
+ssize_t z_fd_readv   (int fd, const struct iovec *iov, int iovcnt);
+ssize_t z_fd_skip    (int fd, size_t length);
 
-ssize_t z_fd_read         (int fd, void *buf, size_t bufsize);
-ssize_t z_fd_readv        (int fd, const struct iovec *iov, int iovcnt);
+ssize_t z_fd_write   (int fd, const void *buf, size_t bufsize);
+ssize_t z_fd_writev  (int fd, const struct iovec *iov, int iovcnt);
 
 ssize_t z_fd_preadv  (int fd, uint64_t offset, const struct iovec *iov, int iovcnt);
 ssize_t z_fd_pwritev (int fd, uint64_t offset, const struct iovec *iov, int iovcnt);
 
 __Z_END_DECLS__
 
-#endif /* _Z_FD_H_ */
+#endif /* !_Z_FD_H_ */

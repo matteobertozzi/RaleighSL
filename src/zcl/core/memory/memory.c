@@ -76,8 +76,7 @@ void *z_memory_raw_alloc (z_memory_t *self, const char *type_name, size_t size) 
 #endif
 }
 
-void *z_memory_raw_realloc (z_memory_t *self, void *ptr, size_t size) {
-  z_histogram_add(&(self->histo), size);
-  //++self->sys_alloc;
-  return(z_allocator_raw_realloc(self->allocator, ptr, size));
+void z_memory_raw_free (z_memory_t *self, const char *type_name, void *ptr, size_t size) {
+  Z_LOG_TRACE("[FREE] %zu %s %p", size, type_name, ptr);
+  z_allocator_free(self->allocator, ptr, size);
 }

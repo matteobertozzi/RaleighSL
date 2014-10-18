@@ -65,6 +65,44 @@ size_t  z_memshared   (const void *a, size_t alen,
 size_t  z_memrshared  (const void *a, size_t alen,
                        const void *b, size_t blen);
 
+#define z_memcpy16(dst, src, len)                             \
+  do {                                                        \
+    register const uint8_t *psrc = (const uint8_t *)(src);    \
+    register uint8_t *pdst = (uint8_t *)(dst);                \
+    switch (len) {                                            \
+      case 2: pdst[1] = psrc[1];                              \
+      case 1: pdst[0] = psrc[0];                              \
+    }                                                         \
+  } while (0)
+
+#define z_memcpy32(dst, src, len)                             \
+  do {                                                        \
+    register const uint8_t *psrc = (const uint8_t *)(src);    \
+    register uint8_t *pdst = (uint8_t *)(dst);                \
+    switch (len) {                                            \
+      case 4: pdst[3] = psrc[3];                              \
+      case 3: pdst[2] = psrc[2];                              \
+      case 2: pdst[1] = psrc[1];                              \
+      case 1: pdst[0] = psrc[0];                              \
+    }                                                         \
+  } while (0)
+
+#define z_memcpy64(dst, src, len)                             \
+  do {                                                        \
+    register const uint8_t *psrc = (const uint8_t *)(src);    \
+    register uint8_t *pdst = (uint8_t *)(dst);                \
+    switch (len) {                                            \
+      case 8: pdst[7] = psrc[7];                              \
+      case 7: pdst[6] = psrc[6];                              \
+      case 6: pdst[5] = psrc[5];                              \
+      case 5: pdst[4] = psrc[4];                              \
+      case 4: pdst[3] = psrc[3];                              \
+      case 3: pdst[2] = psrc[2];                              \
+      case 2: pdst[1] = psrc[1];                              \
+      case 1: pdst[0] = psrc[0];                              \
+    }                                                         \
+  } while (0)
+
 __Z_END_DECLS__
 
 #endif /* !_Z_MEMUTIL_H_ */

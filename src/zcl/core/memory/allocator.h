@@ -23,19 +23,32 @@ __Z_BEGIN_DECLS__
 Z_TYPEDEF_STRUCT(z_allocator)
 
 struct z_allocator {
+  void *  (*mmalloc)  (z_allocator_t *self, size_t size);
+  void    (*mmfree)   (z_allocator_t *self, void *ptr, size_t size);
+
+  uint64_t pool_alloc;
+  uint64_t pool_used;
+  uint64_t extern_alloc;
+  uint64_t extern_used;
+
+  uint8_t *mmpool;
+  void *   udata;
 };
 
-#define z_system_allocator()                      NULL
-
-#define z_allocator_raw_alloc(self, size)         malloc(size)
-#define z_allocator_raw_realloc(self, ptr, size)  realloc(ptr, size)
-#define z_allocator_free(self, ptr)               free(ptr)
+#define z_allocator_raw_alloc(self, size)        (self)->mmalloc(self, size)
+#define z_allocator_free(self, ptr, size)        (self)->mmfree(self, ptr, size)
 
 #define z_allocator_alloc(self, type, size)                                   \
   Z_CAST(type, z_allocator_raw_alloc(self, size))
 
 #define z_allocator_realloc(self, type, size)                                 \
   Z_CAST(type, z_allocator_raw_realloc(self, ptr, size))
+
+void *z_raw_alloc (size_t size);
+void  z_raw_free  (void *ptr, size_t size);
+
+#define z_sys_alloc(size)             malloc(size)
+#define z_sys_free(ptr, size)         free(ptr)
 
 __Z_END_DECLS__
 

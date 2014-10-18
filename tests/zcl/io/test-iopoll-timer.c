@@ -14,7 +14,7 @@
  *   limitations under the License.
  */
 
-#include <zcl/iopoll.h>
+#include <zcl/global.h>
 #include <zcl/debug.h>
 #include <zcl/time.h>
 #include <stdio.h>
@@ -46,10 +46,7 @@ int main (int argc, char **argv) {
   z_iopoll_entity_t entity[2];
 
   /* Initialize global context */
-  z_debug_open();
-
-  /* Initialize I/O Poll */
-  if (z_iopoll_open(1)) {
+  if (z_global_context_open_default(1)) {
     Z_LOG_FATAL("z_iopoll_open(): failed\n");
     return(1);
   }
@@ -64,10 +61,9 @@ int main (int argc, char **argv) {
   z_iopoll_timer(entity + 1, 10000);
 
   /* Start spinning... */
-  z_iopoll_poll(0, &__is_running);
+  z_global_context_poll(0, &__is_running);
 
   /* ...and we're done */
-  z_iopoll_close();
-  z_debug_close();
+  z_global_context_close();
   return(0);
 }

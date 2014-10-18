@@ -21,10 +21,12 @@ __Z_BEGIN_DECLS__
 #include <zcl/histogram.h>
 #include <zcl/macros.h>
 #include <zcl/ticket.h>
+#include <zcl/opaque.h>
 
 Z_TYPEDEF_STRUCT(z_iopoll_entity_vtable)
-Z_TYPEDEF_STRUCT(z_iopoll_timer_vtable)
+Z_TYPEDEF_STRUCT(z_iopoll_vtable)
 Z_TYPEDEF_STRUCT(z_iopoll_entity)
+Z_TYPEDEF_STRUCT(z_iopoll_engine)
 Z_TYPEDEF_STRUCT(z_iopoll_timer)
 Z_TYPEDEF_STRUCT(z_iopoll_stats)
 
@@ -32,6 +34,24 @@ Z_TYPEDEF_STRUCT(z_iopoll_stats)
 #define Z_IOPOLL_ENTITY(x)          Z_CAST(z_iopoll_entity_t, x)
 
 #define __Z_IOPOLL_ENTITY__         z_iopoll_entity_t __io_entity__;
+
+#define Z_IOPOLL_READ               0
+#define Z_IOPOLL_WRITE              1
+#define Z_IOPOLL_TIMER              2
+#define Z_IOPOLL_USER               3
+
+#define Z_IOPOLL_WATCH              4
+#define Z_IOPOLL_HANG               5
+#define Z_IOPOLL_DATA               6
+
+#define Z_IOPOLL_READABLE           (1U << Z_IOPOLL_READ)
+#define Z_IOPOLL_WRITABLE           (1U << Z_IOPOLL_WRITE)
+#define Z_IOPOLL_TIMEOUT            (1U << Z_IOPOLL_TIMER)
+#define Z_IOPOLL_UEVENT             (1U << Z_IOPOLL_USER)
+
+#define Z_IOPOLL_WATCHED            (1U << Z_IOPOLL_WATCH)
+#define Z_IOPOLL_HANGUP             (1U << Z_IOPOLL_HANG)
+#define Z_IOPOLL_HAS_DATA           (1U << Z_IOPOLL_DATA)
 
 struct z_iopoll_entity_vtable {
   int     (*read)     (z_iopoll_entity_t *entity);
@@ -41,14 +61,33 @@ struct z_iopoll_entity_vtable {
   void    (*close)    (z_iopoll_entity_t *entity);
 };
 
+struct z_iopoll_vtable {
+  int     (*add)      (z_iopoll_engine_t *engine,
+                       z_iopoll_entity_t *entry);
+  int     (*remove)   (z_iopoll_engine_t *engine,
+                       z_iopoll_entity_t *entry);
+  int     (*timer)    (z_iopoll_engine_t *engine,
+                       z_iopoll_entity_t *entry,
+                       uint32_t msec);
+  int     (*uevent)   (z_iopoll_engine_t *engine,
+                       z_iopoll_entity_t *entry,
+                       int enable);
+  int     (*notify)   (z_iopoll_engine_t *engine,
+                       z_iopoll_entity_t *entry);
+
+  int     (*open)     (z_iopoll_engine_t *engine);
+  void    (*close)    (z_iopoll_engine_t *engine);
+  void    (*poll)     (z_iopoll_engine_t *engine);
+};
+
 struct z_iopoll_entity {
-  z_ticket_t lock;            /* can we remove this one? */
   uint8_t    type;
   uint8_t    iflags8;
   uint8_t    ioengine;
   uint8_t    uflags8;
-  uint32_t   last_write_sec;
+  uint32_t   last_write_ts;
   int        fd;
+  uint32_t   __pad;
 };
 
 struct z_iopoll_stats {
@@ -61,12 +100,39 @@ struct z_iopoll_stats {
   z_histogram_t iowrite;
   uint64_t      iowrite_events[24];
 
+  z_histogram_t event;
+  uint64_t      event_events[24];
+
+  z_histogram_t timeout;
+  uint64_t      timeout_events[24];
+
   z_histogram_t req_latency;
   uint64_t      req_latency_events[24];
 
   z_histogram_t resp_latency;
   uint64_t      resp_latency_events[24];
 };
+
+struct z_iopoll_engine {
+  z_iopoll_stats_t stats;
+  z_opaque_t       data;
+};
+
+#ifdef Z_IOPOLL_HAS_EPOLL
+  extern const z_iopoll_vtable_t z_iopoll_epoll;
+#endif /* Z_IOPOLL_HAS_EPOLL */
+
+#ifdef Z_IOPOLL_HAS_KQUEUE
+  extern const z_iopoll_vtable_t z_iopoll_kqueue;
+#endif /* Z_IOPOLL_HAS_KQUEUE */
+
+#if defined(Z_IOPOLL_HAS_EPOLL)
+  #define z_iopoll_engine           z_iopoll_epoll
+#elif defined(Z_IOPOLL_HAS_KQUEUE)
+  #define z_iopoll_engine           z_iopoll_kqueue
+#else
+  #error "IOPoll engine missing"
+#endif
 
 int  z_iopoll_open  (unsigned int ncores);
 void z_iopoll_close (void);
@@ -80,17 +146,24 @@ int  z_iopoll_uevent  (z_iopoll_entity_t *entity, int enable);
 int  z_iopoll_notify  (z_iopoll_entity_t *entity);
 int  z_iopoll_poll    (int detached, const int *is_looping);
 
-unsigned int            z_iopoll_cores (void);
-const z_iopoll_stats_t *z_iopoll_stats (int core);
+void z_iopoll_process       (z_iopoll_engine_t *engine,
+                             z_iopoll_entity_t *entity,
+                             uint32_t events);
+
+int  z_iopoll_engine_open   (z_iopoll_engine_t *engine);
+void z_iopoll_engine_close  (z_iopoll_engine_t *engine);
+void z_iopoll_engine_dump   (z_iopoll_engine_t *engine);
 
 void z_iopoll_entity_open   (z_iopoll_entity_t *entity,
                              const z_iopoll_entity_vtable_t *vtable,
                              int fd);
 void z_iopoll_entity_close  (z_iopoll_entity_t *entity, int defer);
-void z_iopoll_set_writable  (z_iopoll_entity_t *entity, int writable);
-void z_iopoll_add_latencies (z_iopoll_entity_t *entity,
-                             uint64_t req_latency,
-                             uint64_t resp_latency);
+
+void z_iopoll_set_data_available (z_iopoll_entity_t *entity, int has_data);
+void z_iopoll_set_writable       (z_iopoll_entity_t *entity, int writable);
+void z_iopoll_add_latencies      (z_iopoll_entity_t *entity,
+                                  uint64_t req_latency,
+                                  uint64_t resp_latency);
 
 void z_iopoll_timer_open    (z_iopoll_entity_t *entity,
                              const z_iopoll_entity_vtable_t *vtable,
@@ -98,6 +171,13 @@ void z_iopoll_timer_open    (z_iopoll_entity_t *entity,
 void z_iopoll_uevent_open   (z_iopoll_entity_t *entity,
                              const z_iopoll_entity_vtable_t *vtable,
                              int oid);
+
+#define z_iopoll_stats_add_events(engine, nevents, wait_time)               \
+  do {                                                                      \
+    z_histogram_t *iowait = &((engine)->stats.iowait);                      \
+    z_histogram_add(iowait, wait_time);                                     \
+    iowait->max_events = z_max(iowait->max_events, nevents);                \
+  } while (0)
 
 __Z_END_DECLS__
 

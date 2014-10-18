@@ -87,7 +87,6 @@ void *z_chain16_map_get (uint8_t *block,
   buckets = __first_bucket(block);
   entries = __first_entry(head, block);
 
-  Z_ASSERT(hash > 0, "hash must be greater than 0");
   index = buckets[hash % head->slots];
   while (index > 0) {
     struct chain_slot *slot = __slot_at(entries, head->stride, index - 1);
@@ -115,7 +114,6 @@ void *z_chain16_map_put (uint8_t *block,
   buckets = __first_bucket(block);
   entries = __first_entry(head, block);
 
-  Z_ASSERT(hash > 0, "hash must be greater than 0");
   target = hash % head->slots;
   index = buckets[target];
   while (index > 0) {
@@ -160,7 +158,6 @@ void *z_chain16_map_remove (uint8_t *block,
   buckets = __first_bucket(block);
   entries = __first_entry(head, block);
 
-  Z_ASSERT(hash > 0, "hash must be greater than 0");
   target = hash % head->slots;
   index = buckets[target];
   while (index > 0) {

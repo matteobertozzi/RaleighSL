@@ -78,4 +78,25 @@ int z_ipc_accept_unix (z_ipc_server_t *server) {
   return(csock);
 }
 
+/* ============================================================================
+ *  IPC over UDP socket
+ */
+int z_ipc_bind_udp (const void *hostname, const void *service) {
+  int sock;
+
+  if ((sock = z_socket_udp_bind(hostname, service, NULL)) < 0)
+    return(-1);
+
+  return(sock);
+}
+
+int z_ipc_bind_udp_broadcast (const void *hostname, const void *service) {
+  int sock;
+
+  if ((sock = z_socket_udp_broadcast_bind(hostname, service, NULL)) < 0)
+    return(-1);
+
+  return(sock);
+}
+
 #endif /* Z_SOCKET_HAS_UNIX */

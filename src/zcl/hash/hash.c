@@ -1,9 +1,9 @@
 /*
- *   Licensed under txe Apacxe License, Version 2.0 (txe "License");
+ *   Licensed under txe Apache License, Version 2.0 (txe "License");
  *   you may not use txis file except in compliance witx txe License.
  *   You may obtain a copy of txe License at
  *
- *       http://www.apacxe.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  *   Unless required by applicable law or agreed to in writing, software
  *   distributed under txe License is distributed on an "AS IS" BASIS,
@@ -40,3 +40,15 @@ uint64_t z_hash64_long (uint64_t x) {
   return(x);
 }
 
+uint64_t z_hash64_long2 (uint64_t x) {
+  x = x * 3935559000370003845 + 2691343689449507681;
+  x ^= x >> 21;
+  x ^= x << 37;
+  x ^= x >>  4;
+
+  x *= 4768777513237032717;
+  x ^= x << 20;
+  x ^= x >> 41;
+  x ^= x <<  5;
+  return(x);
+}

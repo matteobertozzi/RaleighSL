@@ -17,7 +17,9 @@
 
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <sys/uio.h>
 #include <unistd.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 
@@ -25,7 +27,7 @@ int z_fd_set_blocking (int fd, int blocking) {
   int flags;
 
   if ((flags = fcntl(fd, F_GETFL)) < 0) {
-    perror("fcntl()");
+    Z_LOG_ERRNO_WARN("failed fcntl(F_GETFL %d) for fd %d", blocking, fd);
     return(1);
   }
 
@@ -35,7 +37,7 @@ int z_fd_set_blocking (int fd, int blocking) {
     flags |= O_NONBLOCK;
 
   if (fcntl(fd, F_SETFL, flags) < 0) {
-    perror("fcntl()");
+    Z_LOG_ERRNO_WARN("failed fcntl(F_SETFL %d) for fd %d", blocking, fd);
     return(2);
   }
 
@@ -56,53 +58,71 @@ int z_fd_get_path (int fd, char *path, int size) {
   return(__fd_read_link(fd, path, size));
 }
 
+ssize_t z_fd_read (int fd, void *buf, size_t bufsize) {
+  ssize_t rd = read(fd, buf, bufsize);
+  if (Z_UNLIKELY(rd < 0 && errno == EAGAIN))
+    return(0);
+  return(rd);
+}
+
+ssize_t z_fd_readv (int fd, const struct iovec *iov, int iovcnt) {
+  ssize_t rd = readv(fd, iov, iovcnt);
+  if (Z_UNLIKELY(rd < 0 && errno == EAGAIN))
+    return(0);
+  return(rd);
+}
+
+ssize_t z_fd_skip (int fd, size_t length) {
+  uint8_t buffer[2048];
+  ssize_t rdtotal = 0;
+  while (length >= sizeof(buffer)) {
+    ssize_t rd = read(fd, buffer, sizeof(buffer));
+    if (Z_UNLIKELY(rd < 0)) {
+      if (errno == EAGAIN)
+        return(0);
+      return(rd);
+    }
+    rdtotal += rd;
+  }
+  if (length > 0) {
+    ssize_t rd = read(fd, buffer, length);
+    if (Z_UNLIKELY(rd < 0)) {
+      if (errno == EAGAIN)
+        return(0);
+      return(rd);
+    }
+    rdtotal += rd;
+  }
+  return(rdtotal);
+}
+
 ssize_t z_fd_write (int fd, const void *buf, size_t bufsize) {
   const char *p = buf;
   ssize_t total = 0;
 
   while (bufsize > 0) {
     ssize_t written = write(fd, p, bufsize);
-    if (written <= 0)
+    if (written <= 0 || errno == EAGAIN)
       return(written);
 
     p += written;
     total += written;
     bufsize -= written;
   }
+
   return(total);
 }
 
 ssize_t z_fd_writev(int fd, const struct iovec *iov, int iovcnt) {
   ssize_t wr = writev(fd, iov, iovcnt);
-  /* TODO */
-#if 0 && __Z_DEBUG__
-  ssize_t total = 0;
-
-  while (iovcnt--) {
-    total += iov->iov_len;
-    iov++;
-  }
-
-  if (wr >= 0) {
-    Z_ASSERT(wr == total, "Incomplete writev wr=%zd total=%zd", wr, total);
-  }
-#endif
+  if (Z_UNLIKELY(wr < 0 && errno == EAGAIN))
+    return(0);
   return(wr);
-}
-
-ssize_t z_fd_read (int fd, void *buf, size_t bufsize) {
-  return read(fd, buf, bufsize);
-}
-
-ssize_t z_fd_readv (int fd, const struct iovec *iov, int iovcnt) {
-  return readv(fd, iov, iovcnt);
 }
 
 ssize_t z_fd_preadv (int fd, uint64_t offset, const struct iovec *iov, int iovcnt) {
 #if defined(Z_IO_HAS_PWRITEV)
-  /* TODO */
-  lseek(fd, offset, SEEK_SET);
-  return(z_fd_readv(fd, iov, iovcnt));
+  return preadv(fd, iov, iovcnt, offset);
 #else
   lseek(fd, offset, SEEK_SET);
   return(z_fd_readv(fd, iov, iovcnt));
@@ -111,9 +131,7 @@ ssize_t z_fd_preadv (int fd, uint64_t offset, const struct iovec *iov, int iovcn
 
 ssize_t z_fd_pwritev (int fd, uint64_t offset, const struct iovec *iov, int iovcnt) {
 #if defined(Z_IO_HAS_PWRITEV)
-  /* TODO */
-  lseek(fd, offset, SEEK_SET);
-  return(z_fd_writev(fd, iov, iovcnt));
+  return pwritev(fd, iov, iovcnt, offset);
 #else
   lseek(fd, offset, SEEK_SET);
   return(z_fd_writev(fd, iov, iovcnt));

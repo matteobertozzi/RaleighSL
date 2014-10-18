@@ -40,7 +40,17 @@ void __z_log (FILE *fp, int level, int errnum,
               const char *format, ...)
 {
   char datetime[32];
+  void *trace[16];
+  char **symbols;
+  int i, size;
   va_list ap;
+
+  if (z_in(level, Z_LOG_LEVEL_ERROR, Z_LOG_LEVEL_FATAL)) {
+    size = backtrace(trace, 16);
+    symbols = backtrace_symbols(trace, size);
+  } else {
+    symbols = NULL;
+  }
 
   z_mutex_lock(&(__current_debug_conf.lock));
   z_human_date(datetime, 32, z_time_micros());
@@ -56,7 +66,17 @@ void __z_log (FILE *fp, int level, int errnum,
   }
 
   fprintf(fp, "\n");
+  if (symbols != NULL) {
+    fprintf(stderr, "Obtained %zd stack frames.\n", size);
+    for (i = 0; i < size; i++) {
+      fprintf(stderr, "%s\n", symbols[i]);
+    }
+  }
   z_mutex_unlock(&(__current_debug_conf.lock));
+
+  if (symbols != NULL) {
+    free(symbols);
+  }
 }
 
 void __z_assert (const char *file, int line, const char *func,
@@ -64,7 +84,13 @@ void __z_assert (const char *file, int line, const char *func,
                  const char *format, ...)
 {
   char datetime[32];
+  void *trace[16];
+  char **symbols;
+  int i, size;
   va_list ap;
+
+  size = backtrace(trace, 16);
+  symbols = backtrace_symbols(trace, size);
 
   z_mutex_lock(&(__current_debug_conf.lock));
   z_human_date(datetime, 32, z_time_micros());
@@ -74,10 +100,19 @@ void __z_assert (const char *file, int line, const char *func,
   va_start(ap, format);
   vfprintf(stderr, format, ap);
   va_end(ap);
-
   fprintf(stderr, "\n");
+
+  if (symbols != NULL) {
+    fprintf(stderr, "Obtained %zd stack frames.\n", size);
+    for (i = 0; i < size; i++) {
+      fprintf(stderr, "%s\n", symbols[i]);
+    }
+  }
   z_mutex_unlock(&(__current_debug_conf.lock));
 
+  if (symbols != NULL) {
+    free(symbols);
+  }
   abort();
 }
 

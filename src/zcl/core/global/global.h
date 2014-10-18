@@ -20,8 +20,46 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 #include <zcl/memory.h>
+#include <zcl/iopoll.h>
 
-z_memory_t *z_global_memory (void);
+Z_TYPEDEF_STRUCT(z_global_conf)
+
+struct z_global_conf {
+  uint32_t ncores;
+
+  /* Memory Pool */
+  uint32_t mmpool_base_size;
+  uint32_t mmpool_page_size;
+  uint32_t mmpool_block_min;
+  uint32_t mmpoll_block_max;
+
+  /* Events */
+  uint32_t events_ring_size;
+
+  /* User data */
+  uint32_t udata_size;
+};
+
+int   z_global_context_open         (z_global_conf_t *conf);
+int   z_global_context_open_default (uint32_t ncores);
+void  z_global_context_close        (void);
+int   z_global_context_poll         (int detached, int *is_running);
+void  z_global_context_stop         (void);
+void  z_global_context_wait         (void);
+
+void *              z_global_udata        (void);
+int *               z_global_is_running   (void);
+
+uint32_t            z_global_balance      (void);
+
+z_memory_t *        z_global_memory       (void);
+z_memory_t *        z_global_memory_at    (uint32_t core);
+
+z_iopoll_engine_t * z_global_iopoll       (void);
+z_iopoll_engine_t * z_global_iopoll_at    (uint32_t core);
+
+const z_iopoll_stats_t *z_global_iopoll_stats    (void);
+const z_iopoll_stats_t *z_global_iopoll_stats_at (uint32_t core);
 
 __Z_END_DECLS__
 

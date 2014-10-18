@@ -150,7 +150,6 @@ void *z_hash_map_put (z_hash_map_t *self,
   uint32_t target;
   uint32_t index;
 
-  Z_ASSERT(hash > 0, "hash must be greater than 0");
   target = hash & self->mask;
   index = buckets[target];
   while (index > 0) {

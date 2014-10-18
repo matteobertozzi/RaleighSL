@@ -21,13 +21,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "iopoll_private.h"
+#include <zcl/global.h>
 #include <zcl/iopoll.h>
 #include <zcl/debug.h>
 #include <zcl/time.h>
 
 #define __KQUEUE_QSIZE           (256)
-#define __KQUEUE_TIMEOUT_SEC     (2)
+#define __KQUEUE_TIMEOUT_SEC     (30)
 
 static int __kqueue_open (z_iopoll_engine_t *self) {
   if ((self->data.fd = kqueue()) < 0) {
@@ -142,20 +142,16 @@ static int __kqueue_notify (z_iopoll_engine_t *self,
 }
 
 static void __kqueue_poll (z_iopoll_engine_t *self) {
-  const int *is_running = z_iopoll_is_running();
+  const int *is_running = z_global_is_running();
   struct kevent events[__KQUEUE_QSIZE];
-  struct timespec timeout;
   z_timer_t timer;
-  int edits = 0;
 
-  timeout.tv_sec  = __KQUEUE_TIMEOUT_SEC;
-  timeout.tv_nsec = 0;
   while (*is_running) {
     struct kevent *e;
     int n;
 
     z_timer_start(&timer);
-    n = kevent(self->data.fd, NULL, 0, events, __KQUEUE_QSIZE, &timeout);
+    n = kevent(self->data.fd, NULL, 0, events, __KQUEUE_QSIZE, NULL);
     if (Z_UNLIKELY(n < 0)) {
       Z_LOG_ERRNO_WARN("kevent()");
       continue;
@@ -163,28 +159,26 @@ static void __kqueue_poll (z_iopoll_engine_t *self) {
     z_timer_stop(&timer);
     z_iopoll_stats_add_events(self, n, z_timer_micros(&timer));
 
-    edits = 0;
     for (e = events; n--; ++e) {
-      z_iopoll_entity_t *entity = Z_IOPOLL_ENTITY(e->udata);
       uint32_t eflags =
           (e->filter == EVFILT_READ)  << Z_IOPOLL_READ  |
           (e->filter == EVFILT_WRITE) << Z_IOPOLL_WRITE |
           (e->filter == EVFILT_TIMER) << Z_IOPOLL_TIMER |
           (e->filter == EVFILT_USER)  << Z_IOPOLL_USER  |
           (e->flags & EV_EOF && e->filter == EVFILT_READ) << Z_IOPOLL_HANG;
-      z_iopoll_process(self, entity, eflags);
+      z_iopoll_process(self, Z_IOPOLL_ENTITY(e->udata), eflags);
     }
   }
 }
 
 const z_iopoll_vtable_t z_iopoll_kqueue = {
-  .open   = __kqueue_open,
-  .close  = __kqueue_close,
   .add    = __kqueue_add,
   .remove = __kqueue_remove,
   .timer  = __kqueue_timer,
   .uevent = __kqueue_uevent,
   .notify = __kqueue_notify,
+  .open   = __kqueue_open,
+  .close  = __kqueue_close,
   .poll   = __kqueue_poll,
 };
 

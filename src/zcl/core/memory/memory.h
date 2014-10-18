@@ -32,8 +32,6 @@ struct z_memory {
 
   z_histogram_t histo;
   uint64_t histo_events[26];
-  //uint64_t pool_alloc;
-  //uint64_t sys_alloc;
 };
 
 z_memory_t *z_memory_open   (z_memory_t *self, z_allocator_t *allocator);
@@ -42,34 +40,28 @@ void        z_memory_close  (z_memory_t *memory);
 void        z_memory_stats_dump (z_memory_t *self, FILE *stream);
 
 /* basic alloc/realloc/free */
-void *z_memory_raw_alloc   (z_memory_t *self, const char *type_name, size_t size);
-void *z_memory_raw_realloc (z_memory_t *self, void *ptr, size_t size);
+void *z_memory_raw_alloc (z_memory_t *self, const char *type_name, size_t size);
+void  z_memory_raw_free  (z_memory_t *self, const char *type_name, void *ptr, size_t size);
 
 #define z_memory_alloc(self, type, size)                                      \
   Z_CAST(type, z_memory_raw_alloc(self, #type, size))
 
-#define z_memory_realloc(self, type, ptr, size)                               \
-  Z_CAST(type, z_memory_raw_realloc(self, ptr, size))
-
-#define z_memory_free(self, ptr)                                              \
-  z_allocator_free(self->allocator, ptr);
+#define z_memory_free(self, type, ptr, size)                                  \
+  z_memory_raw_free(self, #type, ptr, size);
 
 /* struct alloc/free */
 #define z_memory_struct_alloc(self, type)                                     \
   Z_CAST(type, z_memory_raw_alloc(self, #type, sizeof(type)))
 
 #define z_memory_struct_free(self, type, ptr)                                 \
-  z_memory_free(self, ptr)
+  z_memory_free(self, type, ptr, sizeof(type))
 
 /* array alloc/realloc/free */
 #define z_memory_array_alloc(self, type, n)                                   \
   Z_CAST(type, z_memory_raw_alloc(self, #type "[]", (n) * sizeof(type)))
 
-#define z_memory_array_realloc(self, ptr, type, n)                            \
-  z_memory_realloc(self, type, ptr, (n) * sizeof(type))
-
-#define z_memory_array_free(self, ptr)                                        \
-  z_memory_free(self, ptr)
+#define z_memory_array_free(self, ptr, type, n)                               \
+  z_memory_free(self, type, ptr, (n) * sizeof(type))
 
 #if __Z_DEBUG__
   #define z_memory_set_dirty_debug(ptr, size)     z_memset(ptr, 0xff, size)

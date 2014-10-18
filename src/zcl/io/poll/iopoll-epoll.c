@@ -22,13 +22,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "iopoll_private.h"
+#include <zcl/global.h>
 #include <zcl/iopoll.h>
 #include <zcl/debug.h>
 #include <zcl/time.h>
 
 #define __EPOLL_QSIZE           (256)
-#define __EPOLL_TIMEOUT_MSEC    (2000)
 
 static int __epoll_open (z_iopoll_engine_t *self) {
   if ((self->data.fd = epoll_create(__EPOLL_QSIZE)) < 0) {
@@ -50,6 +49,7 @@ static int __epoll_add (z_iopoll_engine_t *self, z_iopoll_entity_t *entity) {
   event.events  = EPOLLHUP | EPOLLRDHUP | EPOLLERR;
   event.events |= EPOLLIN  * !!(entity->iflags8 & Z_IOPOLL_READABLE);
   event.events |= EPOLLOUT * !!(entity->iflags8 & Z_IOPOLL_WRITABLE);
+  Z_LOG_DEBUG("entity %d read %d write %d", entity->fd, event.events & EPOLLIN, event.events & EPOLLOUT);
 
   /* Epoll event data points to the entity */
   event.data.ptr = entity;
@@ -154,6 +154,7 @@ static int __epoll_notify (z_iopoll_engine_t *self,
                            z_iopoll_entity_t *entity)
 {
   uint64_t v = 1;
+  Z_ASSERT(entity->fd >= 0, "unregistered user event");
   if (Z_UNLIKELY(write(entity->fd, &v, 8) != 8)) {
     Z_LOG_ERRNO_WARN("write(eventfd)");
   }
@@ -161,16 +162,16 @@ static int __epoll_notify (z_iopoll_engine_t *self,
 }
 
 static void __epoll_poll (z_iopoll_engine_t *self) {
-  const int *is_running = z_iopoll_is_running();
+  const int *is_running = z_global_is_running();
   struct epoll_event events[__EPOLL_QSIZE];
   z_timer_t timer;
 
   while (*is_running) {
-    struct epoll_event *e;
+    const struct epoll_event *e;
     int n;
 
     z_timer_start(&timer);
-    n = epoll_wait(self->data.fd, events, __EPOLL_QSIZE, __EPOLL_TIMEOUT_MSEC);
+    n = epoll_wait(self->data.fd, events, __EPOLL_QSIZE, -1);
     if (Z_UNLIKELY(n < 0)) {
       Z_LOG_ERRNO_WARN("epoll_wait()");
       continue;
@@ -195,8 +196,8 @@ static void __epoll_poll (z_iopoll_engine_t *self) {
           break;
         default:
           eflags = (!!(e->events & EPOLLIN))  << Z_IOPOLL_READ |
-                 (!!(e->events & EPOLLOUT)) << Z_IOPOLL_WRITE |
-                 z_has(e->events, EPOLLRDHUP, EPOLLHUP, EPOLLERR) << Z_IOPOLL_HANG;
+                   (!!(e->events & EPOLLOUT)) << Z_IOPOLL_WRITE |
+                   z_has(e->events, EPOLLRDHUP, EPOLLHUP, EPOLLERR) << Z_IOPOLL_HANG;
           break;
       }
       z_iopoll_process(self, entity, eflags);
@@ -205,13 +206,13 @@ static void __epoll_poll (z_iopoll_engine_t *self) {
 }
 
 const z_iopoll_vtable_t z_iopoll_epoll = {
-  .open   = __epoll_open,
-  .close  = __epoll_close,
   .add    = __epoll_add,
   .remove = __epoll_remove,
   .timer  = __epoll_timer,
   .uevent = __epoll_uevent,
   .notify = __epoll_notify,
+  .open   = __epoll_open,
+  .close  = __epoll_close,
   .poll   = __epoll_poll,
 };
 

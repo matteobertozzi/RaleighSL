@@ -13,12 +13,13 @@
  */
 
 #include <zcl/int-coding.h>
+#include <zcl/bits.h>
 
 /* ============================================================================
  *  Bytes Required to encode an integer
  */
 uint8_t z_uint16_size (uint16_t value) {
-  return(1 + (value < (1ul << 8)));
+  return(1 + (value > (1 << 8)));
 }
 
 uint8_t z_uint32_size (uint32_t value) {
@@ -107,4 +108,4 @@ void z_uint64_decode (const uint8_t *buffer,
 
   *value = result;
 }
-#endif /* Z_CPU_IS_BIG_ENDIAN */
+#endif
