@@ -16,6 +16,9 @@
 #include <zcl/memutil.h>
 #include <zcl/debug.h>
 
+#define __DBUF_EOF          0xff
+#define __DBUF_REF          0xfe
+
 #define Z_DBUF_NODE_MIN                 (64)
 #define Z_DBUF_NODE_MAX                 (256)
 #define Z_DBUF_NODE_OVERHEAD            (sizeof(z_dbuf_node_t) - Z_DBUF_IBUFLEN)
@@ -32,65 +35,137 @@ void z_dbuffer_clear (z_memory_t *memory, z_dbuf_node_t *head) {
   while (head != NULL) {
     z_dbuf_node_t *next = head->next;
     if (head->alloc) {
-      z_memory_free(memory, z_dbuf_node_t, head, __dbuf_node_size(z_dbuf_node_size(head)));
+      z_memory_free(memory, z_dbuf_node_t, head,
+                    __dbuf_node_size(z_dbuf_node_size(head)));
     }
     head = next;
   }
 }
 
 /* ============================================================================
- *  PUBLIC Data-Buffer Writer
+ *  PRIVATE dbuf-writer methods
  */
-static z_dbuf_node_t *__dbuf_writer_add_node (z_dbuf_writer_t *self,
-                                              size_t size)
-{
+static z_dbuf_node_t *__dbuf_node_alloc (z_dbuf_writer_t *self, int size) {
   z_dbuf_node_t *node;
 
   /* Allocate new node */
-  printf("ALLOC NODE REQUIRED %zu\n", size);
   size  = (size > Z_DBUF_NODE_MAX) ? Z_DBUF_NODE_MAX : z_align_up(size, Z_DBUF_NODE_MIN);
   node = z_memory_alloc(self->memory, z_dbuf_node_t, size);
   if (Z_MALLOC_IS_NULL(node))
     return(NULL);
 
-  node->next  = NULL;
+  /* Initialize node */
+  node->next = NULL;
   node->size  = (size - Z_DBUF_NODE_OVERHEAD) >> 1;
   node->alloc = 1;
-  node->data[0] = 0xff;
-
-  /* Add to the writer tail */
-  if (Z_LIKELY(self->tail != NULL))
-    self->tail->next = node;
-  self->tail = node;
-
-  self->avail = size - Z_DBUF_NODE_OVERHEAD;
-  self->whead = Z_DBUF_NO_HEAD;
+  memset(node->data, __DBUF_EOF, size - Z_DBUF_NODE_OVERHEAD);
   return(node);
 }
 
-int z_dbuf_writer_open (z_dbuf_writer_t *self,
+static z_dbuf_node_t *__dbuf_writer_add_node (z_dbuf_writer_t *self, int size) {
+  z_dbuf_node_t *node;
+
+  node = __dbuf_node_alloc(self, size);
+  if (Z_MALLOC_IS_NULL(node))
+    return(NULL);
+
+  /* Initialize writer */
+  self->tail->next = node;
+  self->tail  = node;
+  self->pbuf  = node->data;
+  self->phead = 0;
+  self->avail = z_dbuf_node_size(node);
+  return(node);
+}
+
+/* ============================================================================
+ *  PUBLIC dbuf-writer methods
+ */
+int z_dbuf_writer_init (z_dbuf_writer_t *self,
                         z_memory_t *memory,
-                        z_dbuf_node_t *head,
-                        uint8_t whead,
+                        z_dbuf_node_t *tail,
+                        uint8_t phead,
                         uint8_t avail)
 {
   /* TODO: Add reserve, to allocate bigger chunk if we do small add */
   self->memory = memory;
   self->size = 0;
 
-  if (head == NULL) {
-    head = __dbuf_writer_add_node(self, Z_DBUF_NODE_MIN);
-    if (Z_UNLIKELY(head == NULL))
-      return(-1);
-    self->head = head;
-    //printf("%p %p %u %u\n", self->head, self->tail, self->avail, self->whead);
+  if (tail == NULL) {
+    tail = __dbuf_node_alloc(self, Z_DBUF_NODE_MIN);
+    if (Z_MALLOC_IS_NULL(tail))
+      return(1);
+
+    self->avail = z_dbuf_node_size(tail);
+    self->phead = __DBUF_EOF;
+    self->pbuf = tail->data;
   } else {
-    self->tail = head;
-    self->head = head;
     self->avail = avail;
-    self->whead = whead;
+    self->phead = phead;
+    self->pbuf = __dbuf_node_tail(tail, avail);
   }
+
+  self->tail = tail;
+  self->head = tail;
   return(0);
+}
+
+uint8_t *z_dbuf_writer_next (z_dbuf_writer_t *self, uint8_t *buffer, uint8_t size) {
+  return((self->avail < size) ? buffer : (self->pbuf + (self->phead == __DBUF_EOF)));
+}
+
+void z_dbuf_writer_move (z_dbuf_writer_t *self, uint8_t size) {
+  z_dbuf_node_t *node = self->tail;
+  uint8_t *pbuf = self->pbuf;
+  if (self->phead != __DBUF_EOF) {
+    self->avail -= size;
+    node->data[self->phead] += size;
+  } else {
+    self->phead = (pbuf - node->data) & 0xff;
+    self->avail -= size + 1;
+    *pbuf++ = size;
+  }
+  self->pbuf += size;
+  self->size += size;
+}
+
+uint8_t *z_dbuf_writer_commit (z_dbuf_writer_t *self, uint8_t *buffer, uint8_t size) {
+  z_dbuf_node_t *node = self->tail;
+  uint8_t *pbuf;
+
+  if (size > self->avail) {
+    node = __dbuf_writer_add_node(self, size);
+    if (Z_UNLIKELY(node == NULL))
+      return(NULL);
+
+    pbuf = node->data;
+    *pbuf++ = size;
+    memcpy(pbuf, buffer, size);
+    self->size += size;
+    self->avail -= (size + 1);
+    self->pbuf = node->data + 1 + size;
+    self->phead = 0;
+    return(pbuf);
+  }
+
+  pbuf = self->pbuf;
+  if (self->phead != __DBUF_EOF) {
+    node->data[self->phead] += size;
+    self->pbuf  += size;
+    self->avail -= size;
+  } else {
+    self->phead = (pbuf - node->data) & 0xff;
+    *pbuf++ = size;
+    self->pbuf  += (size + 1);
+    self->avail -= (size + 1);
+  }
+
+  if (pbuf != buffer) {
+    memcpy(pbuf, buffer, size);
+  }
+
+  self->size += size;
+  return(pbuf);
 }
 
 int z_dbuf_writer_add (z_dbuf_writer_t *self, const void *data, size_t size) {
@@ -101,40 +176,32 @@ int z_dbuf_writer_add (z_dbuf_writer_t *self, const void *data, size_t size) {
     uint8_t to_add;
     uint8_t *pbuf;
 
-    printf("AVAIL %u %u\n", self->avail, self->whead);
-    if (self->avail <= (self->whead == Z_DBUF_NO_HEAD)) {
+    if (self->avail <= (self->phead == Z_DBUF_NO_HEAD)) {
       node = __dbuf_writer_add_node(self, size);
       if (Z_UNLIKELY(node == NULL))
         return(-1);
     }
 
     pbuf = __dbuf_node_tail(node, self->avail);
-    printf("AVAIL %u %u\n", self->avail, self->whead);
-    printf(" - SIZE %u\n",  z_dbuf_node_size(node));
-    printf(" - END %p TAIL %p %p\n", __dbuf_node_pend(node), pbuf, node->data);
-    if (self->whead != Z_DBUF_NO_HEAD) {
+    if (self->phead != Z_DBUF_NO_HEAD) {
       /* Update the header - inline size */
       to_add = z_min(size, self->avail);
-      node->data[self->whead] += to_add;
+      node->data[self->phead] += to_add;
     } else {
       /* Setup the header - inline size */
-      self->whead = (pbuf - node->data) & 0xff;
-      printf("WHEAD %u\n", self->whead);
-      --(self->avail);
+      self->phead = (pbuf - node->data) & 0xff;
+      self->avail--;
+      self->pbuf++;
       to_add = z_min(size, self->avail);
       *pbuf++ = to_add;
     }
 
     z_memcpy(pbuf, pdata, to_add);
+    self->pbuf  += to_add;
     self->avail -= to_add;
-    self->size += to_add;
+    self->size  += to_add;
     pdata += to_add;
     size -= to_add;
-  }
-
-  /* Add EOF Marker */
-  if (self->avail > 0) {
-    *__dbuf_node_tail(node, self->avail) = 0xff;
   }
   return(0);
 }
@@ -150,160 +217,131 @@ int z_dbuf_writer_add_ref (z_dbuf_writer_t *self, const z_memref_t *ref) {
   }
 
   pbuf = __dbuf_node_tail(node, self->avail);
-  *pbuf++ = 0;
+  *pbuf++ = __DBUF_REF;
   self->avail -= 1 + sizeof(z_memref_t);
   self->size  += ref->slice.size;
   z_memref_acquire(Z_MEMREF(pbuf), ref);
-
-  /* Add EOF Marker */
-  if (Z_LIKELY(self->avail > 0)) {
-    *(pbuf + sizeof(z_memref_t)) = 0xff;
-  }
   return(0);
+}
+
+/* ============================================================================
+ *  PRIVATE Data-Buffer Reader
+ */
+static z_dbuf_node_t *__dbuf_reader_remove_head (z_dbuf_reader_t *self) {
+  z_dbuf_node_t *node = self->head;
+
+  self->head = node->next;
+  self->phead = 0;
+  self->poffset = 0;
+
+  if (node->alloc) {
+    z_memory_free(self->memory, z_dbuf_node_t, node,
+                  __dbuf_node_size(z_dbuf_node_size(node)));
+  }
+  return(self->head);
 }
 
 /* ============================================================================
  *  PUBLIC Data-Buffer Reader
  */
-static uint8_t *__dbuf_node_fetch (uint8_t *pbuf, struct iovec *iov) {
-  uint8_t isize = *pbuf++;
-
-  Z_ASSERT(isize != 0xff, "unexpected EOF");
-  if (isize > 0) {
-    iov->iov_base = pbuf;
-    iov->iov_len  = isize;
-    pbuf += isize;
-  } else {
-    const z_memref_t *ref = Z_CONST_MEMREF(pbuf);
-    iov->iov_base = ref->slice.data;
-    iov->iov_len  = ref->slice.size;
-    pbuf += sizeof(z_memref_t);
-  }
-  return(pbuf);
-}
-
-static z_dbuf_node_t *__dbuf_reader_remove_head (z_dbuf_reader_t *self) {
-  z_dbuf_node_t *node = self->head;
-
-  self->head = node->next;
-  self->rhead = Z_DBUF_NO_HEAD;
-  self->hoffset = 0;
-
-  if (node->alloc) {
-    z_memory_free(self->memory, z_dbuf_node_t, node, __dbuf_node_size(z_dbuf_node_size(node)));
-  }
-  return(self->head);
-}
-
-void z_dbuf_reader_open (z_dbuf_reader_t *self,
+void z_dbuf_reader_init (z_dbuf_reader_t *self,
                          z_memory_t *memory,
                          z_dbuf_node_t *head,
-                         uint8_t rhead,
-                         uint32_t hoffset)
+                         uint8_t phead,
+                         int poffset)
 {
   self->head = head;
-  self->rhead = rhead;
-  self->hoffset = hoffset;
+  self->phead = phead;
+  self->poffset = poffset;
   self->memory = memory;
 }
 
-int z_dbuf_reader_get_iovs (z_dbuf_reader_t *self, struct iovec *iovs, int niovs) {
-  z_dbuf_node_t *node = self->head;
-  uint8_t *pbuf, *ebuf;
-  int count = 0;
+int z_dbuf_reader_iovs (z_dbuf_reader_t *self, struct iovec *iovs, int iovcnt) {
+  struct iovec *iov = iovs;
+  z_dbuf_node_t *node;
+  uint8_t *ptail;
+  uint8_t *pbuf;
+  int poffset;
 
-  Z_ASSERT(node != NULL, "expected head to be not NULL");
+  node = self->head;
+  if (node == NULL)
+    return(0);
 
-  pbuf = node->data;
-  ebuf = __dbuf_node_pend(node);
-  if (self->rhead != Z_DBUF_NO_HEAD) {
-    struct iovec *iov = &(iovs[count++]);
-    pbuf = __dbuf_node_fetch(pbuf + self->rhead, iov);
-    iov->iov_base  = ((uint8_t *)iov->iov_base) + self->hoffset;
-    iov->iov_len  -= self->hoffset;
-  }
+  pbuf  = node->data + self->phead;
+  ptail = __dbuf_node_pend(node);
+  poffset = self->poffset;
+  while (iovcnt > 0) {
+    if (pbuf >= ptail || *pbuf == __DBUF_EOF) {
+      node = node->next;
+      if (node == NULL)
+        break;
 
-  while (1) {
-    while (count < niovs && pbuf < ebuf && *pbuf != 0xff) {
-      pbuf = __dbuf_node_fetch(pbuf, &(iovs[count++]));
+      pbuf = node->data;
+      ptail = __dbuf_node_pend(node);
     }
 
-    node = node->next;
-    if (count >= niovs || node == NULL)
-      break;
+    if (*pbuf == __DBUF_REF) {
+      const z_memref_t *ref = Z_CONST_MEMREF(pbuf + 1);
+      iov->iov_base = ref->slice.data;
+      iov->iov_len  = ref->slice.size;
+      pbuf += sizeof(z_memref_t) + 1;
+    } else {
+      iov->iov_base = pbuf + 1 + poffset;
+      iov->iov_len  = *pbuf - poffset;
+      pbuf += *pbuf + 1;
+    }
 
-    pbuf = node->data;
-    ebuf = __dbuf_node_pend(node);
+    poffset = 0;
+    iov++;
+    iovcnt--;
   }
-  return(count);
+  return(iov - iovs);
 }
 
 size_t z_dbuf_reader_remove (z_dbuf_reader_t *self, size_t rm_size) {
-  z_dbuf_node_t *node = self->head;
-  uint8_t *pbuf, *ebuf;
-  struct iovec iov;
+  z_dbuf_node_t *node;
+  size_t to_remove;
+  uint8_t *ptail;
 
-  if (Z_UNLIKELY(rm_size == 0))
+  node = self->head;
+  if (node == NULL)
     return(0);
 
-  pbuf = node->data;
-  ebuf = __dbuf_node_pend(node);
-  if (self->rhead != Z_DBUF_NO_HEAD) {
-    z_memref_t *ref;
-    pbuf += self->rhead;
-    ref = (*pbuf == 0) ? Z_MEMREF(pbuf + 1) : NULL;
-    pbuf = __dbuf_node_fetch(pbuf, &iov);
-    iov.iov_base  = ((uint8_t *)iov.iov_base) + self->hoffset;
-    iov.iov_len  -= self->hoffset;
-    if (iov.iov_len >= rm_size) {
-      self->hoffset += rm_size;
-      if (iov.iov_len == rm_size) {
-        if (pbuf < ebuf && *pbuf != 0xff) {
-          /* More data available in this block */
-          self->rhead = (pbuf - node->data) & 0xff;
-          self->hoffset = 0;
-        } else {
-          /* Nothing more in this block */
-          z_memref_release(ref);
-          __dbuf_reader_remove_head(self);
-        }
-      }
-      return(0);
-    }
-    rm_size -= iov.iov_len;
-    z_memref_release(ref);
-  }
+  ptail = __dbuf_node_pend(node);
+  to_remove = rm_size;
+  while (to_remove > 0) {
+    uint8_t *pbuf  = node->data + self->phead;
+    int next_offset;
+    int plen;
 
-  while (1) {
-    while (rm_size > 0 && pbuf < ebuf && *pbuf != 0xff) {
-      z_memref_t *ref = (*pbuf == 0) ? Z_MEMREF(pbuf + 1) : NULL;
-      self->rhead = (pbuf - node->data) & 0xff;
-      pbuf = __dbuf_node_fetch(pbuf, &iov);
-      if (iov.iov_len >= rm_size) {
-        self->hoffset += rm_size;
-        if (iov.iov_len == rm_size) {
-          if (pbuf < ebuf && *pbuf != 0xff) {
-            /* More data available in this block */
-            self->rhead = (pbuf - node->data) & 0xff;
-            self->hoffset = 0;
-          } else {
-            /* Nothing more in this block */
-            z_memref_release(ref);
-            __dbuf_reader_remove_head(self);
-          }
-        }
-        return(0);
-      }
-      rm_size -= iov.iov_len;
-      z_memref_release(ref);
+    if (pbuf >= ptail || *pbuf == __DBUF_EOF) {
+      node = __dbuf_reader_remove_head(self);
+      if (node == NULL)
+        break;
+
+      pbuf = node->data;
+      ptail = __dbuf_node_pend(node);
+      self->phead = 0;
     }
 
-    node = __dbuf_reader_remove_head(self);
-    if (node == NULL || !rm_size)
+    if (*pbuf == __DBUF_REF) {
+      const z_memref_t *ref = Z_CONST_MEMREF(pbuf + 1);
+      plen = ref->slice.size - self->poffset;
+      next_offset = sizeof(z_memref_t) + 1;
+    } else {
+      plen = *pbuf - self->poffset;
+      next_offset = *pbuf + 1;
+    }
+
+    if (to_remove >= plen) {
+      to_remove -= plen;
+      self->phead += next_offset;
+      self->poffset = 0;
+    } else /* (to_remove < plen) */ {
+      self->poffset += to_remove;
+      to_remove = 0;
       break;
-
-    pbuf = node->data;
-    ebuf = __dbuf_node_pend(node);
+    }
   }
-  return(rm_size);
+  return(rm_size - to_remove);
 }

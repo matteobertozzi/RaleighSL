@@ -29,6 +29,7 @@ Z_TYPEDEF_STRUCT(z_iopoll_entity)
 Z_TYPEDEF_STRUCT(z_iopoll_engine)
 Z_TYPEDEF_STRUCT(z_iopoll_timer)
 Z_TYPEDEF_STRUCT(z_iopoll_stats)
+Z_TYPEDEF_STRUCT(z_iopoll_load)
 
 #define Z_IOPOLL_ENTITY_FD(x)       (Z_IOPOLL_ENTITY(x)->fd)
 #define Z_IOPOLL_ENTITY(x)          Z_CAST(z_iopoll_entity_t, x)
@@ -90,32 +91,36 @@ struct z_iopoll_entity {
   uint32_t   __pad;
 };
 
+struct z_iopoll_load {
+  uint8_t  tail;
+  uint8_t  max_events;
+  uint8_t  events[6];
+  uint32_t idle[6];
+  uint32_t active[6];
+};
+
 struct z_iopoll_stats {
-  z_histogram_t iowait;
-  uint64_t      iowait_events[24];
+  z_iopoll_load_t ioload;
 
-  z_histogram_t ioread;
-  uint64_t      ioread_events[24];
+  z_histogram_t   iowait;
+  uint64_t        iowait_events[20];
 
-  z_histogram_t iowrite;
-  uint64_t      iowrite_events[24];
+  z_histogram_t   ioread;
+  uint64_t        ioread_events[20];
 
-  z_histogram_t event;
-  uint64_t      event_events[24];
+  z_histogram_t   iowrite;
+  uint64_t        iowrite_events[20];
 
-  z_histogram_t timeout;
-  uint64_t      timeout_events[24];
+  z_histogram_t   event;
+  uint64_t        event_events[20];
 
-  z_histogram_t req_latency;
-  uint64_t      req_latency_events[24];
-
-  z_histogram_t resp_latency;
-  uint64_t      resp_latency_events[24];
+  z_histogram_t   timeout;
+  uint64_t        timeout_events[20];
 };
 
 struct z_iopoll_engine {
-  z_iopoll_stats_t stats;
   z_opaque_t       data;
+  z_iopoll_stats_t stats;
 };
 
 #ifdef Z_IOPOLL_HAS_EPOLL
@@ -133,6 +138,10 @@ struct z_iopoll_engine {
 #else
   #error "IOPoll engine missing"
 #endif
+
+#ifndef Z_IOPOLL_MAX_EVENTS
+  #define Z_IOPOLL_MAX_EVENTS           (128)
+#endif /* !Z_IOPOLL_MAX_EVENTS */
 
 int  z_iopoll_open  (unsigned int ncores);
 void z_iopoll_close (void);
@@ -172,12 +181,17 @@ void z_iopoll_uevent_open   (z_iopoll_entity_t *entity,
                              const z_iopoll_entity_vtable_t *vtable,
                              int oid);
 
-#define z_iopoll_stats_add_events(engine, nevents, wait_time)               \
-  do {                                                                      \
-    z_histogram_t *iowait = &((engine)->stats.iowait);                      \
-    z_histogram_add(iowait, wait_time);                                     \
-    iowait->max_events = z_max(iowait->max_events, nevents);                \
-  } while (0)
+float z_iopoll_engine_load      (z_iopoll_engine_t *engine);
+void  z_iopoll_stats_add_events (z_iopoll_engine_t *engine,
+                                 int nevents,
+                                 uint64_t idle_usec);
+
+#define z_iopoll_stats_add_active(engine, usec)                                \
+  (self)->stats.ioload.active[(self)->stats.ioload.tail] = (usec) & 0xffffffff
+
+#define z_iopoll_stats_inc_active(engine, usec)                                \
+  (self)->stats.ioload.active[(self)->stats.ioload.tail] += (usec) & 0xffffffff
+
 
 __Z_END_DECLS__
 

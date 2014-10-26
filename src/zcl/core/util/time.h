@@ -45,6 +45,7 @@ uint64_t z_time_nanos   (void);
 
 void     z_time_usleep  (uint64_t usec);
 
+#define z_timer_init(t)         z_timer_stop(t)
 #define z_timer_start(t)        (t)->start = z_time_micros()
 #define z_timer_stop(t)         (t)->end = z_time_micros()
 #define z_timer_reset(t)        (t)->start = (t)->end

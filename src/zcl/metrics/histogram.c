@@ -26,15 +26,13 @@ void z_histogram_init (z_histogram_t *self,
 {
   self->bounds = bounds;
   self->events = events;
-  self->nbuckets = nbounds;
-  z_histogram_clear(self);
+  z_histogram_clear(self, nbounds);
 }
 
-void z_histogram_clear (z_histogram_t *self) {
+void z_histogram_clear (z_histogram_t *self, uint32_t nbounds) {
   self->sum = 0;
   self->max = 0;
-  self->max_events = 0;
-  z_memzero(self->events, self->nbuckets * sizeof(uint64_t));
+  z_memzero(self->events, nbounds * sizeof(uint64_t));
 }
 
 void z_histogram_add (z_histogram_t *self, uint64_t value) {
@@ -73,8 +71,10 @@ void z_histogram_add_atomic (z_histogram_t *self, uint64_t value) {
 uint64_t z_histogram_nevents (const z_histogram_t *self) {
   uint64_t nevents = 0;
   int i;
-  for (i = 0; i < self->nbuckets; ++i)
+  for (i = 0; self->max > self->bounds[i]; ++i) {
     nevents += self->events[i];
+  }
+  nevents += self->events[i];
   return(nevents);
 }
 
@@ -85,11 +85,10 @@ double z_histogram_average (const z_histogram_t *self) {
 
 double z_histogram_percentile (const z_histogram_t *self, double p) {
   uint64_t nevents = z_histogram_nevents(self);
-  unsigned int nbuckets = self->nbuckets - 1;
   double threshold = nevents * (p * 0.01);
   double sum = 0;
   int i;
-  for (i = 0; i < nbuckets; ++i) {
+  for (i = 0; self->max > self->bounds[i]; ++i) {
     sum += self->events[i];
     if (sum >= threshold) {
       // Scale linearly within this bucket
@@ -115,9 +114,10 @@ void z_histogram_dump (const z_histogram_t *self, FILE *stream, z_human_dbl_t ke
   int i;
 
   const double mult = 100.0 / z_histogram_nevents(self);
-  for (i = 0; i < self->nbuckets; ++i) {
+  for (i = 0; self->max > self->bounds[i]; ++i) {
     emax = z_max(emax, self->events[i]);
   }
+  emax = z_max(emax, self->events[i]);
 
   fprintf(stream, "Max %s ", key(buffer, sizeof(buffer), self->max));
   fprintf(stream, "Avg %s ", key(buffer, sizeof(buffer), z_histogram_average(self)));
@@ -130,7 +130,7 @@ void z_histogram_dump (const z_histogram_t *self, FILE *stream, z_human_dbl_t ke
   fprintf(stream, "P99.99: %s ", key(buffer, sizeof(buffer), z_histogram_percentile(self, 99.99)));
   fprintf(stream, "\n--------------------------------------------------------------------------\n");
 
-  for (i = 0; i < self->nbuckets - 1; ++i) {
+  for (i = 0; self->max > self->bounds[i]; ++i) {
     if (self->events[i] == 0) continue;
 
     fprintf(stream, "%10s (%5.2f%%) |", key(buffer, sizeof(buffer), self->bounds[i]),

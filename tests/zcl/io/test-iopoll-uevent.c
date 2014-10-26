@@ -22,7 +22,6 @@
 
 #define __TEST_PERF    10000000
 
-static int __is_running = 1;
 static uint64_t __nevents = 0;
 static uint64_t __stime = 0;
 
@@ -41,7 +40,7 @@ static int __user_event (z_iopoll_entity_t *entity) {
     float sec = (z_time_micros() - __stime) / 1000000.0f;
     z_human_dops(buffer, sizeof(buffer), __nevents / sec);
     Z_DEBUG("NEVENTS %.3fsec %s/sec", sec, buffer);
-    __is_running = 0;
+    z_global_context_stop();
   }
 
 #else
@@ -51,7 +50,7 @@ static int __user_event (z_iopoll_entity_t *entity) {
     z_iopoll_notify(entity);
   } else {
     z_iopoll_uevent(entity, 0);
-    __is_running = 0;
+    z_global_context_stop();
   }
 #endif
   return(0);
@@ -83,7 +82,7 @@ int main (int argc, char **argv) {
   z_iopoll_notify(&entity);
 
   /* Start spinning... */
-  z_global_context_poll(0, &__is_running);
+  z_global_context_poll(0);
 
   /* ...and we're done */
   z_global_context_close();

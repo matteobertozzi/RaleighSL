@@ -20,7 +20,22 @@
 #include <zcl/fd.h>
 
 #include "server.h"
+#include "rpc/generated/r5l.h"
 
+#if 0
+{
+  .transaction_create = {
+    .alloc  = ...
+    .parse  = ...
+    .exec   = ...
+    .states = &__txn_states,
+  }
+}
+#endif
+
+/* ============================================================================
+ *  IPC Protocol
+ */
 static int __client_connected (z_ipc_client_t *client) {
   struct r5l_client *r5l = (struct r5l_client *)client;
   Z_LOG_INFO("r5l client connected %p", r5l);
@@ -53,6 +68,7 @@ static int __client_msg_parse (z_ipc_msg_client_t *client,
   return(0);
 }
 
+#include <zcl/debug.h>
 static int __client_msg_exec (z_ipc_msg_client_t *client,
                               z_ipc_msg_head_t *msg_head)
 {
@@ -63,8 +79,7 @@ static int __client_msg_exec (z_ipc_msg_client_t *client,
 
   z_dbuf_writer_t writer;
   z_ipc_msg_t *msg;
-  msg = z_ipc_msg_alloc(z_global_memory(), msg_head);
-  z_ipc_msg_writer_open(msg, &writer, z_global_memory());
+  msg = z_ipc_msg_writer_open(NULL, msg_head, &writer, z_global_memory());
   z_ipc_msg_writer_close(msg, &writer, 0, 0);
   z_ipc_msg_client_push(client, msg);
 

@@ -111,9 +111,9 @@ static int __ipc_msg_flush (z_iopoll_entity_t *entity, z_stailq_t *msgq) {
   iovcnt = 0;
   z_stailq_for_each_entry(msgq, msg, z_ipc_msg_t, node, {
     z_dbuf_reader_t reader;
-    z_dbuf_reader_open(&reader, NULL, msg->hskip ? msg->dnode.next : &(msg->dnode),
+    z_dbuf_reader_init(&reader, NULL, msg->hskip ? msg->dnode.next : &(msg->dnode),
                        msg->rhead, msg->hoffset);
-    iovcnt += z_dbuf_reader_get_iovs(&reader, iovs + iovcnt, __MSGQ_FLUSH_IOVS - iovcnt);
+    iovcnt += z_dbuf_reader_iovs(&reader, iovs + iovcnt, __MSGQ_FLUSH_IOVS - iovcnt);
     if (iovcnt == __MSGQ_FLUSH_IOVS)
       break;
   });
@@ -133,7 +133,7 @@ static int __ipc_msg_flush (z_iopoll_entity_t *entity, z_stailq_t *msgq) {
   z_stailq_for_each_safe_entry(msgq, msg, z_ipc_msg_t, node, {
     z_dbuf_reader_t reader;
 
-    z_dbuf_reader_open(&reader, memory, msg->hskip ? msg->dnode.next : &(msg->dnode),
+    z_dbuf_reader_init(&reader, memory, msg->hskip ? msg->dnode.next : &(msg->dnode),
                        msg->rhead, msg->hoffset);
 
     wr = z_dbuf_reader_remove(&reader, wr);
@@ -149,8 +149,8 @@ static int __ipc_msg_flush (z_iopoll_entity_t *entity, z_stailq_t *msgq) {
         msg->hskip = 1;
         msg->dnode.next = reader.head;
       }
-      msg->hoffset = reader.hoffset;
-      msg->rhead = reader.rhead;
+      msg->hoffset = reader.poffset;
+      msg->rhead = reader.phead;
       return(0);
     }
 
@@ -406,6 +406,7 @@ int z_ipc_msg_client_read (z_ipc_msg_client_t *self,
  */
 void z_ipc_msg_client_push (z_ipc_msg_client_t *self, z_ipc_msg_t *msg) {
   z_stailq_add(&(self->wmsgq), &(msg->node));
+  z_ipc_client_set_data_available(self, 1);
 }
 
 
@@ -435,36 +436,35 @@ int z_ipc_msg_client_flush (z_ipc_msg_client_t *self,
 /* ============================================================================
  *  PUBLIC IPC-Message
  */
-z_ipc_msg_t *z_ipc_msg_alloc (z_memory_t *memory, const z_ipc_msg_head_t *head) {
+z_ipc_msg_t *z_ipc_msg_writer_open (z_ipc_msg_t *self,
+                                    const z_ipc_msg_head_t *head,
+                                    z_dbuf_writer_t *writer,
+                                    z_memory_t *memory)
+{
   z_dbuf_node_t *node;
-  z_ipc_msg_t *msg;
   int hsize;
 
-  msg = z_memory_struct_alloc(memory, z_ipc_msg_t);
-  if (Z_MALLOC_IS_NULL(msg))
-    return(NULL);
+  if (self == NULL) {
+    self = z_memory_struct_alloc(memory, z_ipc_msg_t);
+    if (Z_MALLOC_IS_NULL(self))
+      return(NULL);
+  }
 
-  msg->hoffset = 0;
-  msg->rhead = Z_DBUF_NO_HEAD;
-  msg->hskip = 0;
+  self->hoffset = 0;
+  self->rhead = Z_DBUF_NO_HEAD;
+  self->hskip = 0;
 
-  node = &(msg->dnode);
+  node = &(self->dnode);
   node->next = NULL;
   z_dbuf_node_set_size(node, Z_IPC_MSG_IBUF);
   node->alloc = 0;
+  memset(node->data, Z_DBUF_EOF, Z_IPC_MSG_IBUF);
 
   hsize = __ipc_msg_prepare_head(node->data + 1, head, 2, 4);
   node->data[0] = hsize & 0xff;
-  node->data[hsize + 1] = 0xff;
-  return(msg);
-}
 
-void z_ipc_msg_writer_open (z_ipc_msg_t *self,
-                            z_dbuf_writer_t *writer,
-                            z_memory_t *memory)
-{
-  z_dbuf_node_t *node = &(self->dnode);
-  z_dbuf_writer_open(writer, memory, node, 0, Z_IPC_MSG_IBUF - 1 - node->data[0]);
+  z_dbuf_writer_init(writer, memory, node, Z_DBUF_NO_HEAD, Z_IPC_MSG_IBUF - hsize);
+  return(self);
 }
 
 void z_ipc_msg_writer_close (z_ipc_msg_t *self,
@@ -494,16 +494,18 @@ void z_ipc_msg_writer_close (z_ipc_msg_t *self,
     uint8_t *phead;
 
     /* Move Header */
+    phead = self->dnode.data + 0;
     phead = self->dnode.data + diff;
-    memmove(phead, self->dnode.data, 1 + 2 + ih_msg_type + ih_msg_id);
+    memmove(phead, self->dnode.data, 3 + ih_msg_type + ih_msg_id);
 
     /* Fix Heder */
     phead[0] -= diff;
-    phead[2]  = (phead[2] & 0xE0) | (body_length << 3) | blob_length;
+    phead[2]  = (phead[2] & 0xE0) | (h_body_len << 3) | h_blob_len;
 
     phead += 3 + ih_msg_type + ih_msg_id;
     z_uint16_encode(phead,              h_body_len, body_length);
     z_uint32_encode(phead + h_body_len, h_blob_len, blob_length);
+
     self->rhead = diff;
   } else {
     uint8_t *phead = self->dnode.data + 2 + ih_msg_type + ih_msg_id;
@@ -517,5 +519,5 @@ void z_ipc_msg_reader_open (z_ipc_msg_t *self,
                             z_memory_t *memory)
 {
   z_dbuf_node_t *node = &(self->dnode);
-  z_dbuf_reader_open(reader, memory, node, self->rhead, 0);
+  z_dbuf_reader_init(reader, memory, node, self->rhead, 0);
 }

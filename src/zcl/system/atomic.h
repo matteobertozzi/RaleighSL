@@ -20,6 +20,8 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 
+//#if __STDC_NO_ATOMICS__ TODO
+
 #if defined(Z_SYS_HAS_ATOMIC_GCC)
   #define z_atomic_set(p, v) ({                               \
     __asm__ volatile("" ::: "memory");                        \

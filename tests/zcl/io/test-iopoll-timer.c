@@ -19,8 +19,6 @@
 #include <zcl/time.h>
 #include <stdio.h>
 
-static int __is_running = 1;
-
 static int __timer_timeout (z_iopoll_entity_t *entity) {
   Z_DEBUG("TEST ENTITY %d TIMEOUT %u", entity->fd, entity->uflags8);
   if (entity->uflags8 < 100) {
@@ -29,7 +27,9 @@ static int __timer_timeout (z_iopoll_entity_t *entity) {
     z_iopoll_timer(entity, entity->uflags8 * 100);
   } else {
     entity->uflags8++;
-    __is_running = (entity->uflags8 < 105);
+    if (entity->uflags8 >= 105) {
+      z_global_context_stop();
+    }
   }
   return(0);
 }
@@ -61,7 +61,7 @@ int main (int argc, char **argv) {
   z_iopoll_timer(entity + 1, 10000);
 
   /* Start spinning... */
-  z_global_context_poll(0, &__is_running);
+  z_global_context_poll(0);
 
   /* ...and we're done */
   z_global_context_close();

@@ -27,31 +27,34 @@ Z_TYPEDEF_STRUCT(z_dbuf_reader)
 Z_TYPEDEF_STRUCT(z_dbuf_node)
 
 #define Z_DBUF_NO_HEAD          (0xff)
-#define Z_DBUF_IBUFLEN          (7)
+#define Z_DBUF_EOF              (0xff)
+#define Z_DBUF_REF              (0xfe)
+#define Z_DBUF_IBUFLEN          (1)
 
 struct z_dbuf_node {
   z_dbuf_node_t *next;
   uint8_t size  : 7;
   uint8_t alloc : 1;
-  uint8_t data[Z_DBUF_IBUFLEN];
-};
+  uint8_t data[1];
+} __attribute__((packed));
 
 struct z_dbuf_writer {
-  z_dbuf_node_t *tail;
   z_dbuf_node_t *head;
-  uint8_t  avail;
-  uint8_t  whead;
-  uint16_t __pad;
-  uint32_t size;
+  z_dbuf_node_t *tail;
+
+  uint8_t *   pbuf;
+  uint8_t     phead;
+  uint8_t     avail;
+  uint16_t    _pad;
+  uint32_t    size;
   z_memory_t *memory;
 };
 
 struct z_dbuf_reader {
   z_dbuf_node_t *head;
-  uint8_t  rhead;
-  uint8_t  _pad[3];
-  uint32_t hoffset;
-  z_memory_t *memory;
+  uint32_t       phead;
+  uint32_t       poffset;
+  z_memory_t *   memory;
 };
 
 #define z_dbuf_node_size(node)      (((node)->size << 1) + 1)
@@ -61,29 +64,41 @@ struct z_dbuf_reader {
     (node)->size = (z_align_down(size_, 2) >> 1);           \
   } while (0)
 
-void    z_dbuffer_clear         (z_memory_t *memory,
+void      z_dbuffer_clear       (z_memory_t *memory,
                                  z_dbuf_node_t *head);
 
-int     z_dbuf_writer_open      (z_dbuf_writer_t *self,
+
+int       z_dbuf_writer_init    (z_dbuf_writer_t *self,
                                  z_memory_t *memory,
-                                 z_dbuf_node_t *head,
-                                 uint8_t whead,
+                                 z_dbuf_node_t *tail,
+                                 uint8_t phead,
                                  uint8_t avail);
-int     z_dbuf_writer_add       (z_dbuf_writer_t *self,
+
+uint8_t * z_dbuf_writer_next    (z_dbuf_writer_t *self,
+                                 uint8_t *buffer,
+                                 uint8_t size);
+void      z_dbuf_writer_move    (z_dbuf_writer_t *self,
+                                 uint8_t size);
+uint8_t * z_dbuf_writer_commit  (z_dbuf_writer_t *self,
+                                 uint8_t *buffer,
+                                 uint8_t size);
+
+int       z_dbuf_writer_add     (z_dbuf_writer_t *self,
                                  const void *data,
                                  size_t size);
-int     z_dbuf_writer_add_ref   (z_dbuf_writer_t *self,
+int       z_dbuf_writer_add_ref (z_dbuf_writer_t *self,
                                  const z_memref_t *ref);
 
-void    z_dbuf_reader_open      (z_dbuf_reader_t *self,
+
+void      z_dbuf_reader_init    (z_dbuf_reader_t *self,
                                  z_memory_t *memory,
                                  z_dbuf_node_t *head,
-                                 uint8_t rhead,
-                                 uint32_t hoffset);
-int     z_dbuf_reader_get_iovs  (z_dbuf_reader_t *self,
+                                 uint8_t phead,
+                                 int poffset);
+int       z_dbuf_reader_iovs    (z_dbuf_reader_t *self,
                                  struct iovec *iovs,
-                                 int niovs);
-size_t  z_dbuf_reader_remove    (z_dbuf_reader_t *self,
+                                 int iovcnt);
+size_t    z_dbuf_reader_remove  (z_dbuf_reader_t *self,
                                  size_t rm_size);
 
 __Z_END_DECLS__

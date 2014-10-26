@@ -1,5 +1,8 @@
 #include <zcl/histogram.h>
 #include <zcl/allocator.h>
+#include <zcl/task-rq.h>
+#include <zcl/vtask.h>
+#include <zcl/task.h>
 #include <zcl/global.h>
 #include <zcl/array.h>
 #include <zcl/humans.h>
@@ -13,13 +16,15 @@
 #include <zcl/dbuffer.h>
 #include <zcl/spsc.h>
 #include <zcl/ipc.h>
+#include <zcl/txn.h>
 #include <stdio.h>
 
-#define __print_size(type)                                            \
-  do {                                                                \
-    char buffer[32];                                                  \
-    z_human_size(buffer, 32, sizeof(type));                           \
-    printf("%25s %10s (%d)\n", #type, buffer, (int)sizeof(type));     \
+#define __print_size(type)                                              \
+  do {                                                                  \
+    char buffer[32];                                                    \
+    z_human_size(buffer, 32, sizeof(type));                             \
+    printf("%25s %10s (%5d) %6.2f 64s\n",                               \
+           #type, buffer, (int)sizeof(type), (float)sizeof(type)/64);   \
   } while (0)
 
 int main (int argc, char **argv) {
@@ -34,6 +39,16 @@ int main (int argc, char **argv) {
   __print_size(z_dbuf_node_t);
   __print_size(z_dbuf_writer_t);
   __print_size(z_dbuf_reader_t);
+
+  printf("dispatch\n");
+  __print_size(z_task_t);
+  __print_size(z_vtask_t);
+  __print_size(z_vtask_tree_t);
+  __print_size(z_vtask_queue_t);
+  __print_size(z_task_rq_t);
+  __print_size(z_task_rq_rr_t);
+  __print_size(z_task_rq_fifo_t);
+  __print_size(z_task_rq_fair_t);
 
   printf("io/poll\n");
   __print_size(z_iopoll_entity_t);
@@ -57,6 +72,10 @@ int main (int argc, char **argv) {
 
   printf("metrics\n");
   __print_size(z_histogram_t);
+
+  printf("txn\n");
+  __print_size(z_txn_t);
+  __print_size(z_txn_mgr_t);
 
   printf("util/array\n");
   __print_size(z_array_t);

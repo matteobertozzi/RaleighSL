@@ -14,6 +14,19 @@
 
 #include <zcl/bits.h>
 
+int z_bit_set_count8 (uint8_t v) {
+  int count = 0;
+  count += !!(v & 1);
+  count += !!(v & 2);
+  count += !!(v & 4);
+  count += !!(v & 8);
+  count += !!(v & 16);
+  count += !!(v & 32);
+  count += !!(v & 64);
+  count += !!(v & 128);
+  return count;
+}
+
 int z_bit_set_count32 (uint32_t v) {
   v = v - ((v >> 1) & 0x55555555);
   v = (v & 0x33333333) + ((v >> 2) & 0x33333333);

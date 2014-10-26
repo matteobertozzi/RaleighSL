@@ -21,7 +21,8 @@ __Z_BEGIN_DECLS__
 #include <zcl/memutil.h>
 #include <zcl/macros.h>
 
-uint8_t z_uint16_size (uint16_t value);
+#define z_uint16_size(value)        (1 + ((value) > (1 << 8)))
+
 uint8_t z_uint32_size (uint32_t value);
 uint8_t z_uint64_size (uint64_t value);
 
@@ -41,6 +42,10 @@ uint8_t z_uint64_size (uint64_t value);
                         unsigned int length,
                         uint64_t value);
 
+  #define z_uint16_encode z_uint_encode
+  #define z_uint32_encode z_uint_encode
+  #define z_uint64_encode z_uint_encode
+
   void z_uint16_decode (const uint8_t *buffer,
                         unsigned int length,
                         uint16_t *value);
@@ -52,6 +57,9 @@ uint8_t z_uint64_size (uint64_t value);
                         uint64_t *value);
 #else
   #define z_uint_encode(buf, len, val)     z_memcpy64(buf, &(val), len)
+  #define z_uint_encode16(buf, len, val)   z_memcpy16(buf, &(val), len)
+  #define z_uint_encode32(buf, len, val)   z_memcpy32(buf, &(val), len)
+  #define z_uint_encode64(buf, len, val)   z_memcpy64(buf, &(val), len)
 
   #define z_uint16_decode(buf, len, val)   *(val) = 0; z_memcpy16(val, buf, len)
   #define z_uint32_decode(buf, len, val)   *(val) = 0; z_memcpy32(val, buf, len)

@@ -31,4 +31,4 @@ int z_keycmp_mm512 (void *udata, const void *a, const void *b);
 
 __Z_END_DECLS__
 
-#endif /* _Z_KEY_CMP_H_ */
+#endif /* !_Z_KEY_CMP_H_ */

@@ -26,13 +26,11 @@
 #include "server.h"
 
 struct signal_data {
-  int is_running;
   int term_signum;
 };
 
 static struct signal_data __signal_data;
 static void __signal_handler (int signum) {
-  __signal_data.is_running  = 0;
   __signal_data.term_signum = signum;
   z_global_context_stop();
 }
@@ -51,7 +49,8 @@ static int __global_ctx_open (uint32_t ncores) {
   conf.mmpoll_block_max = (1 << 9);
 
   /* Events */
-  conf.events_ring_size = (1 << 20);
+  conf.local_ring_size = 1024;
+  conf.remote_ring_size = 256;
 
   /* User data */
   conf.udata_size = sizeof(struct server_context);
@@ -75,7 +74,6 @@ int main (int argc, char **argv) {
   zcl_info_dump(stdout);
 
   /* Initialize signals */
-  __signal_data.is_running  = 1;
   __signal_data.term_signum = 0;
   signal(SIGINT,  __signal_handler);
   signal(SIGTERM, __signal_handler);
@@ -95,14 +93,17 @@ int main (int argc, char **argv) {
     __global_server_context()->icp_server[ECHO_SERVER] = echo_tcp_plug(NULL, service);
 
     snprintf(service, 8, "%ld", base_port + 1);
-    __global_server_context()->icp_server[UDO_SERVER] = udo_udp_plug(NULL, service);
+    __global_server_context()->icp_server[METRICS_SERVER] = metrics_tcp_plug(NULL, service);
 
     snprintf(service, 8, "%ld", base_port + 2);
+    __global_server_context()->icp_server[UDO_SERVER] = udo_udp_plug(NULL, service);
+
+    snprintf(service, 8, "%ld", base_port + 3);
     __global_server_context()->icp_server[R5L_SERVER] = r5l_tcp_plug(NULL, service);
   } while (0);
 
   /* Start spinning... */
-  z_global_context_poll(0, &(__signal_data.is_running));
+  z_global_context_poll(0);
 
   /* ...and we're done */
   __unplug_ipc(__global_server_context()->icp_server,

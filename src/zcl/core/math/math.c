@@ -25,6 +25,18 @@ uint32_t z_align_pow2 (uint32_t n) {
   return(n + 1);
 }
 
+uint32_t z_nearest_pow2 (uint32_t n) {
+  uint32_t i = 1;
+  while (1) {
+    switch (n) {
+      case 1:  return(i);
+      case 3:  return(i * 4);
+      default: n >>= 1; i <<= 1;
+    }
+  }
+  return(0);
+}
+
 uint32_t z_ilog2 (uint32_t n) {
   uint32_t lg2 = 0U;
   if (n & (n - 1)) lg2 += 1;

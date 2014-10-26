@@ -33,16 +33,14 @@ struct avl16_head {
 } __attribute__((packed));
 
 struct avl16_uber {
-  uint64_t seqid : 48;
-  uint64_t root  : 16;
+  uint32_t seqid;
+  uint16_t root;
 } __attribute__((packed));
 
 struct avl16_node {
   uint16_t child[2];
-  uint32_t birth_hi;
-  uint32_t death_hi;
-  uint16_t birth_lo;
-  uint16_t death_lo;
+  uint32_t birth;
+  uint32_t death;
   int8_t   balance;
   uint8_t  key[1];
 } __attribute__((packed));
@@ -74,32 +72,18 @@ struct avl16_node {
 /* ============================================================================
  *  PRIVATE AVL Version Macros
  */
-#define __u48_get(hi, lo)                                     \
-  ((uint64_t)(hi) << 16 | (lo))
+#define __AVL_NOT_DEAD                       (0xffffffff)
 
-#define __u48_set(hi, lo, value)                              \
-  do {                                                        \
-    (hi) = ((value) >> 16) & 0xffffffff;                      \
-    (lo) = (value) & 0xffff;                                  \
-  } while (0)
-
-#define __avl_node_birth(node)                                \
-  __u48_get((node)->birth_hi, (node)->birth_lo)
-
-#define __avl_node_set_birth(node, value)                     \
-  __u48_set((node)->birth_hi, (node)->birth_lo, value)
-
-#define __avl_node_death(node)                                \
-  __u48_get((node)->death_hi, (node)->death_lo)
-
-#define __avl_node_set_death(node, value)                     \
-  __u48_set((node)->death_hi, (node)->death_lo, value)
+#define __avl_node_birth(node)               ((node)->birth)
+#define __avl_node_set_birth(node, value)    (node)->birth = value
+#define __avl_node_death(node)               ((node)->death)
+#define __avl_node_set_death(node, value)    (node)->death = value
 
 #define __avl16_copy_node(dst, src, seqid, stride)            \
   do {                                                        \
     memcpy(dst, src, stride);                                 \
     __avl_node_set_birth(dst, seqid);                         \
-    __avl_node_set_death(dst, 0xffffffffffff);                \
+    __avl_node_set_death(dst, __AVL_NOT_DEAD);                \
     __avl_node_set_death(src, seqid);                         \
   } while (0)
 
@@ -183,7 +167,7 @@ static void __free_node (struct avl16_head *head,
   node->child[1] = 0;
   node->balance = 0;
   __avl_node_set_birth(node, 0);
-  __avl_node_set_death(node, 0xffffffffffff);
+  __avl_node_set_death(node, __AVL_NOT_DEAD);
   head->free_list = node_pos;
   head->avail += head->stride;
 }
@@ -547,7 +531,7 @@ static void *__avl16_append (uint8_t *block,
   node->child[1] = 0;
   node->balance  = 0;
   __avl_node_set_birth(node, seqid);
-  __avl_node_set_death(node, 0xffffffffffff);
+  __avl_node_set_death(node, __AVL_NOT_DEAD);
 
   if (*root != 0) {
     struct avl16_node *stack[20];
@@ -621,7 +605,7 @@ static void *__avl16_insert (uint8_t *block,
   node->child[1] = 0;
   node->balance  = 0;
   __avl_node_set_birth(node, seqid);
-  __avl_node_set_death(node, 0xffffffffffff);
+  __avl_node_set_death(node, __AVL_NOT_DEAD);
 
   /* lookup the insertion point */
   if (*root != 0) {
@@ -816,7 +800,7 @@ static void __avl16_revert (uint8_t *block, uint64_t seqid, uint16_t node_pos) {
 
   node = __AVL_NODE(head->stride, block, node_pos);
   if (seqid == __avl_node_death(node)) {
-    __avl_node_set_death(node, 0xffffffffffff);
+    __avl_node_set_death(node, __AVL_NOT_DEAD);
   }
 
   if (seqid != __avl_node_birth(node)) {
@@ -846,7 +830,7 @@ static void __avl16_revert_death (uint8_t *block,
     return;
 
   if (seqid == death) {
-    __avl_node_set_death(node, 0xffffffffffff);
+    __avl_node_set_death(node, __AVL_NOT_DEAD);
   }
 
   if (node->child[0] != 0)
@@ -906,7 +890,7 @@ static void __avl_dump (const uint8_t *block, uint16_t root) {
 
   node = __AVL_NODE(head->stride, block, root);
   __avl_dump(block, node->child[0]);
-  printf("%03u[%"PRIu64":%"PRIx64":%03u/",
+  printf("%03u[%u:%x:%03u/",
          root,
          __avl_node_birth(node),
          __avl_node_death(node),
@@ -921,13 +905,13 @@ void z_avl16_txn_dump (z_avl16_txn_t *self, uint8_t *block) {
   int i;
   for (i = 1; i <= head->root_versions; ++i) {
     struct avl16_uber *uber = __AVL_UBER(block + head->size, i);
-    printf("%d[%"PRIu64":%u] -> ", i, uber->seqid, uber->root);
+    printf("%d[%u:%u] -> ", i, uber->seqid, uber->root);
   }
   printf("[TXN %"PRIu64":%u]\n", self->seqid, self->root);
 
   for (i = 1; i <= head->root_versions; ++i) {
     struct avl16_uber *uber = __AVL_UBER(block + head->size, i);
-    printf("HEAD %d seqid=%-4"PRIu64" root=%-2"PRIu32" next=%-2"PRIu32
+    printf("HEAD %d seqid=%-4u root=%-2"PRIu32" next=%-2"PRIu32
            " avail=%-5"PRIu32": ",
            i, uber->seqid, uber->root, head->next, head->avail);
     __avl_dump(block, uber->root);

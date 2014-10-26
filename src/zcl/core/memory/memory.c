@@ -20,12 +20,12 @@
  *  PRIVATE Memory Stats
  */
 #define __STATS_HISTO_NBOUNDS       z_fix_array_size(__STATS_HISTO_BOUNDS)
-static const uint64_t __STATS_HISTO_BOUNDS[26] = {
+static const uint64_t __STATS_HISTO_BOUNDS[27] = {
     16,  32,  48,  64,  80,  96, 112, 128, 256, 512,
-  Z_KB(1),  Z_KB(4),   Z_KB(8),   Z_KB(16),  Z_KB(32),
-  Z_KB(64), Z_KB(128), Z_KB(256), Z_KB(512), Z_MB(1),
-  Z_MB(8),  Z_MB(16),  Z_MB(32),  Z_MB(64),  Z_MB(256),
-  0xffffffffffffffffll,
+  Z_KB(1),   Z_KB(2),   Z_KB(4),   Z_KB(8),   Z_KB(16),
+  Z_KB(32), Z_KB(64), Z_KB(128), Z_KB(256),  Z_KB(512),
+  Z_MB(1),   Z_MB(8),  Z_MB(16),  Z_MB(32),  Z_MB(64),
+  Z_MB(256), 0xffffffffffffffffll,
 };
 
 /* ===========================================================================

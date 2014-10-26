@@ -120,8 +120,15 @@ void z_iopoll_process (z_iopoll_engine_t *engine,
       }
       now = z_time_micros();
       z_histogram_add(&(engine->stats.iowrite), now - stime);
+
+      if (Z_UNLIKELY(entity->iflags8 & Z_IOPOLL_HAS_DATA &&
+          !(entity->iflags8 & Z_IOPOLL_WRITABLE)))
+      {
+        entity->iflags8 ^= Z_IOPOLL_WRITABLE;
+        __iopoll_engine_add(engine, entity);
+      }
     } else if (Z_UNLIKELY(events & Z_IOPOLL_WRITABLE && __write_time_elapsed(entity, now))) {
-      Z_LOG_DEBUG("switch state %u %u diff %u (too many write events)\n",
+      Z_LOG_DEBUG("switch state %u %u diff %u (too many write events)",
                   (uint32_t)(now & 0xffffffffull), entity->last_write_ts,
                   (uint32_t)(now & 0xffffffffull) - entity->last_write_ts);
 
@@ -153,13 +160,12 @@ _handle_failure:
  *  PRIVATE I/O Poll Stats
  */
 #define __STATS_HISTO_NBOUNDS       z_fix_array_size(__STATS_HISTO_BOUNDS)
-static const uint64_t __STATS_HISTO_BOUNDS[24] = {
+static const uint64_t __STATS_HISTO_BOUNDS[20] = {
   Z_TIME_USEC(5),   Z_TIME_USEC(10),  Z_TIME_USEC(25),  Z_TIME_USEC(60),
   Z_TIME_USEC(80),  Z_TIME_USEC(125), Z_TIME_USEC(200), Z_TIME_USEC(350),
-  Z_TIME_USEC(300), Z_TIME_USEC(350), Z_TIME_USEC(400), Z_TIME_USEC(450),
-  Z_TIME_MSEC(500), Z_TIME_USEC(750), Z_TIME_MSEC(1),   Z_TIME_MSEC(5),
-  Z_TIME_MSEC(10),  Z_TIME_MSEC(25),  Z_TIME_MSEC(75),  Z_TIME_MSEC(250),
-  Z_TIME_MSEC(500), Z_TIME_MSEC(750), Z_TIME_SEC(1),    0xffffffffffffffffll,
+  Z_TIME_MSEC(500), Z_TIME_USEC(750),   Z_TIME_MSEC(5),  Z_TIME_MSEC(10),
+  Z_TIME_MSEC(25),   Z_TIME_MSEC(75), Z_TIME_MSEC(100), Z_TIME_MSEC(250),
+  Z_TIME_MSEC(500), Z_TIME_MSEC(750), Z_TIME_SEC(1), 0xffffffffffffffffll,
 };
 
 /* ===========================================================================
@@ -167,6 +173,9 @@ static const uint64_t __STATS_HISTO_BOUNDS[24] = {
  */
 int z_iopoll_engine_open (z_iopoll_engine_t *engine) {
   z_iopoll_stats_t *stats = &(engine->stats);
+
+  /* Initialize I/O Poll Load */
+  memset(&(stats->ioload), 0, sizeof(z_iopoll_load_t));
 
   /* Initialize I/O Poll Histogram */
   z_histogram_init(&(stats->iowait),  __STATS_HISTO_BOUNDS,
@@ -179,10 +188,6 @@ int z_iopoll_engine_open (z_iopoll_engine_t *engine) {
                    stats->event_events, __STATS_HISTO_NBOUNDS);
   z_histogram_init(&(stats->timeout), __STATS_HISTO_BOUNDS,
                    stats->timeout_events, __STATS_HISTO_NBOUNDS);
-  z_histogram_init(&(stats->req_latency), __STATS_HISTO_BOUNDS,
-                   stats->req_latency_events, __STATS_HISTO_NBOUNDS);
-  z_histogram_init(&(stats->resp_latency), __STATS_HISTO_BOUNDS,
-                   stats->resp_latency_events, __STATS_HISTO_NBOUNDS);
 
   if (z_iopoll_engine.open(engine)) {
     return(1);
@@ -199,7 +204,7 @@ void z_iopoll_engine_dump (z_iopoll_engine_t *engine) {
 
   printf("IOPoll Stats\n");
   printf("==================================\n");
-  fprintf(stdout, "IOWait (Max Events %u) ", stats->iowait.max_events);
+  fprintf(stdout, "IOWait");
   z_histogram_dump(&(stats->iowait), stdout, z_human_dtime);
   fprintf(stdout, "\n");
 
@@ -218,14 +223,36 @@ void z_iopoll_engine_dump (z_iopoll_engine_t *engine) {
   fprintf(stdout, "Timeout ");
   z_histogram_dump(&(stats->timeout), stdout, z_human_dtime);
   fprintf(stdout, "\n");
+}
 
-  fprintf(stdout, "Req Latency ");
-  z_histogram_dump(&(stats->req_latency), stdout, z_human_dtime);
-  fprintf(stdout, "\n");
+void z_iopoll_stats_add_events (z_iopoll_engine_t *engine,
+                                int nevents,
+                                uint64_t idle_usec)
+{
+  z_iopoll_load_t *ioload = &((engine)->stats.ioload);
+  z_histogram_t *iowait = &((engine)->stats.iowait);
+  int tail;
 
-  fprintf(stdout, "Resp Latency ");
-  z_histogram_dump(&(stats->resp_latency), stdout, z_human_dtime);
-  fprintf(stdout, "\n");
+  tail = ioload->tail;
+  ioload->tail = (tail + 1) % 6;
+  ioload->max_events = z_max(nevents, ioload->max_events);
+  ioload->events[tail] = nevents & 0xffff;
+  ioload->idle[tail]   = idle_usec & 0xffffffff;
+
+  z_histogram_add(iowait, idle_usec);
+}
+
+float z_iopoll_engine_load (z_iopoll_engine_t *self) {
+  const z_iopoll_load_t *load = &(self->stats.ioload);
+  const uint32_t *actv = load->active;
+  const uint32_t *idle = load->idle;
+  uint64_t total_active;
+  float total_idle;
+
+  total_active = 1 + actv[0] + actv[1] + actv[2] + actv[3] + actv[4] + actv[5];
+  total_idle   = 1 + idle[0] + idle[1] + idle[2] + idle[3] + idle[4] + idle[5];
+
+  return(((total_active * 100) / total_idle) / (total_active + total_idle));
 }
 
 /* ===========================================================================
@@ -307,15 +334,6 @@ void z_iopoll_set_writable (z_iopoll_entity_t *entity, int writable) {
     entity->iflags8 ^= Z_IOPOLL_WRITABLE;
     __iopoll_engine_add(engine, entity);
   }
-}
-
-void z_iopoll_add_latencies (z_iopoll_entity_t *entity,
-                             uint64_t req_latency,
-                             uint64_t resp_latency)
-{
-  z_iopoll_stats_t *stats = &(z_global_iopoll_at(entity->ioengine)->stats);
-  z_histogram_add(&(stats->req_latency), req_latency);
-  z_histogram_add(&(stats->resp_latency), resp_latency);
 }
 
 /* ===========================================================================

@@ -26,9 +26,6 @@
 #include <zcl/debug.h>
 #include <zcl/time.h>
 
-#define __KQUEUE_QSIZE           (256)
-#define __KQUEUE_TIMEOUT_SEC     (30)
-
 static int __kqueue_open (z_iopoll_engine_t *self) {
   if ((self->data.fd = kqueue()) < 0) {
     Z_LOG_ERRNO_ERROR("kqueue()");
@@ -142,33 +139,32 @@ static int __kqueue_notify (z_iopoll_engine_t *self,
 }
 
 static void __kqueue_poll (z_iopoll_engine_t *self) {
-  const int *is_running = z_global_is_running();
-  struct kevent events[__KQUEUE_QSIZE];
+  struct kevent events[Z_IOPOLL_MAX_EVENTS];
+  struct kevent *e;
   z_timer_t timer;
+  int n;
 
-  while (*is_running) {
-    struct kevent *e;
-    int n;
-
-    z_timer_start(&timer);
-    n = kevent(self->data.fd, NULL, 0, events, __KQUEUE_QSIZE, NULL);
-    if (Z_UNLIKELY(n < 0)) {
-      Z_LOG_ERRNO_WARN("kevent()");
-      continue;
-    }
-    z_timer_stop(&timer);
-    z_iopoll_stats_add_events(self, n, z_timer_micros(&timer));
-
-    for (e = events; n--; ++e) {
-      uint32_t eflags =
-          (e->filter == EVFILT_READ)  << Z_IOPOLL_READ  |
-          (e->filter == EVFILT_WRITE) << Z_IOPOLL_WRITE |
-          (e->filter == EVFILT_TIMER) << Z_IOPOLL_TIMER |
-          (e->filter == EVFILT_USER)  << Z_IOPOLL_USER  |
-          (e->flags & EV_EOF && e->filter == EVFILT_READ) << Z_IOPOLL_HANG;
-      z_iopoll_process(self, Z_IOPOLL_ENTITY(e->udata), eflags);
-    }
+  z_timer_start(&timer);
+  n = kevent(self->data.fd, NULL, 0, events, Z_IOPOLL_MAX_EVENTS, NULL);
+  if (Z_UNLIKELY(n < 0)) {
+    Z_LOG_ERRNO_WARN("kevent()");
+    return;
   }
+  z_timer_stop(&timer);
+  z_iopoll_stats_add_events(self, n, z_timer_micros(&timer));
+
+  z_timer_reset(&timer);
+  for (e = events; n--; ++e) {
+    uint32_t eflags =
+        (e->filter == EVFILT_READ)  << Z_IOPOLL_READ  |
+        (e->filter == EVFILT_WRITE) << Z_IOPOLL_WRITE |
+        (e->filter == EVFILT_TIMER) << Z_IOPOLL_TIMER |
+        (e->filter == EVFILT_USER)  << Z_IOPOLL_USER  |
+        (e->flags & EV_EOF && e->filter == EVFILT_READ) << Z_IOPOLL_HANG;
+    z_iopoll_process(self, Z_IOPOLL_ENTITY(e->udata), eflags);
+  }
+  z_timer_stop(&timer);
+  z_iopoll_stats_add_active(self, z_timer_micros(&timer));
 }
 
 const z_iopoll_vtable_t z_iopoll_kqueue = {

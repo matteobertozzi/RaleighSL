@@ -31,7 +31,7 @@ struct z_memory {
   z_allocator_t *allocator;
 
   z_histogram_t histo;
-  uint64_t histo_events[26];
+  uint64_t histo_events[27];
 };
 
 z_memory_t *z_memory_open   (z_memory_t *self, z_allocator_t *allocator);

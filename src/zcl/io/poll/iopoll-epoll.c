@@ -27,10 +27,8 @@
 #include <zcl/debug.h>
 #include <zcl/time.h>
 
-#define __EPOLL_QSIZE           (256)
-
 static int __epoll_open (z_iopoll_engine_t *self) {
-  if ((self->data.fd = epoll_create(__EPOLL_QSIZE)) < 0) {
+  if ((self->data.fd = epoll_create(Z_IOPOLL_MAX_EVENTS)) < 0) {
     Z_LOG_ERRNO_ERROR("epoll()");
     return(1);
   }
@@ -49,7 +47,8 @@ static int __epoll_add (z_iopoll_engine_t *self, z_iopoll_entity_t *entity) {
   event.events  = EPOLLHUP | EPOLLRDHUP | EPOLLERR;
   event.events |= EPOLLIN  * !!(entity->iflags8 & Z_IOPOLL_READABLE);
   event.events |= EPOLLOUT * !!(entity->iflags8 & Z_IOPOLL_WRITABLE);
-  Z_LOG_DEBUG("entity %d read %d write %d", entity->fd, event.events & EPOLLIN, event.events & EPOLLOUT);
+  Z_LOG_DEBUG("entity %d read %d write %d",
+              entity->fd, event.events & EPOLLIN, event.events & EPOLLOUT);
 
   /* Epoll event data points to the entity */
   event.data.ptr = entity;
@@ -162,47 +161,46 @@ static int __epoll_notify (z_iopoll_engine_t *self,
 }
 
 static void __epoll_poll (z_iopoll_engine_t *self) {
-  const int *is_running = z_global_is_running();
-  struct epoll_event events[__EPOLL_QSIZE];
+  struct epoll_event events[Z_IOPOLL_MAX_EVENTS];
+  const struct epoll_event *e;
   z_timer_t timer;
+  int n;
 
-  while (*is_running) {
-    const struct epoll_event *e;
-    int n;
-
-    z_timer_start(&timer);
-    n = epoll_wait(self->data.fd, events, __EPOLL_QSIZE, -1);
-    if (Z_UNLIKELY(n < 0)) {
-      Z_LOG_ERRNO_WARN("epoll_wait()");
-      continue;
-    }
-    z_timer_stop(&timer);
-    z_iopoll_stats_add_events(self, n, z_timer_micros(&timer));
-
-    for (e = events; n--; ++e) {
-      z_iopoll_entity_t *entity = Z_IOPOLL_ENTITY(e->data.ptr);
-      uint32_t eflags = 0;
-      switch (entity->iflags8) {
-        case Z_IOPOLL_TIMEOUT:
-        case Z_IOPOLL_UEVENT:
-          if (e->events & EPOLLIN) {
-            uint64_t v;
-            if (Z_LIKELY(read(entity->fd, &v, 8) == 8)) {
-              eflags = entity->iflags8;
-            } else {
-              Z_LOG_ERRNO_WARN("read(eventfd/timerfd)");
-            }
-          }
-          break;
-        default:
-          eflags = (!!(e->events & EPOLLIN))  << Z_IOPOLL_READ |
-                   (!!(e->events & EPOLLOUT)) << Z_IOPOLL_WRITE |
-                   z_has(e->events, EPOLLRDHUP, EPOLLHUP, EPOLLERR) << Z_IOPOLL_HANG;
-          break;
-      }
-      z_iopoll_process(self, entity, eflags);
-    }
+  z_timer_start(&timer);
+  n = epoll_wait(self->data.fd, events, Z_IOPOLL_MAX_EVENTS, -1);
+  if (Z_UNLIKELY(n < 0)) {
+    Z_LOG_ERRNO_WARN("epoll_wait()");
+    return;
   }
+  z_timer_stop(&timer);
+  z_iopoll_stats_add_events(self, n, z_timer_micros(&timer));
+
+  z_timer_reset(&timer);
+  for (e = events; n--; ++e) {
+    z_iopoll_entity_t *entity = Z_IOPOLL_ENTITY(e->data.ptr);
+    uint32_t eflags = 0;
+    switch (entity->iflags8) {
+      case Z_IOPOLL_TIMEOUT:
+      case Z_IOPOLL_UEVENT:
+        if (e->events & EPOLLIN) {
+          uint64_t v;
+          if (Z_LIKELY(read(entity->fd, &v, 8) == 8)) {
+            eflags = entity->iflags8;
+          } else {
+            Z_LOG_ERRNO_WARN("read(eventfd/timerfd)");
+          }
+        }
+        break;
+      default:
+        eflags = (!!(e->events & EPOLLIN))  << Z_IOPOLL_READ |
+                 (!!(e->events & EPOLLOUT)) << Z_IOPOLL_WRITE |
+                 z_has(e->events, EPOLLRDHUP, EPOLLHUP, EPOLLERR) << Z_IOPOLL_HANG;
+        break;
+    }
+    z_iopoll_process(self, entity, eflags);
+  }
+  z_timer_stop(&timer);
+  z_iopoll_stats_add_active(self, z_timer_micros(&timer));
 }
 
 const z_iopoll_vtable_t z_iopoll_epoll = {

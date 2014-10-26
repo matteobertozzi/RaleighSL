@@ -24,6 +24,8 @@ __Z_BEGIN_DECLS__
 #include <zcl/global.h>
 #include <zcl/ipc.h>
 
+Z_TYPEDEF_STRUCT(metrics_rpc_task)
+
 #define SERVER_CONTEXT(x)           Z_CAST(struct server_context, x)
 #define ECHO_CLIENT(x)              Z_CAST(struct echo_client, x)
 
@@ -31,13 +33,14 @@ __Z_BEGIN_DECLS__
   Z_CAST(struct server_context, z_global_udata())
 
 enum server_type {
-  ECHO_SERVER = 0,
-  UDO_SERVER  = 1,
-  R5L_SERVER  = 2,
+  ECHO_SERVER     = 0,
+  METRICS_SERVER  = 1,
+  UDO_SERVER      = 2,
+  R5L_SERVER      = 3,
 };
 
 struct server_context {
-  z_ipc_server_t *icp_server[3];
+  z_ipc_server_t *icp_server[4];
 };
 
 struct echo_client {
@@ -52,12 +55,19 @@ struct echo_client {
 struct udo_client {
 };
 
+struct metrics_client {
+  __Z_IPC_MSG_CLIENT__
+  metrics_rpc_task_t *task;
+};
+
 struct r5l_client {
   __Z_IPC_MSG_CLIENT__
 };
 
+extern const z_ipc_msg_protocol_t metrics_msg_protocol;
 extern const z_ipc_msg_protocol_t r5l_msg_protocol;
 
+extern const z_ipc_protocol_t metrics_tcp_protocol;
 extern const z_ipc_protocol_t echo_tcp_protocol;
 extern const z_ipc_protocol_t udo_udp_protocol;
 extern const z_ipc_protocol_t r5l_tcp_protocol;
@@ -71,6 +81,7 @@ extern const z_ipc_protocol_t r5l_tcp_protocol;
              & srv_type ## _msg_protocol,                                     \
              # srv_type, struct srv_type ## _client, address, service)
 
+#define metrics_tcp_plug(addr, port)  __ipc_msg_proto_plug(metrics, tcp, addr, port)
 #define echo_tcp_plug(addr, port)     __ipc_proto_plug(echo, tcp, addr, port)
 #define udo_udp_plug(addr, port)      __ipc_proto_plug(udo, udp, addr, port)
 #define r5l_tcp_plug(addr, port)      __ipc_msg_proto_plug(r5l, tcp, addr, port)

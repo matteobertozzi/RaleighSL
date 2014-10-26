@@ -101,13 +101,13 @@ struct z_ipc_msg_head {
   uint8_t  pkt_type;
 };
 
-#define Z_IPC_MSG_IBUF      (64 + 26 + Z_DBUF_IBUFLEN)
+#define Z_IPC_MSG_IBUF      (64 + 32)
 struct z_ipc_msg {
   z_slink_node_t node;
   uint32_t       hoffset;
   uint32_t       wtime;
   z_dbuf_node_t  dnode;
-  uint8_t        data[Z_IPC_MSG_IBUF - Z_DBUF_IBUFLEN];
+  uint8_t        data[Z_IPC_MSG_IBUF];
   uint8_t        rhead;
   uint8_t        hskip;
   uint32_t       latency;
@@ -169,12 +169,11 @@ void            z_ipc_unbind_unix        (z_ipc_server_t *server);
 int             z_ipc_accept_unix        (z_ipc_server_t *server);
 #endif /* Z_SOCKET_HAS_UNIX */
 
-z_ipc_msg_t *   z_ipc_msg_alloc          (z_memory_t *memory,
-                                          const z_ipc_msg_head_t *head);
 void            z_ipc_msg_set_length     (z_ipc_msg_t *self,
                                           uint8_t h_msg_len,
                                           uint32_t length);
-void            z_ipc_msg_writer_open    (z_ipc_msg_t *self,
+z_ipc_msg_t *   z_ipc_msg_writer_open    (z_ipc_msg_t *self,
+                                          const z_ipc_msg_head_t *head,
                                           z_dbuf_writer_t *writer,
                                           z_memory_t *memory);
 void            z_ipc_msg_writer_close   (z_ipc_msg_t *self,

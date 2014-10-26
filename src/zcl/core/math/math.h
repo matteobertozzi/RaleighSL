@@ -18,6 +18,8 @@
 #include <zcl/macros.h>
 
 uint32_t z_align_pow2     (uint32_t n);
+uint32_t z_nearest_pow2   (uint32_t n);
+
 uint32_t z_ilog2          (uint32_t n);
 uint8_t  z_bshift         (uint32_t min_block);
 

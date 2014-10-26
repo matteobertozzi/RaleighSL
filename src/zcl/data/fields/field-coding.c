@@ -62,11 +62,7 @@ int z_field_encode (uint8_t *buf, uint16_t field_id, uint64_t length) {
     buf[0] = ((length - 1) & 0x7) << 4;
   } else {
     /* External Length */
-#if 0
     unsigned int flen = z_uint64_size(length);
-#else
-    unsigned int flen = (8 - (__builtin_clzll(length) >> 3));
-#endif
     buf[0] = (1 << 7) | (((flen - 1) & 0x7) << 4);
     z_uint_encode(buf + 1, flen, length);
     elength += flen;
@@ -77,11 +73,7 @@ int z_field_encode (uint8_t *buf, uint16_t field_id, uint64_t length) {
     buf[0] |= field_id + 2;
   } else {
     /* Field-Id is to high, store Field-Id length here (max 2 byte) */
-#if 0
     unsigned int flen = z_uint32_size(field_id);
-#else
-    unsigned int flen = (4 - (__builtin_clz(field_id) >> 3));
-#endif
     buf[0] |= (flen - 1);
     z_uint_encode(buf + elength, flen, field_id);
     elength += flen;

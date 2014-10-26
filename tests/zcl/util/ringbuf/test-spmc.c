@@ -1,6 +1,7 @@
 #include <zcl/system.h>
 #include <zcl/atomic.h>
 #include <zcl/humans.h>
+#include <zcl/debug.h>
 #include <zcl/time.h>
 #include <zcl/spmc.h>
 
@@ -40,7 +41,7 @@ static void *__consumer (void *args) {
   }
   return(NULL);
 }
-#include <zcl/debug.h>
+
 int main (int argc, char **argv) {
   struct consumer consumers[NTHREADS];
   uint8_t *spmc;
