@@ -109,7 +109,21 @@ int  z_rpc_iter_field_uint64 (z_rpc_field_iter_t *self,
 #define z_rpc_read_uint64(block, field_id, value)    \
   __z_rpc_read_uint(block, 64, field_id, value)
 
-uint16_t *z_rpc_write_mark16 (z_dbuf_writer_t *writer, uint16_t field_id);
+uint8_t * z_rpc_write_mark8       (z_dbuf_writer_t *writer,
+                                   uint16_t field_id);
+uint16_t *z_rpc_write_mark16      (z_dbuf_writer_t *writer,
+                                   uint16_t field_id);
+
+uint16_t  z_rpc_write_field_count (z_dbuf_writer_t *writer,
+                                   uint8_t field_count);
+uint16_t  z_rpc_write_u8_list     (z_dbuf_writer_t *writer,
+                                   const uint8_t *v, int count);
+uint16_t  z_rpc_write_u16_list    (z_dbuf_writer_t *writer,
+                                   const uint16_t *v, int count);
+uint16_t  z_rpc_write_u32_list    (z_dbuf_writer_t *writer,
+                                   const uint32_t *v, int count);
+uint16_t  z_rpc_write_u64_list    (z_dbuf_writer_t *writer,
+                                   const uint64_t *v, int count);
 
 __Z_END_DECLS__
 

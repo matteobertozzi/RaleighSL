@@ -114,6 +114,16 @@ int z_rpc_write_uint64 (uint8_t *buf, uint16_t field_id, uint64_t value) {
 /* ============================================================================
  *  dbuf helpers
  */
+uint8_t *z_rpc_write_mark8 (z_dbuf_writer_t *writer, uint16_t field_id) {
+  uint8_t buffer[5];
+  uint8_t *pbuf;
+  int len;
+  pbuf = z_dbuf_writer_next(writer, buffer, 5);
+  len  = z_rpc_write_uint8(pbuf, field_id, 0xff);
+  pbuf = z_dbuf_writer_commit(writer, pbuf, len);
+  return(pbuf + len - 1);
+}
+
 uint16_t *z_rpc_write_mark16 (z_dbuf_writer_t *writer, uint16_t field_id) {
   uint8_t buffer[8];
   uint8_t *pbuf;
@@ -122,6 +132,146 @@ uint16_t *z_rpc_write_mark16 (z_dbuf_writer_t *writer, uint16_t field_id) {
   len  = z_rpc_write_uint16(pbuf, field_id, 0xffff);
   pbuf = z_dbuf_writer_commit(writer, pbuf, len);
   return((uint16_t *)(pbuf + len - 2));
+}
+
+uint16_t z_rpc_write_field_count (z_dbuf_writer_t *writer,
+                                  uint8_t field_count)
+{
+  uint8_t buffer[1];
+  uint8_t *pbuf;
+  pbuf = z_dbuf_writer_next(writer, buffer, 1);
+  pbuf[0] = field_count;
+  z_dbuf_writer_commit(writer, pbuf, 1);
+  return(1);
+}
+
+uint16_t z_rpc_write_u8_list (z_dbuf_writer_t *writer,
+                              const uint8_t *v, int count)
+{
+  uint8_t buffer[9];
+  uint16_t size = 0;
+  int len;
+
+  while (count >= 4) {
+    uint8_t *pbuf;
+    pbuf = z_dbuf_writer_next(writer, buffer, 9);
+    len = z_rpc_uint8_pack4(pbuf, v);
+    z_dbuf_writer_commit(writer, pbuf, len);
+
+    size += len;
+    v += 4;
+    count -= 4;
+  }
+
+  if (count > 0) {
+    uint8_t *pbuf;
+    pbuf = z_dbuf_writer_next(writer, buffer, 1 + (count << 1));
+    switch (count) {
+      case 3: len = z_rpc_uint8_pack3(pbuf,  v); break;
+      case 2: len = z_rpc_uint8_pack2(pbuf,  v); break;
+      case 1: len = z_rpc_uint8_pack1(pbuf, *v); break;
+    }
+    z_dbuf_writer_commit(writer, pbuf, len);
+    size += len;
+  }
+  return(size);
+}
+
+
+uint16_t z_rpc_write_u16_list (z_dbuf_writer_t *writer,
+                               const uint16_t *v, int count)
+{
+  uint8_t buffer[9];
+  uint16_t size = 0;
+  int len;
+
+  while (count >= 4) {
+    uint8_t *pbuf;
+    pbuf = z_dbuf_writer_next(writer, buffer, 9);
+    len = z_rpc_uint16_pack4(pbuf, v);
+    z_dbuf_writer_commit(writer, pbuf, len);
+
+    size += len;
+    v += 4;
+    count -= 4;
+  }
+
+  if (count > 0) {
+    uint8_t *pbuf;
+    pbuf = z_dbuf_writer_next(writer, buffer, 1 + (count << 1));
+    switch (count) {
+      case 3: len = z_rpc_uint16_pack3(pbuf,  v); break;
+      case 2: len = z_rpc_uint16_pack2(pbuf,  v); break;
+      case 1: len = z_rpc_uint16_pack1(pbuf, *v); break;
+    }
+    z_dbuf_writer_commit(writer, pbuf, len);
+    size += len;
+  }
+  return(size);
+}
+
+uint16_t z_rpc_write_u32_list (z_dbuf_writer_t *writer,
+                               const uint32_t *v, int count)
+{
+  uint8_t buffer[17];
+  uint16_t size = 0;
+  int len;
+
+  while (count >= 4) {
+    uint8_t *pbuf;
+    pbuf = z_dbuf_writer_next(writer, buffer, 17);
+    len = z_rpc_uint32_pack4(pbuf, v);
+    z_dbuf_writer_commit(writer, pbuf, len);
+
+    size += len;
+    v += 4;
+    count -= 4;
+  }
+
+  if (count > 0) {
+    uint8_t *pbuf;
+    pbuf = z_dbuf_writer_next(writer, buffer, 1 + (count << 2));
+    switch (count) {
+      case 3: len = z_rpc_uint32_pack3(pbuf,  v); break;
+      case 2: len = z_rpc_uint32_pack2(pbuf,  v); break;
+      case 1: len = z_rpc_uint32_pack1(pbuf, *v); break;
+    }
+    z_dbuf_writer_commit(writer, pbuf, len);
+    size += len;
+  }
+  return(size);
+}
+
+uint16_t z_rpc_write_u64_list (z_dbuf_writer_t *writer,
+                               const uint64_t *v, int count)
+{
+  uint8_t buffer[33];
+  uint16_t size = 0;
+  int len;
+
+  while (count >= 4) {
+    uint8_t *pbuf;
+    pbuf = z_dbuf_writer_next(writer, buffer, 33);
+    len = z_rpc_uint64_pack4(pbuf, v);
+    z_dbuf_writer_commit(writer, pbuf, len);
+
+    size += len;
+    v += 4;
+    count -= 4;
+  }
+
+  if (count > 0) {
+    uint8_t *pbuf;
+    pbuf = z_dbuf_writer_next(writer, buffer, 1 + (count << 3));
+    switch (count) {
+      case 3: len = z_rpc_uint64_pack3(pbuf,  v); break;
+      case 2: len = z_rpc_uint64_pack2(pbuf,  v); break;
+      case 1: len = z_rpc_uint64_pack1(pbuf, *v); break;
+    }
+    z_dbuf_writer_commit(writer, pbuf, len);
+    size += len;
+  }
+  return(size);
 }
 
 /* ============================================================================

@@ -110,6 +110,6 @@ int main (int argc, char **argv) {
                z_fix_array_size(__global_server_context()->icp_server));
 
   z_global_context_close();
-  printf("terminated with signum %d\n", __signal_data.term_signum);
+  fprintf(stderr, "terminated with signum %d\n", __signal_data.term_signum);
   return(0);
 }

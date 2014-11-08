@@ -20,6 +20,7 @@
 #include <zcl/fd.h>
 
 #include "server.h"
+#include "rpc/generated/r5l_rpc.h"
 #include "rpc/generated/r5l.h"
 
 #if 0
@@ -76,6 +77,12 @@ static int __client_msg_exec (z_ipc_msg_client_t *client,
               " body_len: %"PRIu16" blob_length: %"PRIu32,
               msg_head->msg_id, msg_head->msg_type,
               msg_head->body_length, msg_head->blob_length);
+
+  if (r5l_rpc_server_is_rdonly(msg_head->msg_type)) {
+
+  } else {
+
+  }
 
   z_dbuf_writer_t writer;
   z_ipc_msg_t *msg;

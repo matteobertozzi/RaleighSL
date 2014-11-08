@@ -25,9 +25,9 @@ __Z_BEGIN_DECLS__
 #include <stdlib.h>
 #include <stdio.h>
 
-typedef int   (*z_compare_t)  (void *udata, const void *a, const void *b);
-typedef int   (*z_closest_t)  (void *udata, const void *a, const void *b, uint64_t *delta);
-typedef int   (*z_swap_t)     (void *udata, const void *a, const void *b);
+typedef int   (*z_compare_t)    (void *udata, const void *a, const void *b);
+typedef int   (*z_closest_t)    (void *udata, const void *a, const void *b, uint64_t *delta);
+typedef int   (*z_swap_t)       (void *udata, const void *a, const void *b);
 
 #define Z_TYPEDEF_STRUCT(name)          typedef struct name name ## _t;
 #define Z_TYPEDEF_UNION(name)           typedef union name name ## _t;
@@ -153,6 +153,13 @@ typedef int   (*z_swap_t)     (void *udata, const void *a, const void *b);
 #define z_sizeof_sum(a, ...)            (Z_FOLD(__zszof_sum, z_sizeof(a), __VA_ARGS__))
 
 #define z_between(v, a, b)              ((v) >= (a) && (v) <= (b))
+
+#define z_type_swap(type, a, b)           \
+  do {                                    \
+    type __z_swap_vtmp = (a);             \
+    (a) = (b);                            \
+    (b) = __z_swap_vtmp;                  \
+  } while (0)
 
 __Z_END_DECLS__
 

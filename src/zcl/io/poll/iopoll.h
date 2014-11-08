@@ -186,12 +186,8 @@ void  z_iopoll_stats_add_events (z_iopoll_engine_t *engine,
                                  int nevents,
                                  uint64_t idle_usec);
 
-#define z_iopoll_stats_add_active(engine, usec)                                \
-  (self)->stats.ioload.active[(self)->stats.ioload.tail] = (usec) & 0xffffffff
-
-#define z_iopoll_stats_inc_active(engine, usec)                                \
+#define z_iopoll_stats_add_active(self, usec)                                  \
   (self)->stats.ioload.active[(self)->stats.ioload.tail] += (usec) & 0xffffffff
-
 
 __Z_END_DECLS__
 

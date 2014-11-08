@@ -254,13 +254,17 @@ static void *__event_loop_exec (void *args) {
   //__eloop_channel_notify(eloop);
 
   while (eloop->is_running) {
+    z_timer_t timer;
+
     /* process pending events */
     /* TODO: pass max events to slowdown */
     z_iopoll_engine.poll(&(eloop->iopoll));
 
     /* fetch messages from other cores (on event?) */
+    z_iopoll_engine_load(&(eloop->iopoll));
 
     /* execute pending tasks */
+    z_timer_start(&timer);
     while (1) {
       z_vtask_t *vtask = __event_loop_fetch_task(eloop);
       if (vtask == NULL)
@@ -268,6 +272,11 @@ static void *__event_loop_exec (void *args) {
 
       z_vtask_exec(vtask);
     }
+    z_timer_stop(&timer);
+    z_iopoll_stats_add_active(&(eloop->iopoll), z_timer_micros(&timer));
+
+    float xload = z_iopoll_engine_load(&(eloop->iopoll));
+    Z_LOG_DEBUG("ACTIVE %.2f IDLE %.2f", xload, 100 - xload);
   }
 
   char buffer[64];
@@ -292,6 +301,8 @@ static void *__event_loop_mmalloc (z_allocator_t *self, size_t size) {
 
 static void __event_loop_mmfree (z_allocator_t *self, void *ptr, size_t size) {
   self->extern_used -= size;
+  Z_LOG_TRACE("pool_used=%"PRIu64" extern_used=%"PRIu64,
+              self->pool_used, self->extern_used);
   z_sys_free(ptr, size);
 }
 

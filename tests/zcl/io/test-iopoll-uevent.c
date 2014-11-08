@@ -86,6 +86,5 @@ int main (int argc, char **argv) {
 
   /* ...and we're done */
   z_global_context_close();
-  z_debug_close();
   return(0);
 }

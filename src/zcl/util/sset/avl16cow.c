@@ -12,8 +12,8 @@
  *   limitations under the License.
  */
 
+#include <zcl/avl16cow.h>
 #include <zcl/debug.h>
-#include <zcl/avl.h>
 
 #include <string.h>
 

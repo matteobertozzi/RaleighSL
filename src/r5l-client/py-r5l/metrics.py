@@ -24,6 +24,13 @@ metrics_rpc_histogram_fields = {
   2: ('events', 'list[uint]', None),
 }
 
+metrics_rpc_iopoll_load_fields = {
+  1: ('max_events', 'uint', None),
+  2: ('events', 'list[uint]', None),
+  3: ('idle',   'list[uint]', None),
+  4: ('active', 'list[uint]', None),
+}
+
 metrics_rpc_info_fields = {
   1: ('uptime', 'uint', None),
   3: ('core_count', 'uint', None),
@@ -50,6 +57,7 @@ metrics_rpc_memory_fields = {
 }
 
 metrics_rpc_iopoll_fields = {
+  1: ('io_load',  metrics_rpc_iopoll_load_fields, None),
   2: ('io_wait',  metrics_rpc_histogram_fields, None),
   3: ('io_read',  metrics_rpc_histogram_fields, None),
   4: ('io_write', metrics_rpc_histogram_fields, None),

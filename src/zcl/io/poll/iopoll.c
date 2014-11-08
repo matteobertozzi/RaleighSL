@@ -234,10 +234,16 @@ void z_iopoll_stats_add_events (z_iopoll_engine_t *engine,
   int tail;
 
   tail = ioload->tail;
-  ioload->tail = (tail + 1) % 6;
   ioload->max_events = z_max(nevents, ioload->max_events);
-  ioload->events[tail] = nevents & 0xffff;
-  ioload->idle[tail]   = idle_usec & 0xffffffff;
+  if ((ioload->events[tail] + ioload->idle[tail]) < 10000) {
+    ioload->events[tail] += nevents & 0xffff;
+    ioload->idle[tail]   += idle_usec & 0xffffffff;
+  } else {
+    tail = ioload->tail  = (tail + 1) % 6;
+    ioload->events[tail] = nevents & 0xffff;
+    ioload->idle[tail]   = idle_usec & 0xffffffff;
+    ioload->active[tail] = 0;
+  }
 
   z_histogram_add(iowait, idle_usec);
 }
@@ -246,13 +252,13 @@ float z_iopoll_engine_load (z_iopoll_engine_t *self) {
   const z_iopoll_load_t *load = &(self->stats.ioload);
   const uint32_t *actv = load->active;
   const uint32_t *idle = load->idle;
-  uint64_t total_active;
-  float total_idle;
+  double total_active;
+  double total_idle;
 
   total_active = 1 + actv[0] + actv[1] + actv[2] + actv[3] + actv[4] + actv[5];
   total_idle   = 1 + idle[0] + idle[1] + idle[2] + idle[3] + idle[4] + idle[5];
 
-  return(((total_active * 100) / total_idle) / (total_active + total_idle));
+  return((total_active * 100) / (total_active + total_idle));
 }
 
 /* ===========================================================================

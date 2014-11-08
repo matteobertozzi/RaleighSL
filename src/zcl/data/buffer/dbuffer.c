@@ -298,19 +298,17 @@ int z_dbuf_reader_iovs (z_dbuf_reader_t *self, struct iovec *iovs, int iovcnt) {
   return(iov - iovs);
 }
 
-size_t z_dbuf_reader_remove (z_dbuf_reader_t *self, size_t rm_size) {
-  z_dbuf_node_t *node;
-  size_t to_remove;
-  uint8_t *ptail;
+size_t z_dbuf_reader_remove (z_dbuf_reader_t *self, size_t to_remove) {
+  const z_dbuf_node_t *node;
+  const uint8_t *ptail;
 
   node = self->head;
   if (node == NULL)
     return(0);
 
   ptail = __dbuf_node_pend(node);
-  to_remove = rm_size;
-  while (to_remove > 0) {
-    uint8_t *pbuf  = node->data + self->phead;
+  while (1) {
+    const uint8_t *pbuf  = node->data + self->phead;
     int next_offset;
     int plen;
 
@@ -323,6 +321,9 @@ size_t z_dbuf_reader_remove (z_dbuf_reader_t *self, size_t rm_size) {
       ptail = __dbuf_node_pend(node);
       self->phead = 0;
     }
+
+    if (to_remove == 0)
+      break;
 
     if (*pbuf == __DBUF_REF) {
       const z_memref_t *ref = Z_CONST_MEMREF(pbuf + 1);
@@ -343,5 +344,5 @@ size_t z_dbuf_reader_remove (z_dbuf_reader_t *self, size_t rm_size) {
       break;
     }
   }
-  return(rm_size - to_remove);
+  return(to_remove);
 }

@@ -14,6 +14,7 @@
 #include <zcl/mutex.h>
 #include <zcl/spinlock.h>
 #include <zcl/dbuffer.h>
+#include <zcl/avl16.h>
 #include <zcl/spsc.h>
 #include <zcl/ipc.h>
 #include <zcl/txn.h>
@@ -75,6 +76,7 @@ int main (int argc, char **argv) {
 
   printf("txn\n");
   __print_size(z_txn_t);
+  __print_size(z_txn_mvcc_t);
   __print_size(z_txn_mgr_t);
 
   printf("util/array\n");
@@ -85,6 +87,10 @@ int main (int argc, char **argv) {
 
   printf("util/ringbuf\n");
   __print_size(z_spsc_t);
+
+  printf("util/sset\n");
+  __print_size(z_avl16_node_t);
+  __print_size(z_avl16_iter_t);
 
   return(0);
 }
