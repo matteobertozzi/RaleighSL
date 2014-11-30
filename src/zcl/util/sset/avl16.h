@@ -42,6 +42,8 @@ struct z_avl16_iter {
   uint16_t current;
   uint16_t height;
   uint16_t root;
+  uint8_t  found;
+  uint8_t  pad[5];
 };
 
 typedef int (*z_avl16_compare_t)  (void *udata,
@@ -51,6 +53,13 @@ typedef int (*z_avl16_compare_t)  (void *udata,
 #define Z_AVL16_POS(block, node)  (Z_CAST(uint8_t, node) - (block))
 #define Z_AVL16_NODE(block, pos)  Z_CAST(z_avl16_node_t, (block) + (pos))
 #define Z_AVL16_NODE_SIZE         (sizeof(z_avl16_node_t) - 1)
+
+#define z_avl16_init(head)        \
+  do {                            \
+    (head)->root = 0;             \
+    (head)->edge[0] = 0;          \
+    (head)->edge[1] = 0;          \
+  } while (0)
 
 void *   z_avl16_insert           (z_avl16_head_t *head,
                                    uint8_t *block,
@@ -76,7 +85,7 @@ uint16_t z_avl16_remove_edge      (z_avl16_head_t *head,
 #define  z_avl16_remove_min(h, b) z_avl16_remove_edge(h, b, 0)
 #define  z_avl16_remove_max(h, b) z_avl16_remove_edge(h, b, 1)
 
-void *   z_avl16_lookup           (uint8_t *block,
+uint16_t z_avl16_lookup           (uint8_t *block,
                                    uint16_t root,
                                    z_avl16_compare_t key_cmp,
                                    const void *key,

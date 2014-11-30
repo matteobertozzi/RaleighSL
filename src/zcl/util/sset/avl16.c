@@ -430,11 +430,11 @@ uint16_t z_avl16_remove_edge (z_avl16_head_t *head,
   return(node_pos);
 }
 
-void *z_avl16_lookup (uint8_t *block,
-                      uint16_t root,
-                      z_avl16_compare_t key_cmp,
-                      const void *key,
-                      void *udata)
+uint16_t z_avl16_lookup (uint8_t *block,
+                         uint16_t root,
+                         z_avl16_compare_t key_cmp,
+                         const void *key,
+                         void *udata)
 {
   while (root != 0) {
     z_avl16_node_t *node = Z_AVL16_NODE(block, root);
@@ -444,10 +444,10 @@ void *z_avl16_lookup (uint8_t *block,
     } else if (cmp < 0) {
       root = node->child[1];
     } else {
-      return(node->data);
+      return(root);
     }
   }
-  return(NULL);
+  return(0);
 }
 
 uint16_t z_avl16_lookup_edge (uint8_t *block, uint16_t root, int edge) {
@@ -475,11 +475,13 @@ static void *__avl16_iter_lookup_near (z_avl16_iter_t *self,
   self->current = 0;
   node_pos = self->root;
 
+  self->found = 0;
   while (node_pos != 0) {
     z_avl16_node_t *node = Z_AVL16_NODE(self->block, node_pos);
     int cmp = key_cmp(udata, node, key);
     if (cmp == 0) {
       self->current = node_pos;
+      self->found = 1;
       return(node->data);
     }
 
