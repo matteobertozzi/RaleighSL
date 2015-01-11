@@ -615,7 +615,13 @@ class Project(object):
     DEFAULT_RELEASE_CFLAGS = ['-O3']
     DEFAULT_DEBUG_CFLAGS = ['-g']
     DEFAULT_DEFINES = ['-D_GNU_SOURCE', '-D__USE_FILE_OFFSET64']
-    DEFAULT_LDLIBS = ['-lpthread', '-lm']
+    DEFAULT_LDLIBS = ['-lpthread', '-lm', '-lz']
+
+    if Build.platformIsMac():
+      DEFAULT_DEFINES.extend(['-DCRYPTO_COMMON_CRYPTO'])
+    else:
+      DEFAULT_DEFINES.extend(['-DHAVE_SETXATTR', '-DCRYPTO_OPENSSL'])
+      DEFAULT_LDLIBS.extend(['-lcrypto'])
 
     # Default Build Options
     default_opts = BuildOptions()

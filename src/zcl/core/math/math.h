@@ -34,6 +34,11 @@ uint32_t z_cycle32_prime  (uint32_t seq_size);
 uint32_t z_cycle32        (uint32_t *seed, uint32_t prime, uint32_t seq_size);
 uint64_t z_cycle64        (uint64_t *seed, uint64_t prime, uint64_t seq_size);
 
+#define z_fast_p50(x)     ((x) >> 1)
+#define z_fast_p65(x)     (((x) >> 1) + ((x) >> 3) + ((x) >> 5))
+#define z_fast_p66(x)     (((x) >> 1) + ((x) >> 3) + ((x) >> 5) + ((x) >> 7))
+#define z_fast_p75(x)     (((x) >> 1) + ((x) >> 2))
+
 #define z_fast_u32_div10(x) ({                                              \
   uint64_t n = x;                                                           \
   uint64_t q = (n >> 1) + (n >> 2);                                         \
