@@ -12,26 +12,19 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_AES_H_
-#define _Z_AES_H_
+#ifndef _Z_KDF_H_
+#define _Z_KDF_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
-#include <zcl/opaque.h>
 
-typedef struct crypto_aes z_aes_t;
+void z_kdf (uint8_t ikey[32], uint8_t iv[32],
+            int derivation_rounds,
+            const void *key, uint32_t key_size,
+            const void *salt, uint32_t salt_size);
 
-z_aes_t * z_aes_alloc   (uint8_t ikey[32], uint8_t iv[32]);
-void      z_aes_free    (z_aes_t *crypto);
+__Z_END_DECLS__
 
-uint32_t  z_aes_outlen  (z_aes_t *crypto, uint32_t src_size);
-int       z_aes_encrypt (z_aes_t *crypto,
-                         const void *src, uint32_t src_size,
-                         void *dst, uint32_t *dst_size);
-int       z_aes_decrypt (z_aes_t *crypto,
-                         const void *src, uint32_t src_size,
-                         void *dst, uint32_t *dst_size);
-
-#endif /* !_Z_AES_H_ */
+#endif /* _Z_KDF_H_ */

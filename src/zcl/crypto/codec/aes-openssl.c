@@ -31,15 +31,8 @@ struct crypto_aes {
   EVP_CIPHER_CTX dec;
 };
 
-z_aes_t *z_aes_alloc (const void *key, uint32_t key_size,
-                      const void *salt, uint32_t salt_size)
-{
-  unsigned char ikey[32];
-  unsigned char iv[32];
+z_aes_t *z_aes_alloc (uint8_t ikey[32], uint8_t iv[32]) {
   z_aes_t *crypto;
-
-  /* Key Derivation */
-  z_aes_key(ikey, iv, key, key_size, salt, salt_size);
 
   /* Allocate Crypto AES Object */
   if ((crypto = (z_aes_t *) malloc(sizeof(z_aes_t))) == NULL)

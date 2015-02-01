@@ -36,14 +36,12 @@ typedef int (*z_decrypt_t)  (z_cryptor_t *self,
                              uint8_t *dst, uint32_t dst_len);
 
 struct z_crypto_vtable {
-  int (*load)   (z_cryptor_t *self);
-  int (*unload) (z_cryptor_t *self);
-
-  int (*setkey) (z_cryptor_t *self,
-                 const void *key, uint32_t key_size,
-                 const void *salt, uint32_t salt_size);
-
-  uint32_t (*outlen) (z_cryptor_t *self, uint32_t src_len);
+  int       (*load)   (z_cryptor_t *self);
+  int       (*unload) (z_cryptor_t *self);
+  int       (*setkey) (z_cryptor_t *self, int kd_rounds,
+                       const void *key, uint32_t key_size,
+                       const void *salt, uint32_t salt_size);
+  uint32_t  (*outlen) (z_cryptor_t *self, uint32_t src_len);
 
   z_encrypt_t encrypt;
   z_decrypt_t decrypt;

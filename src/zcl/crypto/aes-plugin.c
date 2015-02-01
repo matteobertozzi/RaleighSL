@@ -12,87 +12,36 @@
  *   limitations under the License.
  */
 
-#include <zcl/sha1.h>
-
 #include <zcl/crypto.h>
+#include <zcl/kdf.h>
 
 #include "codec/aes.h"
-
-#ifndef __AES_DERIVATION_ROUNDS
-    #define __AES_DERIVATION_ROUNDS     (5U)
-#endif /* !__AES_DERIVATION_ROUNDS */
-
-void z_aes_key (uint8_t ikey[32], uint8_t iv[32],
-                const void *key, uint32_t key_size,
-                const void *salt, uint32_t salt_size)
-{
-  uint8_t sha1_buf[20];
-  uint32_t nkey = 32;
-  uint32_t niv = 32;
-  z_sha1_t sha1;
-  int i;
-
-  z_sha1_init(&sha1);
-  for (;;) {
-    z_sha1_update(&sha1, key, key_size);
-    z_sha1_update(&sha1, salt, salt_size);
-    z_sha1_final(&sha1, sha1_buf);
-
-    for (i = 1; i < __AES_DERIVATION_ROUNDS; ++i) {
-      z_sha1_init(&sha1);
-      z_sha1_update(&sha1, sha1_buf, 20);
-      z_sha1_final(&sha1, sha1_buf);
-    }
-
-    i = 0;
-    if (nkey > 0) {
-      for (;;) {
-        if (nkey == 0 || i == 20)
-          break;
-        *(ikey++) = sha1_buf[i];
-        nkey--;
-        i++;
-      }
-    }
-
-    if (niv > 0 && (i != 20)) {
-      for (;;) {
-        if (niv == 0 || i == 20)
-          break;
-
-        *iv++ = sha1_buf[i];
-        niv--;
-        i++;
-      }
-    }
-
-    if (nkey == 0 && niv == 0)
-      break;
-          
-    z_sha1_init(&sha1);
-    z_sha1_update(&sha1, sha1_buf, 20);
-  }
-}
 
 static int __aes_load (z_cryptor_t *self) {
   Z_OPAQUE_SET_PTR(&(self->data), NULL);
   return(0);
 }
-  
+
 static int __aes_unload (z_cryptor_t *self) {
   z_aes_t *aes = Z_OPAQUE_PTR(&(self->data), z_aes_t);
   if (aes != NULL) z_aes_free(aes);
   return(0);
 }
-  
-static int __aes_setkey (z_cryptor_t *self,
+
+static int __aes_setkey (z_cryptor_t *self, int kd_rounds,
                          const void *key, uint32_t key_size,
                          const void *salt, uint32_t salt_size)
 {
-  z_aes_t *aes = Z_OPAQUE_PTR(&(self->data), z_aes_t);
-  if (aes != NULL) z_aes_free(aes);
+  uint8_t ikey[32];
+  uint8_t iv[32];
+  z_aes_t *aes;
 
-  aes = z_aes_alloc(key, key_size, salt, salt_size);
+  z_kdf(ikey, iv, kd_rounds, key, key_size, salt, salt_size);
+
+  if ((aes = Z_OPAQUE_PTR(&(self->data), z_aes_t)) != NULL)
+    z_aes_free(aes);
+
+  aes = z_aes_alloc(ikey, iv);
   Z_OPAQUE_SET_PTR(&(self->data), aes);
   return(aes == NULL);
 }

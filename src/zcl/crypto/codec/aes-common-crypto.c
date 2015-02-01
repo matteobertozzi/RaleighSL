@@ -67,18 +67,14 @@ static int __aes_process (z_aes_t *crypto,
   return(0);
 }
 
-z_aes_t *z_aes_alloc (const void *key, uint32_t key_size,
-                      const void *salt, uint32_t salt_size)
-{
-  uint8_t ikey[32];
+z_aes_t *z_aes_alloc (uint8_t ikey[32], uint8_t iv[32]) {
   z_aes_t *crypto;
 
   /* Allocate Crypto AES Object */
   if ((crypto = (z_aes_t *) malloc(sizeof(z_aes_t))) == NULL)
     return(NULL);
 
-  /* Key generation */
-  z_aes_key(ikey, crypto->iv, key, key_size, salt, salt_size);
+  memcpy(crypto->iv, iv, 32);
 
   /* Initialize Encryption */
   if (__aes_cryptor_create(&(crypto->enc), kCCEncrypt, ikey, crypto->iv)) {

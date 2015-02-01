@@ -614,7 +614,7 @@ class Project(object):
     DEFAULT_CFLAGS = ['-Wall', '-Wmissing-field-initializers', '-msse4.2']
     DEFAULT_RELEASE_CFLAGS = ['-O3']
     DEFAULT_DEBUG_CFLAGS = ['-g']
-    DEFAULT_DEFINES = ['-D_GNU_SOURCE', '-D__USE_FILE_OFFSET64']
+    DEFAULT_DEFINES = ['-D_GNU_SOURCE', '-D__USE_FILE_OFFSET64', '-D_FILE_OFFSET_BITS=64']
     DEFAULT_LDLIBS = ['-lpthread', '-lm', '-lz']
 
     if Build.platformIsMac():
@@ -827,10 +827,33 @@ class R5LClient(Project):
     build = BuildMiniTools('%s-test' % self.NAME, ['tests/r5l-client'], options=build_opts)
     return build.build()
 
+class R5LFuse(Project):
+  VERSION = '0.5.0'
+  NAME = 'r5l-fuse'
+
+  def build_tools(self):
+    build_opts = self.default_opts.clone()
+    build_opts.addLdLibs(R5L.get_ldlibs())
+    build_opts.addIncludePaths(R5L.get_includes())
+
+    if Build.platformIsMac():
+      build_opts.addIncludePaths(['-I/usr/local/include/osxfuse/fuse'])
+      build_opts.addLdLibs(['-lpthread', '-L/usr/local/lib/ -losxfuse', '-ldl'])
+    else:
+      build_opts.addIncludePaths(['-I/usr/include/fuse'])
+      build_opts.addLdLibs(['-lpthread', '-lfuse', '-lrt', '-ldl'])
+
+    build = BuildApp(self.NAME, ['src/r5l-fuse/'], options=build_opts)
+    if not self.options.xcode:
+      build.build()
+
 def main(options):
   dependencies = [Zcl]
   if not options.no_r5l:
     dependencies.extend([R5L, R5LServer, R5LClient])
+
+    if options.r5l_fuse:
+      dependencies.append(R5LFuse)
 
   for project in dependencies:
     target = project(options)
@@ -883,6 +906,8 @@ def _parse_cmdline():
                       help='Do not print messages')
   parser.add_argument('--no-r5l', dest='no_r5l', action='store_true', default=False,
                       help='Do not build R5L')
+  parser.add_argument('--r5l-fuse', dest='r5l_fuse', action='store_true', default=False,
+                      help='Build R5L FUSE')
 
 
   return parser.parse_args()
