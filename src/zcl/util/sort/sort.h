@@ -24,10 +24,13 @@ void z_quick3_str (uint8_t *array[], int lo, int hi);
 void z_quick3_u32 (uint32_t array[], int lo, int hi);
 void z_quick3_u64 (uint64_t array[], int lo, int hi);
 
-void z_heap_sort     (void *base, size_t num, size_t size,
-                      z_compare_t cmp_func, void *udata);
-void z_heap_sort_u32 (uint32_t array[], int length);
-void z_heap_sort_u64 (uint64_t array[], int length);
+void z_heap_sort      (void *base, size_t num, size_t size,
+                       z_compare_t cmp_func, void *udata);
+void z_heap_sort_u32  (uint32_t array[], int length);
+void z_heap_sort_u64  (uint64_t array[], int length);
+void z_heap_sort_item (void *udata, int n,
+                       int (*cmp_func) (void *, int, int),
+                       void (*swap_func) (void *, int, int));
 
 __Z_END_DECLS__
 

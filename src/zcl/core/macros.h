@@ -106,6 +106,13 @@ typedef int   (*z_swap_t)       (void *udata, const void *a, const void *b);
     }                                            \
   } while (0)
 
+#define z_type_swap(type, a, b)           \
+  do {                                    \
+    type __swap_tmp = (a);                \
+    (a) = (b);                            \
+    (b) = __swap_tmp;                     \
+  } while (0)
+
 __Z_END_DECLS__
 
 #endif /* !_Z_MACROS_H_ */

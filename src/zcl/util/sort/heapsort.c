@@ -53,13 +53,6 @@ void z_heap_sort(void *base, size_t num, size_t size,
   }
 }
 
-#define __type_swap(type, a, b)           \
-  do {                                    \
-    type __swap_tmp = (a);                \
-    (a) = (b);                            \
-    (b) = __swap_tmp;                     \
-  } while (0)
-
 void z_heap_sort_u32 (uint32_t array[], int n) {
   int i = (n / 2 - 1);
 
@@ -71,7 +64,7 @@ void z_heap_sort_u32 (uint32_t array[], int n) {
         c += 1;
       if (array[r] >= array[c])
         break;
-      __type_swap(uint32_t, array[r], array[c]);
+      z_type_swap(uint32_t, array[r], array[c]);
 
       r = c;
       c = r * 2 + 1;
@@ -81,13 +74,13 @@ void z_heap_sort_u32 (uint32_t array[], int n) {
   for (i = n - 1; i > 0; --i) {
     int c = 1;
     int r = 0;
-    __type_swap(uint32_t, array[0], array[i]);
+    z_type_swap(uint32_t, array[0], array[i]);
     while (c < i) {
       if (c < i - 1 && array[c] < array[c + 1])
         c += 1;
       if (array[r] >= array[c])
         break;
-      __type_swap(uint32_t, array[r], array[c]);
+      z_type_swap(uint32_t, array[r], array[c]);
 
       r = c;
       c = r * 2 + 1;
@@ -106,7 +99,7 @@ void z_heap_sort_u64 (uint64_t array[], int n) {
         c += 1;
       if (array[r] >= array[c])
         break;
-      __type_swap(uint64_t, array[r], array[c]);
+      z_type_swap(uint64_t, array[r], array[c]);
 
       r = c;
       c = r * 2 + 1;
@@ -116,13 +109,51 @@ void z_heap_sort_u64 (uint64_t array[], int n) {
   for (i = n - 1; i > 0; --i) {
     int c = 1;
     int r = 0;
-    __type_swap(uint64_t, array[0], array[i]);
+    z_type_swap(uint64_t, array[0], array[i]);
     while (c < i) {
       if (c < i - 1 && array[c] < array[c + 1])
         c += 1;
       if (array[r] >= array[c])
         break;
-      __type_swap(uint64_t, array[r], array[c]);
+      z_type_swap(uint64_t, array[r], array[c]);
+
+      r = c;
+      c = r * 2 + 1;
+    }
+  }
+}
+
+void z_heap_sort_item (void *udata, int n,
+                       int (*cmp_func) (void *, int, int),
+                       void (*swap_func) (void *, int, int))
+{
+  int i = (n / 2 - 1);
+
+  for (; i >= 0; --i) {
+    int c = i * 2 + 1;
+    int r = i;
+    while (c < n) {
+      if (c < n - 1 && cmp_func(udata, c, c + 1) < 0)
+        c += 1;
+      if (cmp_func(udata, r, c) >= 0)
+        break;
+      swap_func(udata, r, c);
+
+      r = c;
+      c = r * 2 + 1;
+    }
+  }
+
+  for (i = n - 1; i > 0; --i) {
+    int c = 1;
+    int r = 0;
+    swap_func(udata, 0, i);
+    while (c < i) {
+      if (c < i - 1 && cmp_func(udata, c, c + 1) < 0)
+        c += 1;
+      if (cmp_func(udata, r, c) >= 0)
+        break;
+      swap_func(udata, r, c);
 
       r = c;
       c = r * 2 + 1;

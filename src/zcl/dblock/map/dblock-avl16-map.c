@@ -12,21 +12,19 @@
  *   limitations under the License.
  */
 
-#include <zcl/dblock-map.h>
 #include <zcl/int-coding.h>
 #include <zcl/memutil.h>
+#include <zcl/dblock.h>
 #include <zcl/avl16.h>
 
 typedef struct z_dblock_avl16_map_head z_dblock_avl16_map_head_t;
 
 struct z_dblock_avl16_map_head {
-  uint8_t format;
-  uint8_t _pad[3];
+  uint8_t __x[4];
 
   z_avl16_head_t avl_head;
   uint32_t blk_size;
   uint32_t blk_avail;
-  uint32_t kv_count;
   /* write vars */
   uint32_t index_next;
   z_dblock_kv_stats_t kv_stats;
@@ -65,7 +63,7 @@ static uint32_t __record_add (z_dblock_avl16_map_head_t *head,
                               uint8_t *block,
                               const z_dblock_kv_t *kv)
 {
-  z_avl16_node_t *node = Z_AVL16_NODE(block, head->index_next);
+  z_avl16_node_t *node = Z_AVL16_NODE(block, head->index_next, 16);
   uint32_t uspace;
   uint8_t *rhead;
   uint8_t *pbuf;
@@ -103,12 +101,11 @@ static uint32_t __record_add (z_dblock_avl16_map_head_t *head,
   memcpy(pbuf, kv->key,   kv->klength); pbuf += kv->klength;
   memcpy(pbuf, kv->value, kv->vlength); pbuf += kv->vlength;
 
-  uspace = Z_AVL16_ALIGN(Z_AVL16_NODE_SIZE + (pbuf - node->data));
+  uspace = z_align_up(Z_AVL16_NODE_SIZE + (pbuf - node->data), 16);
   head->blk_avail  -= uspace;
-  head->kv_count   += 1;
-  head->index_next += Z_AVL16_OFF2POS(uspace);
+  head->index_next += uspace >> 4;
 
-  z_dblock_map_stats_update(&(head->kv_stats), kv);
+  z_dblock_kv_stats_update(&(head->kv_stats), kv);
 
   return(head->blk_avail);
 }
@@ -117,7 +114,7 @@ static void __record_get (const uint8_t *block,
                           const uint16_t node_pos,
                           z_dblock_kv_t *kv)
 {
-  z_avl16_node_t *node = Z_AVL16_NODE(block, node_pos);
+  z_avl16_node_t *node = Z_AVL16_NODE(block, node_pos, 16);
   const uint8_t *pbuf = node->data + 1;
   const uint8_t head = node->data[0];
   switch (head & 0xC0) {
@@ -152,7 +149,7 @@ static int __dblock_avl16_map_lookup (uint8_t *block, z_dblock_kv_t *kv) {
   z_dblock_avl16_map_head_t *head = Z_CAST(z_dblock_avl16_map_head_t, block);
   uint16_t node_pos;
 
-  node_pos = z_avl16_lookup(block, head->avl_head.root,
+  node_pos = z_avl16_lookup(block, 16, head->avl_head.root,
                             __record_compare, kv, block);
   if (node_pos == 0)
     return(0);
@@ -171,14 +168,14 @@ static void __dblock_avl16_map_last_key (uint8_t *block, z_dblock_kv_t *kv) {
   __record_get(block, head->avl_head.edge[1], kv);
 }
 
-static void __dblock_log_map_get_iptr (uint8_t *block, uint32_t iptr, z_dblock_kv_t *kv) {
+static void __dblock_avl16_map_get_iptr (uint8_t *block, uint32_t iptr, z_dblock_kv_t *kv) {
   __record_get(block, iptr, kv);
 }
 
 /* ============================================================================
  *  Iterator methods
  */
-static int __dblock_avl16_map_seek (z_dblock_map_iter_t *viter,
+static int __dblock_avl16_map_seek (z_dblock_iter_t *viter,
                                     uint8_t *block,
                                     z_dblock_seek_t seek_pos,
                                     const z_dblock_kv_t *kv)
@@ -186,7 +183,7 @@ static int __dblock_avl16_map_seek (z_dblock_map_iter_t *viter,
   const z_dblock_avl16_map_head_t *head = Z_CONST_CAST(z_dblock_avl16_map_head_t, block);
   z_avl16_iter_t *iter = Z_CAST(z_avl16_iter_t, viter->data);
 
-  z_avl16_iter_init(iter, block, head->avl_head.root);
+  z_avl16_iter_init(iter, block, 16, head->avl_head.root);
   switch (seek_pos) {
     case Z_DBLOCK_SEEK_BEGIN:
       return(!!z_avl16_iter_seek_begin(iter));
@@ -211,22 +208,22 @@ static int __dblock_avl16_map_seek (z_dblock_map_iter_t *viter,
   return(0);
 }
 
-static int __dblock_avl16_map_seek_next (z_dblock_map_iter_t *viter) {
+static int __dblock_avl16_map_seek_next (z_dblock_iter_t *viter) {
   z_avl16_iter_t *iter = Z_CAST(z_avl16_iter_t, viter->data);
   return(z_avl16_iter_next(iter) != NULL);
 }
 
-static int __dblock_avl16_map_seek_prev (z_dblock_map_iter_t *viter) {
+static int __dblock_avl16_map_seek_prev (z_dblock_iter_t *viter) {
   z_avl16_iter_t *iter = Z_CAST(z_avl16_iter_t, viter->data);
   return(z_avl16_iter_prev(iter) != NULL);
 }
 
-static void __dblock_avl16_map_seek_item (z_dblock_map_iter_t *viter, z_dblock_kv_t *kv) {
+static void __dblock_avl16_map_seek_item (z_dblock_iter_t *viter, z_dblock_kv_t *kv) {
   const z_avl16_iter_t *iter = Z_CONST_CAST(z_avl16_iter_t, viter->data);
   __record_get(iter->block, iter->current, kv);
 }
 
-static uint32_t __dblock_avl16_map_seek_iptr (z_dblock_map_iter_t *viter) {
+static uint32_t __dblock_avl16_map_seek_iptr (z_dblock_iter_t *viter) {
   const z_avl16_iter_t *iter = Z_CONST_CAST(z_avl16_iter_t, viter->data);
   return(iter->current);
 }
@@ -236,21 +233,26 @@ static uint32_t __dblock_avl16_map_seek_iptr (z_dblock_map_iter_t *viter) {
  */
 static uint32_t __dblock_avl16_map_insert (uint8_t *block, const z_dblock_kv_t *kv) {
   z_dblock_avl16_map_head_t *head = Z_CAST(z_dblock_avl16_map_head_t, block);
-  z_avl16_insert(&(head->avl_head), block, head->index_next,
+  z_avl16_insert(&(head->avl_head), block, 16, head->index_next,
                  __record_compare, kv, block);
   return __record_add(head, block, kv);
 }
 
 static uint32_t __dblock_avl16_map_append (uint8_t *block, const z_dblock_kv_t *kv) {
   z_dblock_avl16_map_head_t *head = Z_CAST(z_dblock_avl16_map_head_t, block);
-  z_avl16_append(&(head->avl_head), block, head->index_next);
+  z_avl16_append(&(head->avl_head), block, 16, head->index_next);
   return __record_add(head, block, kv);
 }
 
 static uint32_t __dblock_avl16_map_prepend (uint8_t *block, const z_dblock_kv_t *kv) {
   z_dblock_avl16_map_head_t *head = Z_CAST(z_dblock_avl16_map_head_t, block);
-  z_avl16_prepend(&(head->avl_head), block, head->index_next);
+  z_avl16_prepend(&(head->avl_head), block, 16, head->index_next);
   return __record_add(head, block, kv);
+}
+
+static void __dblock_avl16_map_remove (uint8_t *block, const z_dblock_kv_t *kv) {
+  z_dblock_avl16_map_head_t *head = Z_CAST(z_dblock_avl16_map_head_t, block);
+  z_avl16_remove(&(head->avl_head), block, 16, __record_compare, kv, block);
 }
 
 /* ============================================================================
@@ -262,57 +264,37 @@ static int __dblock_avl16_map_has_space (uint8_t *block, const z_dblock_kv_t *kv
   kv_size = Z_AVL16_NODE_SIZE + 1 +
             z_uint32_size(kv->klength) + z_uint32_size(kv->vlength) +
             kv->klength + kv->vlength;
-  return(Z_AVL16_ALIGN(kv_size) <= (head->blk_avail));
+  return(z_align_up(kv_size, 16) <= (head->blk_avail));
 }
 
 static uint32_t __dblock_avl16_map_max_overhead (uint8_t *block) {
-  return(Z_AVL16_NODE_SIZE + Z_AVL16_ALIGN(1));
+  return(Z_AVL16_NODE_SIZE + 16);
 }
 
-static void __dblock_avl16_map_stats (uint8_t *block, z_dblock_map_stats_t *stats) {
+static void __dblock_avl16_map_stats (uint8_t *block, z_dblock_stats_t *stats) {
   const z_dblock_avl16_map_head_t *head = Z_CONST_CAST(z_dblock_avl16_map_head_t, block);
   stats->blk_size  = head->blk_size;
   stats->blk_avail = head->blk_avail;
-  stats->kv_count  = head->kv_count;
   stats->is_sorted = 1;
   z_dblock_kv_stats_copy(&(stats->kv_stats), &(head->kv_stats));
 }
 
-static void __dblock_avl16_map_dump (uint8_t *block, FILE *stream) {
-  const z_dblock_avl16_map_head_t *head = Z_CONST_CAST(z_dblock_avl16_map_head_t, block);
-  z_avl16_iter_t iter;
-  z_dblock_kv_t kv;
-  uint32_t i;
-
-  z_avl16_iter_init(&iter, block, head->avl_head.root);
-  z_avl16_iter_seek_begin(&iter);
-  for (i = 0; i < head->kv_count; ++i) {
-    __record_get(iter.block, iter.current, &kv);
-    z_avl16_iter_next(&iter);
-
-    fprintf(stream, " - kv %"PRIu32": ", i);
-    z_dblock_kv_dump(&kv, stream);
-    fprintf(stream, "\n");
-  }
-}
-
-static void __dblock_avl16_map_init (uint8_t *block, const z_dblock_map_opts_t *opts) {
+static void __dblock_avl16_map_init (uint8_t *block, const z_dblock_opts_t *opts) {
   z_dblock_avl16_map_head_t *head = Z_CAST(z_dblock_avl16_map_head_t, block);
   z_avl16_init(&(head->avl_head));
-  head->format     = Z_DBLOCK_MAP_TYPE_AVL16;
+
   head->blk_size   = opts->blk_size;
   head->blk_avail  = opts->blk_size - sizeof(z_dblock_avl16_map_head_t);
-  head->kv_count   = 0;
-  head->index_next = Z_AVL16_OFF2POS(sizeof(z_dblock_avl16_map_head_t));
+  head->index_next = z_max(1, z_align_up(sizeof(z_dblock_avl16_map_head_t), 16) >> 4);
 
   z_dblock_kv_stats_init(&(head->kv_stats));
 }
 
-const z_dblock_map_vtable_t z_dblock_avl16_map = {
+const z_dblock_vtable_t z_dblock_avl16_map = {
   .lookup       = __dblock_avl16_map_lookup,
   .first_key    = __dblock_avl16_map_first_key,
   .last_key     = __dblock_avl16_map_last_key,
-  .get_iptr     = __dblock_log_map_get_iptr,
+  .get_iptr     = __dblock_avl16_map_get_iptr,
 
   .seek         = __dblock_avl16_map_seek,
   .seek_next    = __dblock_avl16_map_seek_next,
@@ -323,11 +305,12 @@ const z_dblock_map_vtable_t z_dblock_avl16_map = {
   .insert       = __dblock_avl16_map_insert,
   .append       = __dblock_avl16_map_append,
   .prepend      = __dblock_avl16_map_prepend,
+  .remove       = __dblock_avl16_map_remove,
+  .replace      = NULL,
 
   .has_space    = __dblock_avl16_map_has_space,
   .max_overhead = __dblock_avl16_map_max_overhead,
 
   .stats        = __dblock_avl16_map_stats,
-  .dump         = __dblock_avl16_map_dump,
   .init         = __dblock_avl16_map_init,
 };

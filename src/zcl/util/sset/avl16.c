@@ -30,12 +30,13 @@
  *  PRIVATE AVL Insert/Balance
  */
 static void __avl16_ibalance (uint8_t *block,
+                              int stride,
                               z_avl16_node_t *parent,
                               z_avl16_node_t *node,
                               uint16_t *top,
                               uint32_t dstack)
 {
-  const uint16_t parent_pos = Z_AVL16_POS(block, parent);
+  const uint16_t parent_pos = Z_AVL16_POS(block, parent, stride);
   uint16_t wpos;
 
   do {
@@ -43,14 +44,14 @@ static void __avl16_ibalance (uint8_t *block,
     while (p != node) {
       const int dir = dstack & 1;
       p->balance += (dir ? 1 : -1);
-      p = Z_AVL16_NODE(block, p->child[dir]);
+      p = Z_AVL16_NODE(block, p->child[dir], stride);
       dstack >>= 1;
     }
   } while (0);
 
   if (parent->balance == -2) {
     const uint16_t xpos = parent->child[0];
-    z_avl16_node_t *x = Z_AVL16_NODE(block, xpos);
+    z_avl16_node_t *x = Z_AVL16_NODE(block, xpos, stride);
     if (x->balance == -1) {
       wpos = xpos;
       parent->child[0] = x->child[1];
@@ -60,7 +61,7 @@ static void __avl16_ibalance (uint8_t *block,
     } else {
       z_avl16_node_t *w;
       wpos = x->child[1];
-      w = Z_AVL16_NODE(block, wpos);
+      w = Z_AVL16_NODE(block, wpos, stride);
       x->child[1] = w->child[0];
       w->child[0] = xpos;
       parent->child[0] = w->child[1];
@@ -79,7 +80,7 @@ static void __avl16_ibalance (uint8_t *block,
     }
   } else if (parent->balance == +2) {
     const uint16_t xpos = parent->child[1];
-    z_avl16_node_t *x = Z_AVL16_NODE(block, xpos);
+    z_avl16_node_t *x = Z_AVL16_NODE(block, xpos, stride);
     if (x->balance == +1) {
       wpos = xpos;
       parent->child[1] = x->child[0];
@@ -88,7 +89,7 @@ static void __avl16_ibalance (uint8_t *block,
     } else {
       z_avl16_node_t *w;
       wpos = x->child[0];
-      w = Z_AVL16_NODE(block, wpos);
+      w = Z_AVL16_NODE(block, wpos, stride);
       x->child[0] = w->child[1];
       w->child[1] = xpos;
       parent->child[1] = w->child[0];
@@ -116,6 +117,7 @@ static void __avl16_ibalance (uint8_t *block,
  *  PRIVATE AVL Delete/Balance
  */
 static void __avl16_dbalance (uint8_t *block,
+                              int stride,
                               const z_avl16_node_t *node,
                               z_avl16_node_t *stack[20],
                               uint8_t dstack[20],
@@ -125,7 +127,7 @@ static void __avl16_dbalance (uint8_t *block,
     stack[k - 1]->child[dstack[k - 1]] = node->child[0];
   } else {
     uint16_t rpos = node->child[1];
-    z_avl16_node_t *r = Z_AVL16_NODE(block, rpos);
+    z_avl16_node_t *r = Z_AVL16_NODE(block, rpos, stride);
     if (r->child[0] == 0) {
       r->child[0] = node->child[0];
       r->balance  = node->balance;
@@ -141,7 +143,7 @@ static void __avl16_dbalance (uint8_t *block,
         dstack[k]  = 0;
         stack[k++] = r;
         spos = r->child[0];
-        s = Z_AVL16_NODE(block, spos);
+        s = Z_AVL16_NODE(block, spos, stride);
         if (s->child[0] == 0)
           break;
 
@@ -161,7 +163,7 @@ static void __avl16_dbalance (uint8_t *block,
 
   while (--k > 0) {
     z_avl16_node_t *y = stack[k];
-    const uint16_t ypos = Z_AVL16_POS(block, y);
+    const uint16_t ypos = Z_AVL16_POS(block, y, stride);
 
     if (dstack[k] == 0) {
       ++(y->balance);
@@ -169,10 +171,10 @@ static void __avl16_dbalance (uint8_t *block,
         break;
       if (y->balance == +2) {
         const uint16_t xpos = y->child[1];
-        z_avl16_node_t *x = Z_AVL16_NODE(block, xpos);
+        z_avl16_node_t *x = Z_AVL16_NODE(block, xpos, stride);
         if (x->balance == -1) {
           const uint16_t wpos = x->child[0];
-          z_avl16_node_t *w = Z_AVL16_NODE(block, wpos);
+          z_avl16_node_t *w = Z_AVL16_NODE(block, wpos, stride);
           x->child[0] = w->child[1];
           w->child[1] = xpos;
           y->child[1] = w->child[0];
@@ -209,10 +211,10 @@ static void __avl16_dbalance (uint8_t *block,
         break;
       if (y->balance == -2) {
         const uint16_t xpos = y->child[0];
-        z_avl16_node_t *x = Z_AVL16_NODE(block, xpos);
+        z_avl16_node_t *x = Z_AVL16_NODE(block, xpos, stride);
         if (x->balance == +1) {
           const uint16_t wpos = x->child[1];
-          z_avl16_node_t *w = Z_AVL16_NODE(block, wpos);
+          z_avl16_node_t *w = Z_AVL16_NODE(block, wpos, stride);
           x->child[1] = w->child[0];
           w->child[0] = xpos;
           y->child[0] = w->child[1];
@@ -252,6 +254,7 @@ static void __avl16_dbalance (uint8_t *block,
  */
 uint8_t *z_avl16_insert (z_avl16_head_t *head,
                          uint8_t *block,
+                         int stride,
                          uint16_t node_pos,
                          z_avl16_compare_t key_cmp,
                          const void *key,
@@ -271,9 +274,9 @@ uint8_t *z_avl16_insert (z_avl16_head_t *head,
     k = dir = 0;
     pp = head->root;
     top = q = &(head->root);
-    parent = Z_AVL16_NODE(block, pp);
+    parent = Z_AVL16_NODE(block, pp, stride);
     while (pp != 0) {
-      z_avl16_node_t *p = Z_AVL16_NODE(block, pp);
+      z_avl16_node_t *p = Z_AVL16_NODE(block, pp, stride);
       const int cmp = key_cmp(udata, p, key);
       if (Z_UNLIKELY(cmp == 0))
         return(p->data);
@@ -291,7 +294,7 @@ uint8_t *z_avl16_insert (z_avl16_head_t *head,
       dstack |= (dir << k++);
     }
 
-    pp = Z_AVL16_POS(block, q);
+    pp = Z_AVL16_POS(block, q, stride);
     if (dir && pp == head->edge[1]) {
       head->edge[1] = node_pos;
     } else if (!dir && pp == head->edge[0]) {
@@ -299,12 +302,12 @@ uint8_t *z_avl16_insert (z_avl16_head_t *head,
     }
 
     q[dir] = node_pos;
-    node = Z_AVL16_NODE(block, node_pos);
+    node = Z_AVL16_NODE(block, node_pos, stride);
     __avl16_node_init(node);
-    __avl16_ibalance(block, parent, node, top, dstack);
+    __avl16_ibalance(block, stride, parent, node, top, dstack);
   } else {
     z_avl16_node_t *node;
-    node = Z_AVL16_NODE(block, node_pos);
+    node = Z_AVL16_NODE(block, node_pos, stride);
     __avl16_node_init(node);
     head->root = node_pos;
     head->edge[0] = node_pos;
@@ -315,6 +318,7 @@ uint8_t *z_avl16_insert (z_avl16_head_t *head,
 
 void z_avl16_add_edge (z_avl16_head_t *head,
                        uint8_t *block,
+                       int stride,
                        uint16_t node_pos,
                        const int edge)
 {
@@ -330,9 +334,9 @@ void z_avl16_add_edge (z_avl16_head_t *head,
     dstack = 0;
     pp = head->root;
     top = q = &(head->root);
-    parent = Z_AVL16_NODE(block, pp);
+    parent = Z_AVL16_NODE(block, pp, stride);
     while (pp != 0) {
-      z_avl16_node_t *p = Z_AVL16_NODE(block, pp);
+      z_avl16_node_t *p = Z_AVL16_NODE(block, pp, stride);
       if (p->balance != 0) {
         k = 0;
         top = q;
@@ -347,12 +351,12 @@ void z_avl16_add_edge (z_avl16_head_t *head,
 
     q[edge] = node_pos;
     head->edge[edge] = node_pos;
-    node = Z_AVL16_NODE(block, node_pos);
+    node = Z_AVL16_NODE(block, node_pos, stride);
     __avl16_node_init(node);
-    __avl16_ibalance(block, parent, node, top, dstack);
+    __avl16_ibalance(block, stride, parent, node, top, dstack);
   } else {
     z_avl16_node_t *node;
-    node = Z_AVL16_NODE(block, node_pos);
+    node = Z_AVL16_NODE(block, node_pos, stride);
     __avl16_node_init(node);
     head->root = node_pos;
     head->edge[0] = node_pos;
@@ -362,6 +366,7 @@ void z_avl16_add_edge (z_avl16_head_t *head,
 
 uint16_t z_avl16_remove (z_avl16_head_t *head,
                          uint8_t *block,
+                         int stride,
                          z_avl16_compare_t key_cmp,
                          const void *key,
                          void *udata)
@@ -387,23 +392,24 @@ uint16_t z_avl16_remove (z_avl16_head_t *head,
       return(0);
 
     node_pos = node->child[dir];
-    node = Z_AVL16_NODE(block, node_pos);
+    node = Z_AVL16_NODE(block, node_pos, stride);
   } while ((cmp = key_cmp(udata, node, key)) != 0);
 
-  __avl16_dbalance(block, node, stack, dstack, istack);
+  __avl16_dbalance(block, stride, node, stack, dstack, istack);
 
   if (node_pos == head->edge[0]) {
     // TODO
-    head->edge[0] = z_avl16_lookup_min(block, head->root);
+    head->edge[0] = z_avl16_lookup_min(block, stride, head->root);
   } else if (node_pos == head->edge[1]) {
     // TODO
-    head->edge[1] = z_avl16_lookup_max(block, head->root);
+    head->edge[1] = z_avl16_lookup_max(block, stride, head->root);
   }
   return(node_pos);
 }
 
 uint16_t z_avl16_remove_edge (z_avl16_head_t *head,
                               uint8_t *block,
+                              int stride,
                               const int edge)
 {
   z_avl16_node_t *stack[20];
@@ -418,27 +424,28 @@ uint16_t z_avl16_remove_edge (z_avl16_head_t *head,
   dstack[0] = 0;
   istack    = 1;
   node_pos = head->root;
-  node = Z_AVL16_NODE(block, head->root);
+  node = Z_AVL16_NODE(block, head->root, stride);
   while (node->child[edge] != 0) {
     stack[istack] = node;
     dstack[istack++] = edge;
     node_pos = node->child[edge];
-    node = Z_AVL16_NODE(block, node_pos);
+    node = Z_AVL16_NODE(block, node_pos, stride);
   }
 
-  __avl16_dbalance(block, node, stack, dstack, istack);
-  head->edge[edge] = z_avl16_lookup_edge(block, head->root, edge);
+  __avl16_dbalance(block, stride, node, stack, dstack, istack);
+  head->edge[edge] = z_avl16_lookup_edge(block, stride, head->root, edge);
   return(node_pos);
 }
 
 uint16_t z_avl16_lookup (uint8_t *block,
+                         int stride,
                          uint16_t root,
                          z_avl16_compare_t key_cmp,
                          const void *key,
                          void *udata)
 {
   while (root != 0) {
-    z_avl16_node_t *node = Z_AVL16_NODE(block, root);
+    z_avl16_node_t *node = Z_AVL16_NODE(block, root, stride);
     const int cmp = key_cmp(udata, node, key);
     if (cmp > 0) {
       root = node->child[0];
@@ -451,11 +458,11 @@ uint16_t z_avl16_lookup (uint8_t *block,
   return(0);
 }
 
-uint16_t z_avl16_lookup_edge (uint8_t *block, uint16_t root, int edge) {
-  z_avl16_node_t *node = Z_AVL16_NODE(block, root);
+uint16_t z_avl16_lookup_edge (uint8_t *block, int stride, uint16_t root, int edge) {
+  z_avl16_node_t *node = Z_AVL16_NODE(block, root, stride);
   while (node->child[edge] != 0) {
     root = (node->child[edge]);
-    node = Z_AVL16_NODE(block, root);
+    node = Z_AVL16_NODE(block, root, stride);
   }
   return(root);
 }
@@ -478,7 +485,7 @@ static void *__avl16_iter_lookup_near (z_avl16_iter_t *self,
 
   self->found = 0;
   while (node_pos != 0) {
-    z_avl16_node_t *node = Z_AVL16_NODE(self->block, node_pos);
+    z_avl16_node_t *node = Z_AVL16_NODE(self->block, node_pos, self->stride);
     int cmp = key_cmp(udata, node, key);
     if (cmp == 0) {
       self->current = node_pos;
@@ -504,7 +511,7 @@ static void *__avl16_iter_lookup_near (z_avl16_iter_t *self,
           uint16_t parent_pos;
 
           parent_pos = self->stack[--(self->height)];
-          parent = Z_AVL16_NODE(self->block, parent_pos);
+          parent = Z_AVL16_NODE(self->block, parent_pos, self->stride);
           while (node_pos == parent->child[ceil_entry]) {
             if (self->height == 0) {
               self->current = 0;
@@ -513,7 +520,7 @@ static void *__avl16_iter_lookup_near (z_avl16_iter_t *self,
 
             node_pos = parent_pos;
             parent_pos = self->stack[--(self->height)];
-            parent = Z_AVL16_NODE(self->block, parent_pos);
+            parent = Z_AVL16_NODE(self->block, parent_pos, self->stride);
           }
           self->current = parent_pos;
           return(parent->data);
@@ -536,17 +543,17 @@ static void *__avl16_iter_trav (z_avl16_iter_t *self, const int child) {
     return(NULL);
 
   node_pos = self->current;
-  node = Z_AVL16_NODE(self->block, node_pos);
+  node = Z_AVL16_NODE(self->block, node_pos, self->stride);
   if (node->child[child] != 0) {
     const int nchild = !child;
 
     self->stack[(self->height)++] = node_pos;
     node_pos = node->child[child];
-    node = Z_AVL16_NODE(self->block, node_pos);
+    node = Z_AVL16_NODE(self->block, node_pos, self->stride);
     while (node->child[nchild] != 0) {
       self->stack[(self->height)++] = node_pos;
       node_pos = node->child[nchild];
-      node = Z_AVL16_NODE(self->block, node_pos);
+      node = Z_AVL16_NODE(self->block, node_pos, self->stride);
     }
   } else {
     uint16_t pos;
@@ -558,7 +565,7 @@ static void *__avl16_iter_trav (z_avl16_iter_t *self, const int child) {
 
       pos = node_pos;
       node_pos = self->stack[--(self->height)];
-      node = Z_AVL16_NODE(self->block, node_pos);
+      node = Z_AVL16_NODE(self->block, node_pos, self->stride);
     } while (node->child[child] == pos);
   }
 
@@ -573,11 +580,11 @@ static void *__avl16_iter_edge (z_avl16_iter_t *self, const int child) {
     uint16_t node_pos;
 
     node_pos = self->root;
-    node = Z_AVL16_NODE(self->block, node_pos);
+    node = Z_AVL16_NODE(self->block, node_pos, self->stride);
     while (node->child[child] != 0) {
       self->stack[(self->height)++] = node_pos;
       node_pos = node->child[child];
-      node = Z_AVL16_NODE(self->block, node_pos);
+      node = Z_AVL16_NODE(self->block, node_pos, self->stride);
     }
     self->current = node_pos;
     return(node->data);
@@ -590,11 +597,12 @@ static void *__avl16_iter_edge (z_avl16_iter_t *self, const int child) {
 /* ============================================================================
  *  PUBLIC Tree Iterator
  */
-void z_avl16_iter_init (z_avl16_iter_t *self, uint8_t *block, uint16_t root) {
+void z_avl16_iter_init (z_avl16_iter_t *self, uint8_t *block, int stride, uint16_t root) {
   self->block = block;
   self->current = 0;
   self->height = 0;
   self->root = root;
+  self->stride = stride;
 }
 
 void *z_avl16_iter_seek_begin (z_avl16_iter_t *self) {

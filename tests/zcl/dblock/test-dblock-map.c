@@ -17,7 +17,7 @@
 #include <zcl/math.h>
 
 #include <zcl/humans.h>
-#include <zcl/dblock-map.h>
+#include <zcl/dblock.h>
 
 #define BLOCK       (96 << 10)
 #define MIN_KVS     ((uint64_t)450u)
@@ -34,13 +34,13 @@ static void __build_valbuf (uint8_t *buf, uint32_t value, uint32_t size) {
   }
 }
 
-static uint64_t __test_dblock_map_append (z_utest_env_t *env,
-                                          const z_dblock_map_vtable_t *vtable,
+static uint64_t __test_dblock_append (z_utest_env_t *env,
+                                          const z_dblock_vtable_t *vtable,
                                           uint8_t *block,
                                           const int ksize, int vsize)
 {
   uint8_t kbuf[128], vbuf[128];
-  z_dblock_map_opts_t opts;
+  z_dblock_opts_t opts;
   uint64_t kv_count = 0;
   int has_space = 1;
   int max_overhead;
@@ -81,13 +81,13 @@ static uint64_t __test_dblock_map_append (z_utest_env_t *env,
   return(kv_count);
 }
 
-static void __test_dblock_map_insert (z_utest_env_t *env,
-                                      const z_dblock_map_vtable_t *vtable,
+static void __test_dblock_insert (z_utest_env_t *env,
+                                      const z_dblock_vtable_t *vtable,
                                       uint8_t *block, uint64_t kv_count,
                                       const int ksize, int vsize)
 {
   uint8_t kbuf[128], vbuf[128];
-  z_dblock_map_opts_t opts;
+  z_dblock_opts_t opts;
   z_dblock_kv_t kv;
   uint32_t prime;
   uint32_t value;
@@ -112,13 +112,13 @@ static void __test_dblock_map_insert (z_utest_env_t *env,
   }
 }
 
-static void __test_dblock_map_prepend (z_utest_env_t *env,
-                                       const z_dblock_map_vtable_t *vtable,
+static void __test_dblock_prepend (z_utest_env_t *env,
+                                       const z_dblock_vtable_t *vtable,
                                        uint8_t *block, uint64_t kv_count,
                                        const int ksize, int vsize)
 {
   uint8_t kbuf[128], vbuf[128];
-  z_dblock_map_opts_t opts;
+  z_dblock_opts_t opts;
   z_dblock_kv_t kv;
   uint32_t value;
   uint64_t key;
@@ -144,8 +144,8 @@ static void __test_dblock_map_prepend (z_utest_env_t *env,
   z_assert_u64_equals(env, (uint64_t)0u, kv_count);
 }
 
-static void __test_dblock_map_lookup (z_utest_env_t *env,
-                                      const z_dblock_map_vtable_t *vtable,
+static void __test_dblock_lookup (z_utest_env_t *env,
+                                      const z_dblock_vtable_t *vtable,
                                       uint8_t *block, uint64_t kv_count,
                                       const int ksize, int vsize)
 {
@@ -180,15 +180,15 @@ static void __test_dblock_map_lookup (z_utest_env_t *env,
   }
 }
 
-static void __test_dblock_map_seek_to (z_utest_env_t *env,
-                                       const z_dblock_map_vtable_t *vtable,
+static void __test_dblock_seek_to (z_utest_env_t *env,
+                                       const z_dblock_vtable_t *vtable,
                                        uint8_t *block, const int ksize, int vsize,
                                        z_dblock_seek_t seek_pos,
                                        uint64_t seek_key, uint64_t expected_key,
                                        int has_prev, int has_next)
 {
   uint8_t kbuf[128], vbuf[128];
-  z_dblock_map_iter_t iter;
+  z_dblock_iter_t iter;
   z_dblock_kv_t kv;
   int has_data;
 
@@ -235,59 +235,59 @@ static void __test_dblock_map_seek_to (z_utest_env_t *env,
   }
 }
 
-static void __test_dblock_map_seek (z_utest_env_t *env,
-                                    const z_dblock_map_vtable_t *vtable,
+static void __test_dblock_seek (z_utest_env_t *env,
+                                    const z_dblock_vtable_t *vtable,
                                     uint8_t *block, uint64_t kv_count,
                                      const int ksize, int vsize)
 {
   /* seek found */
-  __test_dblock_map_seek_to(env, vtable, block, ksize, vsize,
+  __test_dblock_seek_to(env, vtable, block, ksize, vsize,
                             Z_DBLOCK_SEEK_EQ, 50, 50, 1, 1);
   z_utest_check_failure(env);
 
-  __test_dblock_map_seek_to(env, vtable, block, ksize, vsize,
+  __test_dblock_seek_to(env, vtable, block, ksize, vsize,
                             Z_DBLOCK_SEEK_EQ, 0, 0, 0, 1);
   z_utest_check_failure(env);
 
-  __test_dblock_map_seek_to(env, vtable, block, ksize, vsize,
+  __test_dblock_seek_to(env, vtable, block, ksize, vsize,
                             Z_DBLOCK_SEEK_LT, 50, 49, 1, 1);
   z_utest_check_failure(env);
 
-  __test_dblock_map_seek_to(env, vtable, block, ksize, vsize,
+  __test_dblock_seek_to(env, vtable, block, ksize, vsize,
                             Z_DBLOCK_SEEK_LT, 0xffffffffffff, kv_count - 1, 1, 0);
   z_utest_check_failure(env);
 
-  __test_dblock_map_seek_to(env, vtable, block, ksize, vsize,
+  __test_dblock_seek_to(env, vtable, block, ksize, vsize,
                             Z_DBLOCK_SEEK_LE, 50, 50, 1, 1);
   z_utest_check_failure(env);
 
-  __test_dblock_map_seek_to(env, vtable, block, ksize, vsize,
+  __test_dblock_seek_to(env, vtable, block, ksize, vsize,
                             Z_DBLOCK_SEEK_LE, 0, 0, 0, 1);
   z_utest_check_failure(env);
 
-  __test_dblock_map_seek_to(env, vtable, block, ksize, vsize,
+  __test_dblock_seek_to(env, vtable, block, ksize, vsize,
                             Z_DBLOCK_SEEK_LE, 0xffffffffffff, kv_count - 1, 1, 0);
   z_utest_check_failure(env);
 
-  __test_dblock_map_seek_to(env, vtable, block, ksize, vsize,
+  __test_dblock_seek_to(env, vtable, block, ksize, vsize,
                             Z_DBLOCK_SEEK_GT, 50, 51, 1, 1);
   z_utest_check_failure(env);
 
-  __test_dblock_map_seek_to(env, vtable, block, ksize, vsize,
+  __test_dblock_seek_to(env, vtable, block, ksize, vsize,
                             Z_DBLOCK_SEEK_GT, 0, 1, 1, 1);
   z_utest_check_failure(env);
 
-  __test_dblock_map_seek_to(env, vtable, block, ksize, vsize,
+  __test_dblock_seek_to(env, vtable, block, ksize, vsize,
                             Z_DBLOCK_SEEK_GE, 50, 50, 1, 1);
   z_utest_check_failure(env);
 
-  __test_dblock_map_seek_to(env, vtable, block, ksize, vsize,
+  __test_dblock_seek_to(env, vtable, block, ksize, vsize,
                             Z_DBLOCK_SEEK_GE, 0, 0, 0, 1);
   z_utest_check_failure(env);
 
   /* seek not found */
   do {
-    z_dblock_map_iter_t iter;
+    z_dblock_iter_t iter;
     uint8_t kbuf[128];
     z_dblock_kv_t kv;
 
@@ -311,13 +311,13 @@ static void __test_dblock_map_seek (z_utest_env_t *env,
   } while (0);
 }
 
-static void __test_dblock_map_seek_next (z_utest_env_t *env,
-                                         const z_dblock_map_vtable_t *vtable,
+static void __test_dblock_seek_next (z_utest_env_t *env,
+                                         const z_dblock_vtable_t *vtable,
                                          uint8_t *block, uint64_t kv_count,
                                          const int ksize, int vsize)
 {
   uint8_t kbuf[128], vbuf[128];
-  z_dblock_map_iter_t iter;
+  z_dblock_iter_t iter;
   uint32_t value;
   uint64_t key;
 
@@ -341,13 +341,13 @@ static void __test_dblock_map_seek_next (z_utest_env_t *env,
   z_assert_u64_equals(env, kv_count, key);
 }
 
-static void __test_dblock_map_seek_prev (z_utest_env_t *env,
-                                         const z_dblock_map_vtable_t *vtable,
+static void __test_dblock_seek_prev (z_utest_env_t *env,
+                                         const z_dblock_vtable_t *vtable,
                                          uint8_t *block, uint64_t kv_count,
                                          const int ksize, int vsize)
 {
   uint8_t kbuf[128], vbuf[128];
-  z_dblock_map_iter_t iter;
+  z_dblock_iter_t iter;
   uint32_t value;
   uint64_t key;
 
@@ -372,8 +372,8 @@ static void __test_dblock_map_seek_prev (z_utest_env_t *env,
   z_assert_u64_equals(env, (uint64_t)0u, key);
 }
 
-static void __test_dblock_map_edges (z_utest_env_t *env,
-                                     const z_dblock_map_vtable_t *vtable,
+static void __test_dblock_edges (z_utest_env_t *env,
+                                     const z_dblock_vtable_t *vtable,
                                      uint8_t *block, uint64_t kv_count,
                                      const int ksize, int vsize)
 {
@@ -394,31 +394,31 @@ static void __test_dblock_map_edges (z_utest_env_t *env,
 }
 
 static void __test_dblock_read (z_utest_env_t *env,
-                                const z_dblock_map_vtable_t *vtable,
+                                const z_dblock_vtable_t *vtable,
                                 uint8_t *block, uint64_t kv_count,
                                 const int ksize, int vsize)
 {
   /* test lookups */
-  __test_dblock_map_lookup(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_lookup(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
 
   /* test seek */
-  __test_dblock_map_seek_next(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_seek_next(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
-  __test_dblock_map_seek_prev(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_seek_prev(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
 
   /* test seek-to */
-  __test_dblock_map_seek(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_seek(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
 
   /* test edges */
-  __test_dblock_map_edges(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_edges(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
 }
 
 static void __test_dblock_sort (z_utest_env_t *env,
-                                const z_dblock_map_vtable_t *vtable,
+                                const z_dblock_vtable_t *vtable,
                                 uint8_t *block, uint64_t kv_count)
 {
   z_dblock_kv_t a_kv, b_kv;
@@ -428,7 +428,7 @@ static void __test_dblock_sort (z_utest_env_t *env,
   index = (uint32_t *) malloc(kv_count * sizeof(uint32_t));
   z_assert_not_null(env, index);
 
-  z_dblock_map_build_index32(vtable, block, index);
+  z_dblock_build_index32(vtable, block, index);
   for (i = 1; i < kv_count; ++i) {
     vtable->get_iptr(block, index[i - 1], &a_kv);
     vtable->get_iptr(block, index[i + 0], &b_kv);
@@ -439,7 +439,7 @@ static void __test_dblock_sort (z_utest_env_t *env,
 }
 
 static void __test_dblock_smap (z_utest_env_t *env,
-                                const z_dblock_map_vtable_t *vtable,
+                                const z_dblock_vtable_t *vtable,
                                 const int ksize, int vsize)
 {
   uint64_t kv_count;
@@ -449,9 +449,8 @@ static void __test_dblock_smap (z_utest_env_t *env,
   z_assert_not_null(env, block);
 
   /* append data */
-  kv_count = __test_dblock_map_append(env, vtable, block, ksize, vsize);
+  kv_count = __test_dblock_append(env, vtable, block, ksize, vsize);
   z_utest_check_failure(env);
-  z_assert(env, z_dblock_map_block_vtable(block) == vtable, "format mismatch");
   z_assert_u64_gt(env, kv_count, MIN_KVS);
   __test_dblock_read(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
@@ -459,18 +458,16 @@ static void __test_dblock_smap (z_utest_env_t *env,
   z_utest_check_failure(env);
 
   /* insert data */
-  __test_dblock_map_insert(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_insert(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
-  z_assert(env, z_dblock_map_block_vtable(block) == vtable, "format mismatch");
   __test_dblock_read(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
   __test_dblock_sort(env, vtable, block, kv_count);
   z_utest_check_failure(env);
 
   /* prepend data */
-  __test_dblock_map_prepend(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_prepend(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
-  z_assert(env, z_dblock_map_block_vtable(block) == vtable, "format mismatch");
   __test_dblock_read(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
   __test_dblock_sort(env, vtable, block, kv_count);
@@ -480,7 +477,7 @@ static void __test_dblock_smap (z_utest_env_t *env,
 }
 
 static void __test_dblock_map (z_utest_env_t *env,
-                               const z_dblock_map_vtable_t *vtable,
+                               const z_dblock_vtable_t *vtable,
                                const int ksize, int vsize)
 {
   uint64_t kv_count;
@@ -490,9 +487,8 @@ static void __test_dblock_map (z_utest_env_t *env,
   z_assert_not_null(env, block);
 
   /* append data */
-  kv_count = __test_dblock_map_append(env, vtable, block, ksize, vsize);
+  kv_count = __test_dblock_append(env, vtable, block, ksize, vsize);
   z_utest_check_failure(env);
-  z_assert(env, z_dblock_map_block_vtable(block) == vtable, "format mismatch");
   z_assert_u64_gt(env, kv_count, MIN_KVS);
   __test_dblock_read(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
@@ -500,23 +496,21 @@ static void __test_dblock_map (z_utest_env_t *env,
   z_utest_check_failure(env);
 
   /* insert data */
-  __test_dblock_map_insert(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_insert(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
-  z_assert(env, z_dblock_map_block_vtable(block) == vtable, "format mismatch");
-  __test_dblock_map_lookup(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_lookup(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
-  __test_dblock_map_edges(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_edges(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
   __test_dblock_sort(env, vtable, block, kv_count);
   z_utest_check_failure(env);
 
   /* prepend data */
-  __test_dblock_map_prepend(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_prepend(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
-  z_assert(env, z_dblock_map_block_vtable(block) == vtable, "format mismatch");
-  __test_dblock_map_lookup(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_lookup(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
-  __test_dblock_map_edges(env, vtable, block, kv_count, ksize, vsize);
+  __test_dblock_edges(env, vtable, block, kv_count, ksize, vsize);
   z_utest_check_failure(env);
   __test_dblock_sort(env, vtable, block, kv_count);
   z_utest_check_failure(env);
@@ -524,6 +518,8 @@ static void __test_dblock_map (z_utest_env_t *env,
   free(block);
 }
 
+/* ============================================================================
+ */
 static void test_dblock_avl16_k8v4 (z_utest_env_t *env) {
   __test_dblock_smap(env, &z_dblock_avl16_map, 8, 4);
 }
@@ -540,6 +536,26 @@ static void test_dblock_avl16_k64v128 (z_utest_env_t *env) {
   __test_dblock_smap(env, &z_dblock_avl16_map, 64, 128);
 }
 
+/* ============================================================================
+ */
+static void test_dblock_avl16e_k8v4 (z_utest_env_t *env) {
+  __test_dblock_smap(env, &z_dblock_avl16e_map, 8, 4);
+}
+
+static void test_dblock_avl16e_k15v15 (z_utest_env_t *env) {
+  __test_dblock_smap(env, &z_dblock_avl16e_map, 15, 15);
+}
+
+static void test_dblock_avl16e_k32v0 (z_utest_env_t *env) {
+  __test_dblock_smap(env, &z_dblock_avl16e_map, 32, 0);
+}
+
+static void test_dblock_avl16e_k64v128 (z_utest_env_t *env) {
+  __test_dblock_smap(env, &z_dblock_avl16e_map, 64, 128);
+}
+
+/* ============================================================================
+ */
 static void test_dblock_log_k8v4 (z_utest_env_t *env) {
   __test_dblock_map(env, &z_dblock_log_map, 8, 4);
 }
@@ -556,12 +572,12 @@ static void test_dblock_log_k64v128 (z_utest_env_t *env) {
   __test_dblock_map(env, &z_dblock_log_map, 64, 128);
 }
 
-static z_dblock_overlap_t __test_dblock_map_overlap (uint64_t a_first_key,
+static z_dblock_overlap_t __test_dblock_overlap (uint64_t a_first_key,
                                                      uint64_t a_last_key,
                                                      uint64_t b_first_key,
                                                      uint64_t b_last_key)
 {
-  z_dblock_map_opts_t opts;
+  z_dblock_opts_t opts;
   uint8_t a_block[128];
   uint8_t b_block[128];
   z_dblock_kv_t kv;
@@ -586,40 +602,40 @@ static z_dblock_overlap_t __test_dblock_map_overlap (uint64_t a_first_key,
   __build_keybuf(buf, b_last_key, kv.klength);
   z_dblock_avl16_map.append(b_block, &kv);
 
-  return(z_dblock_map_overlap(&z_dblock_log_map, a_block,
+  return(z_dblock_overlap(&z_dblock_log_map, a_block,
                               &z_dblock_avl16_map, b_block));
 }
 
 static void test_dblock_overlap (z_utest_env_t *env) {
   /* |--- X ---|  |--- Y ---| */
   z_assert_u32_equals(env, Z_DBLOCK_OVERLAP_NO_LEFT,
-                      __test_dblock_map_overlap(10, 20, 30, 40));
+                      __test_dblock_overlap(10, 20, 30, 40));
   z_assert_u32_equals(env, Z_DBLOCK_OVERLAP_NO_RIGHT,
-                      __test_dblock_map_overlap(30, 40, 10, 20));
+                      __test_dblock_overlap(30, 40, 10, 20));
 
   /* |--- X ---|--- Y ---| */
   z_assert_u32_equals(env, Z_DBLOCK_OVERLAP_YES_LEFT,
-                      __test_dblock_map_overlap(10, 20, 20, 40));
+                      __test_dblock_overlap(10, 20, 20, 40));
   z_assert_u32_equals(env, Z_DBLOCK_OVERLAP_YES_RIGHT,
-                      __test_dblock_map_overlap(20, 40, 10, 20));
+                      __test_dblock_overlap(20, 40, 10, 20));
 
   /*
    * |----- X -----|
    *   |--- Y ---|
    */
   z_assert_u32_equals(env, Z_DBLOCK_OVERLAP_YES,
-                      __test_dblock_map_overlap(10, 100, 20, 80));
+                      __test_dblock_overlap(10, 100, 20, 80));
   z_assert_u32_equals(env, Z_DBLOCK_OVERLAP_YES,
-                      __test_dblock_map_overlap(20, 80, 10, 100));
+                      __test_dblock_overlap(20, 80, 10, 100));
 
   /*
    * |----- X -----|
    *           |--- Y ---|
    */
   z_assert_u32_equals(env, Z_DBLOCK_OVERLAP_YES,
-                      __test_dblock_map_overlap(10, 20, 15, 30));
+                      __test_dblock_overlap(10, 20, 15, 30));
   z_assert_u32_equals(env, Z_DBLOCK_OVERLAP_YES,
-                      __test_dblock_map_overlap(15, 30, 10, 20));
+                      __test_dblock_overlap(15, 30, 10, 20));
 }
 
 int main (int argc, char **argv) {
@@ -627,6 +643,11 @@ int main (int argc, char **argv) {
   z_utest_run(test_dblock_avl16_k15v15, 0);
   z_utest_run(test_dblock_avl16_k32v0, 0);
   z_utest_run(test_dblock_avl16_k64v128, 0);
+
+  z_utest_run(test_dblock_avl16e_k8v4, 0);
+  z_utest_run(test_dblock_avl16e_k15v15, 0);
+  z_utest_run(test_dblock_avl16e_k32v0, 0);
+  z_utest_run(test_dblock_avl16e_k64v128, 0);
 
   z_utest_run(test_dblock_log_k8v4, 0);
   z_utest_run(test_dblock_log_k15v15, 0);

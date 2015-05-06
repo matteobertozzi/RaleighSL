@@ -15,17 +15,17 @@
 #include <zcl/utest.h>
 #include <zcl/utest-data.h>
 
-#include <zcl/dblock-map.h>
+#include <zcl/dblock.h>
 
 #define BLOCK       (1 << 20)
 
 static void __test_dblock_sset_perf_add (z_utest_env_t *env, uint8_t *block,
-                                         const z_dblock_map_vtable_t *vtable,
+                                         const z_dblock_vtable_t *vtable,
                                          uint32_t klength, uint32_t vlength)
 {
   z_utest_key_iter_t kiter;
   z_utest_key_iter_t viter;
-  z_dblock_map_opts_t opts;
+  z_dblock_opts_t opts;
   uint8_t buffer[128];
   z_dblock_kv_t kv;
   int max_overhead;
@@ -63,7 +63,7 @@ static void __test_dblock_sset_perf_add (z_utest_env_t *env, uint8_t *block,
 }
 
 static void __test_dblock_sset_perf_insert (z_utest_env_t *env,
-                                            const z_dblock_map_vtable_t *vtable,
+                                            const z_dblock_vtable_t *vtable,
                                             uint32_t klength, uint32_t vlength)
 {
   uint8_t *block;
@@ -77,7 +77,7 @@ static void __test_dblock_sset_perf_insert (z_utest_env_t *env,
 }
 
 static void __test_dblock_sset_perf_lookup (z_utest_env_t *env,
-                                            const z_dblock_map_vtable_t *vtable,
+                                            const z_dblock_vtable_t *vtable,
                                             uint32_t klength, uint32_t vlength)
 {
   z_utest_key_iter_t kiter;
@@ -122,7 +122,7 @@ static void __test_dblock_sset_perf_lookup (z_utest_env_t *env,
 }
 
 static void __test_dblock_sset_perf_seek (z_utest_env_t *env,
-                                          const z_dblock_map_vtable_t *vtable,
+                                          const z_dblock_vtable_t *vtable,
                                           uint32_t klength, uint32_t vlength)
 {
   z_utest_key_iter_t kiter;
@@ -130,7 +130,6 @@ static void __test_dblock_sset_perf_seek (z_utest_env_t *env,
   uint8_t buffer[128];
   z_dblock_kv_t kv;
   uint8_t *block;
-  uint64_t kv_count;
   int i;
 
   block = (uint8_t *)malloc(BLOCK);
@@ -138,13 +137,12 @@ static void __test_dblock_sset_perf_seek (z_utest_env_t *env,
 
   /* insert data */
   __test_dblock_sset_perf_add(env, block, vtable, klength, vlength);
-  kv_count = env->perf_ops;
 
   env->perf_bytes = 0;
   env->perf_ops   = 0;
   z_timer_start(&(env->perf_timer));
   for (i = 1; i <= 64; ++i) {
-    z_dblock_map_iter_t iter;
+    z_dblock_iter_t iter;
 
     /* test lookups */
     z_utest_key_iter_init(&kiter, Z_UTEST_KEY_ISEQ, buffer, klength, 0);
@@ -161,13 +159,14 @@ static void __test_dblock_sset_perf_seek (z_utest_env_t *env,
       vtable->seek_item(&iter, &ikv);
       env->perf_ops += 1;
     } while (vtable->seek_next(&iter));
-    z_assert_u64_equals(env, kv_count, env->perf_ops / i);
   }
   z_timer_stop(&(env->perf_timer));
 
   free(block);
 }
 
+/* ============================================================================
+ */
 static void test_dblock_avl16_perf_append (z_utest_env_t *env) {
   __test_dblock_sset_perf_insert(env, &z_dblock_avl16_map, 4, 8);
 }
@@ -180,6 +179,22 @@ static void test_dblock_avl16_perf_seek (z_utest_env_t *env) {
   __test_dblock_sset_perf_seek(env, &z_dblock_avl16_map, 4, 8);
 }
 
+/* ============================================================================
+ */
+static void test_dblock_avl16e_perf_append (z_utest_env_t *env) {
+  __test_dblock_sset_perf_insert(env, &z_dblock_avl16e_map, 4, 8);
+}
+
+static void test_dblock_avl16e_perf_lookup (z_utest_env_t *env) {
+  __test_dblock_sset_perf_lookup(env, &z_dblock_avl16e_map, 4, 8);
+}
+
+static void test_dblock_avl16e_perf_seek (z_utest_env_t *env) {
+  __test_dblock_sset_perf_seek(env, &z_dblock_avl16e_map, 4, 8);
+}
+
+/* ============================================================================
+ */
 static void test_dblock_log_perf_append (z_utest_env_t *env) {
   __test_dblock_sset_perf_insert(env, &z_dblock_log_map, 4, 8);
 }
@@ -196,6 +211,10 @@ int main (int argc, char **argv) {
   z_utest_run(test_dblock_avl16_perf_append, 0);
   z_utest_run(test_dblock_avl16_perf_lookup, 0);
   z_utest_run(test_dblock_avl16_perf_seek, 0);
+
+  z_utest_run(test_dblock_avl16e_perf_append, 0);
+  z_utest_run(test_dblock_avl16e_perf_lookup, 0);
+  z_utest_run(test_dblock_avl16e_perf_seek, 0);
 
   z_utest_run(test_dblock_log_perf_append, 0);
   z_utest_run(test_dblock_log_perf_lookup, 0);

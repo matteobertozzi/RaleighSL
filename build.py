@@ -689,9 +689,10 @@ class Project(object):
 
     self._file_buildnr = os.path.join(Build.DEFAULT_BUILD_DIR, '.buildnr-%s' % self.NAME)
     try:
-      os.makedirs(Build.DEFAULT_BUILD_DIR)
+      if not os.path.exists(Build.DEFAULT_BUILD_DIR):
+        os.makedirs(Build.DEFAULT_BUILD_DIR)
       build = int(file(self._file_buildnr, 'r').read()) + inc
-    except:
+    except Exception as e:
       build = 0
 
     if inc > 0:

@@ -12,18 +12,18 @@
  *   limitations under the License.
  */
 
-#include <zcl/dblock-map.h>
 #include <zcl/memutil.h>
 #include <zcl/humans.h>
+#include <zcl/dblock.h>
 #include <zcl/sort.h>
 
 /* ============================================================================
  *  Overlap helpers
  */
-z_dblock_overlap_t z_dblock_map_overlap (const z_dblock_map_vtable_t *a_vtable,
-                                         uint8_t *a_block,
-                                         const z_dblock_map_vtable_t *b_vtable,
-                                         uint8_t *b_block)
+z_dblock_overlap_t z_dblock_overlap (const z_dblock_vtable_t *a_vtable,
+                                     uint8_t *a_block,
+                                     const z_dblock_vtable_t *b_vtable,
+                                     uint8_t *b_block)
 {
   z_dblock_kv_t b_key;
   z_dblock_kv_t a_key;
@@ -54,16 +54,47 @@ z_dblock_overlap_t z_dblock_map_overlap (const z_dblock_map_vtable_t *a_vtable,
   return Z_DBLOCK_OVERLAP_YES;
 }
 
+z_dblock_overlap_t z_dblock_overlap_blk (const z_dblock_kv_t *a_skey,
+                                         const z_dblock_kv_t *a_ekey,
+                                         const z_dblock_vtable_t *vtable,
+                                         uint8_t *block)
+{
+  z_dblock_kv_t b_key;
+  int cmp;
+
+  /* a.first_key < b.last_key */
+  vtable->last_key(block, &b_key);
+  cmp = z_mem_compare(a_skey->key, a_skey->klength, b_key.key, b_key.klength);
+
+  /* |-- B --| |-- A --| */
+  if (cmp > 0) return Z_DBLOCK_OVERLAP_NO_RIGHT;
+
+  /* |-- B --|-- A --| */
+  if (cmp == 0) return Z_DBLOCK_OVERLAP_YES_RIGHT;
+
+  /* b.first_key < a.last_key */
+  vtable->first_key(block, &b_key);
+  cmp = z_mem_compare(b_key.key, b_key.klength, a_ekey->key, a_ekey->klength);
+
+  /* |-- A --| |-- B --| */
+  if (cmp > 0) return Z_DBLOCK_OVERLAP_NO_LEFT;
+
+  /* |-- A --|-- B --| */
+  if (cmp == 0) return Z_DBLOCK_OVERLAP_YES_LEFT;
+
+  return Z_DBLOCK_OVERLAP_YES;
+}
+
 /* ============================================================================
  *  Sorted Index helpers
  */
-struct dblock_map_idx_udata {
-  const z_dblock_map_vtable_t *vtable;
+struct dblock_idx_udata {
+  const z_dblock_vtable_t *vtable;
   uint8_t *block;
 };
 
-static int __dblock_map_index32_cmp (void *udata, const void *a, const void *b) {
-  struct dblock_map_idx_udata *u = Z_CAST(struct dblock_map_idx_udata, udata);
+static int __dblock_index32_cmp (void *udata, const void *a, const void *b) {
+  struct dblock_idx_udata *u = Z_CAST(struct dblock_idx_udata, udata);
   uint32_t a_ptr = *Z_CONST_CAST(uint32_t, a);
   uint32_t b_ptr = *Z_CONST_CAST(uint32_t, b);
   z_dblock_kv_t a_key;
@@ -75,12 +106,12 @@ static int __dblock_map_index32_cmp (void *udata, const void *a, const void *b) 
   return z_mem_compare(a_key.key, a_key.klength, b_key.key, b_key.klength);
 }
 
-void z_dblock_map_build_index32 (const z_dblock_map_vtable_t *vtable,
-                                 uint8_t *block,
-                                 uint32_t *idx_block)
+void z_dblock_build_index32 (const z_dblock_vtable_t *vtable,
+                             uint8_t *block,
+                             uint32_t *idx_block)
 {
-  struct dblock_map_idx_udata udata;
-  z_dblock_map_iter_t iter;
+  struct dblock_idx_udata udata;
+  z_dblock_iter_t iter;
   uint32_t *p;
 
   /* build the index */
@@ -94,16 +125,15 @@ void z_dblock_map_build_index32 (const z_dblock_map_vtable_t *vtable,
   udata.vtable = vtable;
   udata.block  = block;
   z_heap_sort(idx_block, p - idx_block, sizeof(uint32_t),
-              __dblock_map_index32_cmp, &udata);
+              __dblock_index32_cmp, &udata);
 }
 
 /* ============================================================================
- *  Probe helpers
+ *  vtable helpers
  */
-const z_dblock_map_vtable_t *z_dblock_map_block_vtable (const uint8_t *block) {
-  switch (*block) {
-    case Z_DBLOCK_MAP_TYPE_AVL16: return &z_dblock_avl16_map;
-    case Z_DBLOCK_MAP_TYPE_LOG:   return &z_dblock_log_map;
+const z_dblock_vtable_t *z_dblock_vtable (int type) {
+  switch (type) {
+
   }
   return(NULL);
 }
@@ -111,8 +141,19 @@ const z_dblock_map_vtable_t *z_dblock_map_block_vtable (const uint8_t *block) {
 /* ============================================================================
  *  Print helpers
  */
-void z_dblock_kv_dump (const z_dblock_kv_t *self, FILE *stream) {
-  z_human_dblock_print(stream, self->key, self->klength);
-  fprintf(stream, " = ");
-  z_human_dblock_print(stream, self->value, self->vlength);
+void z_dblock_dump (const z_dblock_vtable_t *vtable,
+                    uint8_t *block,
+                    FILE *stream)
+{
+  z_dblock_iter_t iter;
+  z_dblock_kv_t kv;
+
+  /* build the index */
+  vtable->seek(&iter, block, Z_DBLOCK_SEEK_BEGIN, NULL);
+  do {
+    vtable->seek_item(&iter, &kv);
+    z_human_dblock_print(stream, kv.key, kv.klength);
+    fprintf(stream, " = ");
+    z_human_dblock_print(stream, kv.value, kv.vlength);
+  } while (vtable->seek_next(&iter));
 }

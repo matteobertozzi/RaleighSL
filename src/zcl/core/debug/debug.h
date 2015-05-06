@@ -12,8 +12,8 @@
  *   limitations under the License.
  */
 
-#ifndef _OBJECT_NAME_H_
-#define _OBJECT_NAME_H_
+#ifndef _Z_DEBUG_H_
+#define _Z_DEBUG_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
@@ -24,4 +24,4 @@ int z_stack_trace (char *buffer, size_t bufsize, int levels);
 
 __Z_END_DECLS__
 
-#endif /* !_OBJECT_NAME_H_ */
+#endif /* !_Z_DEBUG_H_ */

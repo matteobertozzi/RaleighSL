@@ -28,11 +28,13 @@ typedef int (*z_avl16_compare_t)  (void *udata,
                                    const z_avl16_node_t *node,
                                    const void *key);
 
-#define Z_AVL16_POS(block, node)    ((Z_CAST(uint8_t, node) - (block)) >> 4)
-#define Z_AVL16_NODE(block, pos)    Z_CAST(z_avl16_node_t, (block) + ((pos) << 4))
-#define Z_AVL16_NODE_SIZE           (sizeof(z_avl16_node_t) - 1)
-#define Z_AVL16_OFF2POS(off)        (Z_AVL16_ALIGN(off) >> 4)
-#define Z_AVL16_ALIGN(size)         (z_align_up(size, 16))
+#define Z_AVL16_NODE_SIZE                   (sizeof(z_avl16_node_t) - 1)
+
+#define Z_AVL16_POS(block, node, stride)                        \
+  (1 + ((Z_CAST(uint8_t, node) - (block)) / (stride)))
+
+#define Z_AVL16_NODE(block, pos, stride)                        \
+  Z_CAST(z_avl16_node_t, (block) + (((pos) - 1) * (stride)))
 
 struct z_avl16_head {
   uint16_t root;
@@ -52,7 +54,8 @@ struct z_avl16_iter {
   uint16_t height;
   uint16_t root;
   uint8_t  found;
-  uint8_t  pad[5];
+  uint8_t  pad[1];
+  uint32_t stride;
 };
 
 #define z_avl16_init(head)        \
@@ -64,41 +67,48 @@ struct z_avl16_iter {
 
 uint8_t *z_avl16_insert           (z_avl16_head_t *head,
                                    uint8_t *block,
+                                   int stride,
                                    uint16_t node_pos,
                                    z_avl16_compare_t cmpfunc,
                                    const void *key,
                                    void *udata);
 void     z_avl16_add_edge         (z_avl16_head_t *head,
                                    uint8_t *block,
+                                   int stride,
                                    uint16_t node_pos,
                                    const int edge);
-#define z_avl16_prepend(h, b, n)  z_avl16_add_edge(h, b, n, 0)
-#define z_avl16_append(h, b, n)   z_avl16_add_edge(h, b, n, 1)
+#define z_avl16_prepend(h,b,s,n)  z_avl16_add_edge(h, b, s, n, 0)
+#define z_avl16_append(h,b,s,n)   z_avl16_add_edge(h, b, s, n, 1)
 
 uint16_t z_avl16_remove           (z_avl16_head_t *head,
                                    uint8_t *block,
+                                   int stride,
                                    z_avl16_compare_t key_cmp,
                                    const void *key,
                                    void *udata);
 uint16_t z_avl16_remove_edge      (z_avl16_head_t *head,
                                    uint8_t *block,
+                                   int stride,
                                    const int edge);
-#define  z_avl16_remove_min(h, b) z_avl16_remove_edge(h, b, 0)
-#define  z_avl16_remove_max(h, b) z_avl16_remove_edge(h, b, 1)
+#define  z_avl16_remove_min(h,b,s) z_avl16_remove_edge(h, b, s, 0)
+#define  z_avl16_remove_max(h,b,s) z_avl16_remove_edge(h, b, s, 1)
 
 uint16_t z_avl16_lookup           (uint8_t *block,
+                                   int stride,
                                    uint16_t root,
                                    z_avl16_compare_t key_cmp,
                                    const void *key,
                                    void *udata);
 uint16_t z_avl16_lookup_edge      (uint8_t *block,
+                                   int stride,
                                    uint16_t root,
                                    int edge);
-#define  z_avl16_lookup_min(b, r) z_avl16_lookup_edge(b, r, 0)
-#define  z_avl16_lookup_max(b, r) z_avl16_lookup_edge(b, r, 1)
+#define  z_avl16_lookup_min(b,s,r) z_avl16_lookup_edge(b, s, r, 0)
+#define  z_avl16_lookup_max(b,s,r) z_avl16_lookup_edge(b, s, r, 1)
 
 void     z_avl16_iter_init        (z_avl16_iter_t *self,
                                    uint8_t *block,
+                                   int stride,
                                    uint16_t root);
 void *   z_avl16_iter_seek_begin  (z_avl16_iter_t *self);
 void *   z_avl16_iter_seek_end    (z_avl16_iter_t *self);
