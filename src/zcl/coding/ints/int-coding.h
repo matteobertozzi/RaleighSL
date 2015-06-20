@@ -18,6 +18,7 @@
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
+#include <zcl/memutil.h>
 #include <zcl/macros.h>
 
 #define z_uint16_size(value)              (1 + ((value) > (1 << 8)))

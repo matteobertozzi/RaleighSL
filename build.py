@@ -389,6 +389,10 @@ class Build(object):
   def platformIsLinux():
     return os.uname()[0] == 'Linux'
 
+  @staticmethod
+  def platformIsBSD():
+    return os.uname()[0] == 'FreeBSD'
+
 class BuildApp(Build):
   def __init__(self, name, src_dirs, **kwargs):
     super(BuildApp, self).__init__(name, **kwargs)
@@ -546,7 +550,7 @@ class BuildLibrary(Build):
               (self._options.cc, self.version, lib_path,              \
                string.join(obj_list, ' '),                            \
                string.join(self._options.ldlibs, ' '))
-    elif self.platformIsLinux():
+    elif self.platformIsLinux() or self.platformIsBSD():
       cmd = '%s -shared -Wl,-soname,%s -o %s %s %s' %                 \
               (self._options.cc, lib_name_maj, lib_path,              \
                string.join(obj_list, ' '),                            \
@@ -622,6 +626,8 @@ class Project(object):
     else:
       DEFAULT_DEFINES.extend(['-DHAVE_SETXATTR', '-DCRYPTO_OPENSSL'])
       DEFAULT_LDLIBS.extend(['-lcrypto'])
+      if Build.platformIsBSD():
+        DEFAULT_LDLIBS.extend(['-lexecinfo'])
 
     # Default Build Options
     default_opts = BuildOptions()
@@ -650,7 +656,7 @@ class Project(object):
           '-Wtype-limits', '-Wuninitialized', '-Winline', '-Wpacked', '-Wcast-align',
           '-Wconversion', '-Wuseless-cast', '-Wsign-conversion'])
     else:
-      default_opts.addCFlags(['-Werror'])
+      default_opts.addCFlags(['-Werror', '-Wfatal-errors', '-Wunused'])
 
     # Default Library Build Options
     default_lib_opts = default_opts.clone()
@@ -702,7 +708,9 @@ class Project(object):
     return '%d%s%04X' % (v_maj, mx[v_min], build)
 
   def _gitRevision(self):
-    _, rev = execCommand('git rev-parse HEAD')
+    exit_code, rev = execCommand('git rev-parse HEAD')
+    if exit_code:
+      raise Exception('unable to find git')
     return rev.strip()
 
 # =============================================================================
@@ -931,7 +939,7 @@ if __name__ == '__main__':
     with bench('[T] Build Time'):
       main(options)
   except Exception as e:
-    print e
+    print 'build failed:', e
     sys.exit(1)
 
   sys.exit(0)

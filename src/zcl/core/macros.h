@@ -42,6 +42,10 @@ typedef int   (*z_swap_t)       (void *udata, const void *a, const void *b);
 #define z_align_up(x, align)            (((x) + ((align) - 1)) & (-(align)))
 #define z_is_pow2(x)                    ((x) && !((x) & ((x) - 1)))
 
+#define z_sizeof(type)                  ((long)sizeof(type))
+#define z_fix_array_size(a)             (sizeof(a) / sizeof(*(a)))
+#define z_sizeof_of_entry(type, member) z_sizeof(((type *)0)->member)
+
 #define z_offset_of(type, member)                           \
   ((unsigned long)(&((type *)0)->member))
 
@@ -93,6 +97,13 @@ typedef int   (*z_swap_t)       (void *udata, const void *a, const void *b);
 #define __zin_5(x, a, b, c, d, e)       __zin_0(x, a, __zin_4(x, b, c, d, e))
 #define __zin_6(x, a, b, c, d, e, f)    __zin_0(x, a, __zin_5(x, b, c, d, e, f))
 #define z_in(x, ...)                    (Z_FOLD(__zin_, x, __VA_ARGS__))
+
+#define __zszof_sum1(a, b)              ((a) + z_sizeof(b))
+#define __zszof_sum2(a, b, c)           __zszof_sum1(__zszof_sum1(a, b), c)
+#define __zszof_sum3(a, b, c, d)        __zszof_sum1(__zszof_sum2(a, b, c), d)
+#define __zszof_sum4(a, b, c, d, e)     __zszof_sum1(__zszof_sum3(a, b, c, d), e)
+#define __zszof_sum5(a, b, c, d, e, f)  __zszof_sum1(__zszof_sum4(a, b, c, d, e), f)
+#define z_sizeof_sum(a, ...)            (Z_FOLD(__zszof_sum, z_sizeof(a), __VA_ARGS__))
 
 #define z_min_max(min, max, value)               \
   do {                                           \

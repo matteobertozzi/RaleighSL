@@ -46,7 +46,7 @@ uint8_t z_vint64_size (uint64_t value) {
  */
 uint8_t *z_vint32_encode (uint8_t *buf, uint32_t value) {
   if (value < (1 << 7)) {
-    *buf++ = value;
+    *buf++ = value & 0xff;
   } else if (value < (1 << 14)) {
     *buf++ = value | 128;
     *buf++ = (value >> 7);

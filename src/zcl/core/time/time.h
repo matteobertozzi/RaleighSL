@@ -20,6 +20,10 @@ __Z_BEGIN_DECLS__
 
 #include <zcl/macros.h>
 
+#define Z_TIME_USEC(x)            ((x) * 1)
+#define Z_TIME_MSEC(x)            ((x) * 1000U)
+#define Z_TIME_SEC(x)             ((x) * 1000000u)
+
 #define z_timeval_to_micros(x)    ((x)->tv_sec * 1000000U + (x)->tv_usec)
 #define z_usec_to_sec(t)          ((t) / 1000000u)
 
