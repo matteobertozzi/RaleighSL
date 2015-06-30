@@ -44,7 +44,7 @@ static uint8_t __ipc_server_register (z_ipc_server_t *server) {
  *  IPC client iopoll entity
  */
 static const z_iopoll_entity_vtable_t __ipc_raw_client_vtable;
-//static const z_iopoll_entity_vtable_t __ipc_msg_client_vtable;
+static const z_iopoll_entity_vtable_t __ipc_msg_client_vtable;
 
 static z_ipc_client_t *__ipc_client_alloc (z_ipc_server_t *server, int csock) {
   z_ipc_client_t *client;
@@ -56,8 +56,9 @@ static z_ipc_client_t *__ipc_client_alloc (z_ipc_server_t *server, int csock) {
 
   if (server->msg_protocol != NULL) {
     /* Initialize msg-client */
-    //z_iopoll_entity_open(Z_IOPOLL_ENTITY(client), &__ipc_msg_client_vtable, csock);
-    //z_ipc_msg_client_open(Z_IPC_MSG_CLIENT(client), server->msg_protocol);
+    z_iopoll_entity_open(Z_IOPOLL_ENTITY(client), &__ipc_msg_client_vtable, csock);
+    /* TODO */
+    memset(&(Z_IPC_MSG_CLIENT(client)->ibuf), 0, sizeof(z_msg_ibuf_t));
   } else {
     /* Initialize raw-client */
     z_iopoll_entity_open(Z_IOPOLL_ENTITY(client), &__ipc_raw_client_vtable, csock);
@@ -65,8 +66,8 @@ static z_ipc_client_t *__ipc_client_alloc (z_ipc_server_t *server, int csock) {
   Z_IOPOLL_ENTITY(client)->uflags8 = Z_IOPOLL_ENTITY(server)->uflags8;
 
   /* Ask the protocol to do its own stuff before starting up */
-  if (server->protocol->connected != NULL) {
-    if (server->protocol->connected(client)) {
+  if (Z_LIKELY(server->protocol->connected != NULL)) {
+    if (Z_UNLIKELY(server->protocol->connected(client))) {
       z_memory_free(server->memory, z_ipc_client_t, client, server->csize);
       return(NULL);
     }
@@ -90,8 +91,8 @@ static void __ipc_client_close (z_iopoll_engine_t *engine,
 #endif
 
   /* Ask the protocol to do its own stuff before closing down */
-  if (server->protocol->disconnected != NULL) {
-    if (server->protocol->disconnected(Z_IPC_CLIENT(entity)))
+  if (Z_LIKELY(server->protocol->disconnected != NULL)) {
+    if (Z_UNLIKELY(server->protocol->disconnected(Z_IPC_CLIENT(entity))))
       return;
   }
 
@@ -138,13 +139,13 @@ static const z_iopoll_entity_vtable_t __ipc_raw_client_vtable = {
 /* ============================================================================
  *  IPC msg-client iopoll entity
  */
-#if 0
 static int __ipc_msg_client_read (z_iopoll_engine_t *engine,
                                   z_iopoll_entity_t *entity)
 {
-  //return(z_ipc_msg_client_read(Z_IPC_MSG_CLIENT(entity),
-                               //__ipc_server[entity->uflags8]->msg_protocol));
-  return(1);
+  return(z_msg_ibuf_read(&(Z_IPC_MSG_CLIENT(entity)->ibuf),
+                         &z_iopoll_entity_raw_io_seq_vtable,
+                         __ipc_server[entity->uflags8]->msg_protocol,
+                         entity));
 }
 
 static int __ipc_msg_client_write (z_iopoll_engine_t *engine,
@@ -162,7 +163,7 @@ static const z_iopoll_entity_vtable_t __ipc_msg_client_vtable = {
   .timeout  = NULL,
   .close = __ipc_client_close,
 };
-#endif
+
 /* ============================================================================
  *  IPC Server Private Methods
  */
@@ -250,13 +251,14 @@ static const z_iopoll_entity_vtable_t __ipc_server_vtable = {
 z_ipc_server_t *__z_ipc_plug (z_iopoll_engine_t *engine,
                               z_memory_t *memory,
                               const z_ipc_protocol_t *proto,
-                              const z_ipc_msg_protocol_t *msg_proto,
+                              const z_msg_protocol_t *msg_proto,
                               const char *name,
                               unsigned int csize,
                               const void *address,
-                              const void *service)
+                              const void *service,
+                              void *udata)
 {
-  z_ipc_server_t *server;
+  z_ipc_server_t *server = NULL;
 
   server = z_memory_struct_alloc(memory, z_ipc_server_t);
   if (Z_MALLOC_IS_NULL(server))
@@ -269,6 +271,7 @@ z_ipc_server_t *__z_ipc_plug (z_iopoll_engine_t *engine,
   server->name = name;
   server->csize = csize;
   server->connections = 0;
+  server->udata.ptr = udata;
 
   if (__ipc_server_bind(server, address, service)) {
     z_memory_struct_free(memory, z_ipc_server_t, server);
@@ -280,15 +283,15 @@ z_ipc_server_t *__z_ipc_plug (z_iopoll_engine_t *engine,
     return(NULL);
   }
 
-  if (1) {
+  do {
     struct sockaddr_storage addr;
-    char ip[Z_INET6_ADDRSTRLEN];
-
-    z_socket_bind_address(Z_IOPOLL_ENTITY_FD(server), &addr);
-    z_socket_str_address(ip, Z_INET6_ADDRSTRLEN, &addr);
-    Z_LOG_INFO("Service %s %d up and running on %s:%s...",
-               name, Z_IOPOLL_ENTITY_FD(server), ip, service);
-  }
+    if (!z_socket_bind_address(Z_IOPOLL_ENTITY_FD(server), &addr)) {
+      char ip[128];
+      z_socket_str_address(ip, sizeof(ip), &addr);
+      Z_LOG_INFO("Service %s %d up and running on %s",
+                 name, Z_IOPOLL_ENTITY_FD(server), ip);
+    }
+  } while (0);
 
   return(server);
 }
@@ -297,6 +300,13 @@ void z_ipc_unplug (z_ipc_server_t *server) {
   z_iopoll_entity_t *entity = Z_IOPOLL_ENTITY(server);
   z_iopoll_engine_remove(server->engine, entity);
   __ipc_server_close(server->engine, entity);
+}
+
+void z_ipc_unplugs (z_ipc_server_t **servers, int n) {
+  while (n--) {
+    z_ipc_unplug(*servers);
+    servers++;
+  }
 }
 
 int z_ipc_server_add (z_ipc_server_t *server, int csock) {
@@ -317,6 +327,6 @@ int z_ipc_server_add (z_ipc_server_t *server, int csock) {
   return(0);
 }
 
-z_ipc_server_t *z_ipc_get_server (const z_ipc_client_t *client) {
+z_ipc_server_t *__z_ipc_get_server (const z_ipc_client_t *client) {
   return __ipc_server[Z_IOPOLL_ENTITY(client)->uflags8];
 }

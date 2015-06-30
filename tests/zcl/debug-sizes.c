@@ -10,6 +10,7 @@
 #include <zcl/mutex.h>
 #include <zcl/spinlock.h>
 #include <zcl/avl16.h>
+#include <zcl/msg.h>
 #include <stdio.h>
 
 #define __print_size(type)                                              \
@@ -33,6 +34,10 @@ int main (int argc, char **argv) {
   printf("io/ipc\n");
   __print_size(z_ipc_server_t);
   __print_size(z_ipc_client_t);
+  __print_size(z_ipc_msg_client_t);
+
+  printf("io/msg\n");
+  __print_size(z_msg_ibuf_t);
 
   printf("core/memory\n");
   __print_size(z_allocator_t);

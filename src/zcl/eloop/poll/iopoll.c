@@ -257,6 +257,7 @@ void z_iopoll_entity_open (z_iopoll_entity_t *entity,
   entity->uflags8  = 0;
   entity->last_write_ts = 0;
   entity->fd = fd;
+  entity->uflags32 = 0;
 }
 
 void z_iopoll_entity_close (z_iopoll_entity_t *entity, int defer) {
@@ -308,6 +309,7 @@ void z_iopoll_timer_open (z_iopoll_entity_t *entity,
 #else
   entity->fd = oid;
 #endif
+  entity->uflags32 = 0;
 }
 
 void z_iopoll_uevent_open (z_iopoll_entity_t *entity,
@@ -325,4 +327,21 @@ void z_iopoll_uevent_open (z_iopoll_entity_t *entity,
 #else
   entity->fd = oid;
 #endif
+  entity->uflags32 = 0;
 }
+
+/* ============================================================================
+ *  I/O Raw
+ */
+static ssize_t __iopoll_entity_raw_read (void *udata, void *buffer, size_t bufsize) {
+  return z_fd_read(Z_IOPOLL_ENTITY_FD(udata), buffer, bufsize);
+}
+
+static ssize_t __iopoll_entity_raw_write (void *udata, const void *buffer, size_t bufsize) {
+  return z_fd_write(Z_IOPOLL_ENTITY_FD(udata), buffer, bufsize);
+}
+
+const z_io_seq_vtable_t z_iopoll_entity_raw_io_seq_vtable = {
+  .read  = __iopoll_entity_raw_read,
+  .write = __iopoll_entity_raw_write,
+};

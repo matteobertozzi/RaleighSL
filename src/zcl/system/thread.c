@@ -18,6 +18,11 @@
 #include <zcl/system.h>
 #include <zcl/debug.h>
 
+#if defined(Z_SYS_HAS_MACH_THREAD_POLICY)
+  #include <mach/thread_act.h>
+  #include <mach/thread_policy.h>
+#endif
+
 /* ============================================================================
  *  Threads
  */
@@ -50,42 +55,67 @@ int z_thread_start (z_thread_t *tid, z_thread_func_t func, void *args) {
 }
 
 int z_thread_bind_to_core (z_thread_t *thread, int core) {
-  Z_ASSERT(core >= 0, "core must be greater than 0, got %d", core);
-#if defined(Z_SYS_HAS_PTHREAD_AFFINITY)
-  unsigned int ncores = z_system_processors();
-  if (Z_UNLIKELY(core >= ncores))
-    return(core % ncores);
+  unsigned int ncores;
+  int r = -1;
 
+  Z_ASSERT(core >= 0, "core must be greater than 0, got %d", core);
+  ncores = z_system_processors();
+  if (Z_UNLIKELY(core >= ncores)) {
+    Z_LOG_WARN("unable to bind to core %d ncores is %u", core, ncores);
+    return(-1);
+  }
+
+#if defined(Z_SYS_HAS_PTHREAD_AFFINITY)
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(core, &cpuset);
-  return pthread_setaffinity_np(*thread, sizeof(cpu_set_t), &cpuset);
-#else
+  r = pthread_setaffinity_np(*thread, sizeof(cpu_set_t), &cpuset);
+#elif defined(Z_SYS_HAS_MACH_THREAD_POLICY)
   /*
    * https://developer.apple.com/library/mac/releasenotes/Performance/RN-AffinityAPI/index.html
    */
-
-  Z_LOG_WARN("unable to bind thread %p to core %d", thread, core);
-  return(-1);
+  struct thread_affinity_policy policy;
+  policy.affinity_tag = core;
+  r = thread_policy_set(pthread_mach_thread_np(*thread), THREAD_AFFINITY_POLICY,
+                        (thread_policy_t)&policy, THREAD_AFFINITY_POLICY_COUNT) != KERN_SUCCESS;
 #endif
+
+  if (Z_UNLIKELY(r)) {
+    Z_LOG_WARN("unable to bind thread %p to core %d", thread, core);
+  }
+  return(r);
 }
 
 int z_thread_get_core (z_thread_t *thread, int *core) {
+  int r = -1;
 #if defined(Z_SYS_HAS_PTHREAD_AFFINITY)
   cpu_set_t cpuset;
   int i;
   CPU_ZERO(&cpuset);
-  if (pthread_getaffinity_np(*thread, sizeof(cpu_set_t), &cpuset)) {
-    Z_LOG_WARN("unable to identify thread %p core", thread);
-    return(-1);
-  }
-
-  for (i = 0; i < CPU_SETSIZE; i++) {
-    if (CPU_ISSET(i, &cpuset)) {
-      return(i);
+  if (!pthread_getaffinity_np(*thread, sizeof(cpu_set_t), &cpuset)) {
+    for (i = 0; i < CPU_SETSIZE; i++) {
+      if (CPU_ISSET(i, &cpuset)) {
+        *core = i;
+        r = 0;
+        break;
+      }
     }
   }
+#elif defined(Z_SYS_HAS_MACH_THREAD_POLICY)
+  struct thread_affinity_policy policy;
+  mach_msg_type_number_t count = THREAD_AFFINITY_POLICY_COUNT;
+  boolean_t get_default = FALSE;
+
+  if (thread_policy_get(pthread_mach_thread_np(*thread), THREAD_AFFINITY_POLICY,
+                        (thread_policy_t)&policy, &count, &get_default) == KERN_SUCCESS)
+  {
+    *core = policy.affinity_tag;
+    r = 0;
+  }
 #endif
-  Z_LOG_WARN("unable to identify thread %p core", thread);
-  return(-1);
+
+  if (Z_UNLIKELY(r < 0)) {
+    Z_LOG_WARN("unable to identify thread %p core", thread);
+  }
+  return(r);
 }

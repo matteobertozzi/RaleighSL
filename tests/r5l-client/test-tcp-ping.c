@@ -26,7 +26,7 @@
 #define NLOOPS          600000
 #define NCLIENTS        4
 
-#define BUFSIZE         PIPELINE * 32
+#define BUFSIZE         PIPELINE * 80
 //#define HOST            "192.168.0.6"
 #define HOST            "localhost"
 #define PORT            "11124"
@@ -43,9 +43,6 @@ void __client_ping (int client_id, const void *address, const void *port) {
   if ((sock = z_socket_tcp_connect(address, port, NULL)) < 0)
     return;
 
-  const uint64_t msg_len = 0;
-  const uint64_t msg_type = 90;
-
   stime = z_time_micros();
   for (req_id = 0; req_id < NLOOPS; ) {
     ssize_t rd;
@@ -53,30 +50,26 @@ void __client_ping (int client_id, const void *address, const void *port) {
 
     pbuf = buffer;
     for (i = 0; i < PIPELINE; ++i) {
-if (0) {
-      uint8_t h_msg_len = z_uint64_size(msg_len);
-      uint8_t h_msg_type = z_uint64_size(msg_type);
-      uint8_t h_req_id = z_uint64_size(req_id);
-
-      *pbuf++ = (0 << 3) | h_msg_len;
-      *pbuf++ = (h_msg_type << 5) | (h_req_id << 2) | 0;
-      z_uint_encode(pbuf, h_msg_len, msg_len);   pbuf += h_msg_len;
-      z_uint_encode(pbuf, h_msg_type, msg_type); pbuf += h_msg_type;
-      z_uint_encode(pbuf, h_req_id, req_id);     pbuf += h_req_id;
-}
+#if 1
+      *pbuf++ = (1 << 4) | 0 << 2 | 0;
+      *pbuf++ = 64;
+      z_uint_encode(pbuf, 8, req_id);
+      memset(pbuf + 8, 0xAA, 56);
+      pbuf += 64;
+#else
       memcpy(pbuf, "PING\n", 5);
       pbuf += 5;
-
+#endif
       ++req_id;
     }
 
-    if (write(sock, buffer, pbuf - buffer) <= 0) {
+    if (write(sock, buffer, pbuf - buffer) != (pbuf - buffer)) {
       perror("write()");
       return;
     }
 
     pbuf = buffer;
-    rd = read(sock, pbuf, sizeof(buffer) - (pbuf - buffer));
+    rd = read(sock, pbuf, sizeof(buffer));
     if (rd < 0) {
       perror("read()");
       return;

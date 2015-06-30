@@ -35,6 +35,17 @@ __Z_BEGIN_DECLS__
 #define Z_LOG_LEVEL_TRACE            6
 #define Z_LOG_LEVEL_DEFAULT          Z_LOG_LEVEL_TRACE
 
+#define z_log_is_level_enabled(exp_level)                     \
+  (z_debug_get_log_level() >= (exp_level))
+
+#define z_log_is_coder_enabled()      z_log_is_level_enabled(Z_LOG_LEVEL_DEBUG)
+#define z_log_is_fatal_enabled()      z_log_is_level_enabled(Z_LOG_LEVEL_FATAL)
+#define z_log_is_error_enabled()      z_log_is_level_enabled(Z_LOG_LEVEL_ERROR)
+#define z_log_is_warn_enabled()       z_log_is_level_enabled(Z_LOG_LEVEL_WARN)
+#define z_log_is_info_enabled()       z_log_is_level_enabled(Z_LOG_LEVEL_INFO)
+#define z_log_is_debug_enabled()      z_log_is_level_enabled(Z_LOG_LEVEL_DEBUG)
+#define z_log_is_trace_enabled()      z_log_is_level_enabled(Z_LOG_LEVEL_TRACE)
+
 #define Z_DEBUG(frmt, ...)         Z_LOG(Z_LOG_LEVEL_CODER, frmt, ##__VA_ARGS__)
 
 #define Z_LOG_FATAL(frmt, ...)     Z_LOG(Z_LOG_LEVEL_FATAL, frmt, ##__VA_ARGS__)

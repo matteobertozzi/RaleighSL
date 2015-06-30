@@ -12,7 +12,6 @@
  *   limitations under the License.
  */
 
-
 #include <netinet/tcp.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -452,7 +451,7 @@ int z_socket_unix_bind (const char *filepath, int dgram) {
   addr.sun_family = AF_UNIX;
   z_strlcpy(addr.sun_path, filepath, sizeof(addr.sun_path));
 
-  addrlen = (z_strlen(addr.sun_path) + (sizeof(addr)-sizeof(addr.sun_path)));
+  addrlen = z_strlen(addr.sun_path) + z_offset_of(struct sockaddr_un, sun_path) + 1;
   if (bind(sock, (struct sockaddr *)&addr, addrlen) < 0) {
     Z_LOG_ERRNO_WARN("bind()");
     close(sock);
@@ -469,6 +468,24 @@ int z_socket_unix_bind (const char *filepath, int dgram) {
   }
 
   return(sock);
+}
+
+static int __socket_unix_address (const struct sockaddr_un *addr, char *buffer, int n) {
+  size_t pathlen;
+  pathlen = z_strlcpy(buffer, addr->sun_path, n);
+  if (Z_UNLIKELY(pathlen > n))
+    return(1);
+
+  buffer[z_min(pathlen, n)] = '\0';
+  return(0);
+}
+
+int z_socket_unix_address (int sock, char *buffer, int n) {
+  struct sockaddr_storage addr;
+  if (z_socket_bind_address(sock, &addr))
+    return(-1);
+
+  return __socket_unix_address(Z_CONST_CAST(struct sockaddr_un, &addr), buffer, n);
 }
 
 int z_socket_unix_accept (int socket, int non_blocking) {
@@ -618,39 +635,56 @@ int z_socket_port (int sock) {
   return(-1);
 }
 
+static char *__socket_str_address (char *buffer, unsigned int n,
+                                   int family, const struct sockaddr *address)
+{
+  const void *addr;
+  uint16_t port;
+  size_t len;
+
+  if (family == AF_UNIX) {
+    z_strlcpy(buffer, "unix://", n);
+#ifdef Z_SOCKET_HAS_UNIX
+    __socket_unix_address((struct sockaddr_un *)address, buffer + 7, n - 7);
+    return(buffer);
+#else
+    z_strlcpy(buffer, "UNKNOWN", n - 7);
+    return(NULL);
+#endif
+  }
+
+  switch (family) {
+    case AF_INET:
+      addr = &((const struct sockaddr_in *)address)->sin_addr;
+      port = ntohs(((struct sockaddr_in *)address)->sin_port);
+      break;
+    case AF_INET6:
+      addr = &((const struct sockaddr_in6 *)address)->sin6_addr;
+      port = ntohs(((struct sockaddr_in6 *)address)->sin6_port);
+      break;
+  }
+
+  if (inet_ntop(family, addr, buffer, n) == NULL)
+    return(NULL);
+
+  len = z_strlen(buffer);
+  snprintf(buffer + len, n - len, ":%"PRIu16, port);
+
+  return(buffer);
+}
+
 char *z_socket_str_address (char *buffer,
                             unsigned int n,
                             const struct sockaddr_storage *address)
 {
-  const void *addr;
-
-  if (address->ss_family == AF_INET) {
-    addr = &((const struct sockaddr_in *)address)->sin_addr;
-  } else {
-    addr = &((const struct sockaddr_in6 *)address)->sin6_addr;
-  }
-
-  if (inet_ntop(address->ss_family, addr, buffer, n) == NULL)
-    return(NULL);
-
-  return(buffer);
+  return __socket_str_address(buffer, n, address->ss_family, (struct sockaddr *)address);
 }
 
 char *z_socket_str_address_info (char *buffer,
                                  unsigned int n,
                                  const struct addrinfo *info)
 {
-  const void *addr;
-
-  if (info->ai_family == AF_INET)
-    addr = &((const struct sockaddr_in *)info->ai_addr)->sin_addr;
-  else
-    addr = &((const struct sockaddr_in6 *)info->ai_addr)->sin6_addr;
-
-  if (inet_ntop(info->ai_family, addr, buffer, n) == NULL)
-    return(NULL);
-
-  return(buffer);
+  return __socket_str_address(buffer, n, info->ai_family, info->ai_addr);
 }
 
 int z_socket_address_is_ipv6 (const struct sockaddr *address) {

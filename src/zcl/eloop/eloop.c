@@ -24,29 +24,14 @@ static int __event_loop_event (z_iopoll_engine_t *engine,
                                z_iopoll_entity_t *entity)
 {
   z_event_loop_t *eloop = z_container_of(entity, z_event_loop_t, entity_event);
-  //Z_DEBUG("EVENT ON ELOOP %p", eloop);
-#if 1
-  eloop->nevents++;
-  //z_iopoll_engine_notify(engine, entity);
-#endif
-  return(0);
+  return eloop->vtable->event(eloop);
 }
 
 static int __event_loop_timeout (z_iopoll_engine_t *engine,
                                  z_iopoll_entity_t *entity)
 {
   z_event_loop_t *eloop = z_container_of(entity, z_event_loop_t, entity_timeout);
-
-  Z_DEBUG("TIMEOUT ON ELOOP %p load=%.3f%%", eloop,
-          z_iopoll_engine_load(&(eloop->iopoll)));
-#if 0
-  const z_iopoll_load_t *load = &(eloop->iopoll.stats.ioload);
-  for (int i = 0; i < 6; ++i) {
-    Z_DEBUG("%d n=%-4u idle=%-6u active=%u",
-            i, load->events[i], load->idle[i], load->active[i]);
-  }
-#endif
-  return(0);
+  return eloop->vtable->timeout(eloop);
 }
 
 const z_iopoll_entity_vtable_t __event_loop_vtable = {
@@ -59,12 +44,8 @@ const z_iopoll_entity_vtable_t __event_loop_vtable = {
 
 static void *__event_loop_exec (void *args) {
   z_event_loop_t *eloop = Z_CAST(z_event_loop_t, args);
-  uint64_t st;
 
-  eloop->nevents = 0;
-  st = z_time_micros();
   z_eloop_channel_notify(eloop);
-
   while (eloop->is_running) {
     z_timer_t timer;
 
@@ -76,18 +57,11 @@ static void *__event_loop_exec (void *args) {
 
     /* execute pending tasks */
     z_timer_start(&timer);
-    /* TODO: execute task */
+    eloop->vtable->exec(eloop);
     z_timer_stop(&timer);
     z_iopoll_stats_add_active(&(eloop->iopoll), z_timer_micros(&timer));
-
-    //float xload = z_iopoll_engine_load(&(eloop->iopoll));
-    //Z_LOG_DEBUG("ACTIVE %.2f%% IDLE %.2f%%", xload, 100 - xload);
   }
-
-  char buffer[64];
-  float sec = (z_time_micros() - st) / 1000000.0f;
-  z_human_dops(buffer, sizeof(buffer), eloop->nevents / sec);
-  Z_DEBUG("%d NEVENTS %.3fsec %s/sec", eloop->core, sec, buffer);
+  z_eloop_channel_notify(eloop);
   return(NULL);
 }
 
@@ -132,6 +106,7 @@ void z_event_loop_dump (z_event_loop_t *self, FILE *stream) {
 }
 
 int z_event_loop_open (z_event_loop_t *self,
+                       const z_event_loop_vtable_t *vtable,
                        uint32_t core)
 {
   /* Initialize iopoll-engine */
@@ -158,6 +133,7 @@ int z_event_loop_open (z_event_loop_t *self,
   z_memory_open(&(self->memory), &(self->allocator));
 
   /* Initialize internals */
+  self->vtable = (vtable != NULL) ? vtable : &z_event_loop_noop_vtable;
   self->core = core;
   self->is_running = 0;
   self->is_detached = 0;
@@ -184,6 +160,7 @@ int z_event_loop_start (z_event_loop_t *self, int start_thread) {
   } else {
     z_thread_self(&(self->thread));
     z_thread_bind_to_core(&(self->thread), self->core);
+
     __event_loop_exec(self);
   }
   return(0);
@@ -197,3 +174,16 @@ int z_event_loop_stop (z_event_loop_t *self) {
 void z_event_loop_wait (z_event_loop_t *self) {
   z_thread_join(&(self->thread));
 }
+
+/* ============================================================================
+ *  Noop Event Loop vtable
+ */
+static int __noop_eloop_func (z_event_loop_t *eloop) {
+  return(0);
+}
+
+const z_event_loop_vtable_t z_event_loop_noop_vtable = {
+  .exec     = __noop_eloop_func,
+  .event    = __noop_eloop_func,
+  .timeout  = __noop_eloop_func,
+};

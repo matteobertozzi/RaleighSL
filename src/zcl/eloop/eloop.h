@@ -24,6 +24,7 @@ __Z_BEGIN_DECLS__
 #include <zcl/thread.h>
 #include <zcl/iopoll.h>
 
+typedef struct z_event_loop_vtable z_event_loop_vtable_t;
 typedef struct z_event_loop z_event_loop_t;
 
 struct z_event_loop {
@@ -31,31 +32,41 @@ struct z_event_loop {
   z_iopoll_engine_t iopoll;
 /* (16 * 64) = 1024 */
 
-  /* channels */
-  z_iopoll_entity_t   entity_event;
-  z_iopoll_entity_t   entity_timeout;
-  uint8_t __pad1[32];
-/* (1 * 64) = 64 */
-
   /* memory */
   z_memory_t    memory;
   z_allocator_t allocator;
 /* (5 * 64) = 320 */
 
   /* internals */
-  uint64_t      nevents;
+  const z_event_loop_vtable_t *vtable;
+  z_opaque_t        udata;
+  z_iopoll_entity_t entity_event;
+  z_iopoll_entity_t entity_timeout;
+
   int           core;
-  int           is_detached;
-  int           is_running;
-  int           __pad2;
+  uint8_t       is_detached;
+  uint8_t       is_running;
+  uint8_t       __pad1[2];
   z_thread_t    thread;
-  uint8_t       __pad3[Z_CACHELINE_PAD_FIELDS(uint64_t, int, int, int, int, z_thread_t)];
-} __attribute__((packed));
+};
+
+struct z_event_loop_vtable {
+  int (*exec)    (z_event_loop_t *eloop);
+  int (*timeout) (z_event_loop_t *eloop);
+  int (*event)   (z_event_loop_t *eloop);
+};
+
+extern const z_event_loop_vtable_t z_event_loop_noop_vtable;
 
 #define z_eloop_channel_notify(eloop)                                         \
   z_iopoll_engine_notify(&((eloop)->iopoll), &((eloop)->entity_event))
 
-int   z_event_loop_open   (z_event_loop_t *self, uint32_t core);
+#define z_eloop_channel_set_timer(eloop, msec)                                \
+  z_iopoll_engine_timer(&((eloop)->iopoll), &((eloop)->entity_timeout), msec)
+
+int   z_event_loop_open   (z_event_loop_t *self,
+                           const z_event_loop_vtable_t *vtable,
+                           uint32_t core);
 void  z_event_loop_close  (z_event_loop_t *self);
 void  z_event_loop_dump   (z_event_loop_t *self, FILE *stream);
 int   z_event_loop_start  (z_event_loop_t *self, int start_thread);

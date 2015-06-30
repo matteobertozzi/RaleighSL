@@ -22,16 +22,19 @@ __Z_BEGIN_DECLS__
 #include <zcl/memory.h>
 #include <zcl/iopoll.h>
 #include <zcl/opaque.h>
+#include <zcl/msg.h>
 
-typedef struct z_ipc_msg_protocol z_ipc_msg_protocol_t;
+typedef struct z_ipc_msg_client z_ipc_msg_client_t;
 typedef struct z_ipc_protocol z_ipc_protocol_t;
 typedef struct z_ipc_server z_ipc_server_t;
 typedef struct z_ipc_client z_ipc_client_t;
 
 #define Z_IPC_SERVER(x)              Z_CAST(z_ipc_server_t, x)
 #define Z_IPC_CLIENT(x)              Z_CAST(z_ipc_client_t, x)
+#define Z_IPC_MSG_CLIENT(x)          Z_CAST(z_ipc_msg_client_t, x)
 
 #define __Z_IPC_CLIENT__             z_ipc_client_t __ipc_client__;
+#define __Z_IPC_MSG_CLIENT__         z_ipc_msg_client_t __ipc_msg_client__;
 
 struct z_ipc_protocol {
   /* raw-client protocol */
@@ -52,9 +55,6 @@ struct z_ipc_protocol {
   int    (*setup)         (z_ipc_server_t *server);
 };
 
-struct z_ipc_msg_protocol {
-};
-
 struct z_ipc_server {
   __Z_IOPOLL_ENTITY__
   uint16_t csize;
@@ -63,19 +63,25 @@ struct z_ipc_server {
   uint64_t __pad1;
 /* 32 */
   const z_ipc_protocol_t *protocol;
-  const z_ipc_msg_protocol_t *msg_protocol;
+  const z_msg_protocol_t *msg_protocol;
   z_iopoll_engine_t *engine;
   z_memory_t *memory;
 /* 64 */
   const char *name;
-  z_opaque_t  data;
+  z_opaque_t  udata;
   z_iopoll_entity_t timer;
   z_iopoll_entity_t event;
+
   uint8_t __pad2[16];
 };
 
 struct z_ipc_client {
   __Z_IOPOLL_ENTITY__
+};
+
+struct z_ipc_msg_client {
+  __Z_IPC_CLIENT__
+  z_msg_ibuf_t ibuf;
 };
 
 #define z_ipc_client_set_writable(engine, client, value)                       \
@@ -84,20 +90,24 @@ struct z_ipc_client {
 #define z_ipc_client_set_data_available(client, value)                         \
   z_iopoll_set_data_available(Z_IOPOLL_ENTITY(client), value)
 
-#define z_ipc_plug(engine, memory, proto, msg_proto, name, client_type, addr, service)         \
-  __z_ipc_plug(engine, memory, proto, msg_proto, name, sizeof(client_type), addr, service)
+#define z_ipc_plug(engine, memory, proto, msg_proto, name, client_type, addr, service, udata)     \
+  __z_ipc_plug(engine, memory, proto, msg_proto, name, sizeof(client_type), addr, service, udata)
 
+#define z_ipc_get_server(type, client)   Z_CAST(type, __z_ipc_get_server(Z_IPC_CLIENT(client)))
+
+z_ipc_server_t *__z_ipc_get_server       (const z_ipc_client_t *client);
 z_ipc_server_t *__z_ipc_plug             (z_iopoll_engine_t *engine,
                                           z_memory_t *memory,
                                           const z_ipc_protocol_t *proto,
-                                          const z_ipc_msg_protocol_t *msg_proto,
+                                          const z_msg_protocol_t *msg_proto,
                                           const char *name,
                                           unsigned int csize,
                                           const void *address,
-                                          const void *service);
+                                          const void *service,
+                                          void *udata);
 void            z_ipc_unplug             (z_ipc_server_t *server);
+void            z_ipc_unplugs            (z_ipc_server_t **servers, int n);
 int             z_ipc_server_add         (z_ipc_server_t *server, int csock);
-z_ipc_server_t *z_ipc_get_server         (const z_ipc_client_t *client);
 
 int             z_ipc_bind_tcp           (z_ipc_server_t *server,
                                           const void *hostname,

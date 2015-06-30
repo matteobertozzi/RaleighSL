@@ -8,3 +8,18 @@
 ==================
   $ valgrind --leak-check=yes --leak-check=full --show-reachable=yes --track-origins=yes ./build/r5l-server/r5l-server &> valgrind.log
 
+ TLS cert
+==================
+ $ openssl req -new -x509 -days 365 -nodes -out cert.pem -keyout cert.pem
+
+ TLS test
+==================
+openssl s_server -accept 12345 -cert cert -key key
+openssl s_client -connect localhost:12345
+
+ HTTPS cert
+==================
+$ openssl genrsa -des3 -passout pass:x -out server.pass.key 2048
+$ openssl rsa -passin pass:x -in server.pass.key -out server.key
+$ openssl req -new -key server.key -out server.csr
+$ openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt

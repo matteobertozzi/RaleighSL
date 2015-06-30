@@ -21,6 +21,7 @@ __Z_BEGIN_DECLS__
 #include <zcl/histogram.h>
 #include <zcl/macros.h>
 #include <zcl/opaque.h>
+#include <zcl/io.h>
 
 typedef struct z_iopoll_entity_vtable z_iopoll_entity_vtable_t;
 typedef struct z_iopoll_vtable z_iopoll_vtable_t;
@@ -92,7 +93,7 @@ struct z_iopoll_entity {
   uint8_t    uflags8;
   uint32_t   last_write_ts;
   int        fd;
-  uint32_t   __pad;
+  uint32_t   uflags32;
 };
 
 struct z_iopoll_load {
@@ -126,6 +127,8 @@ struct z_iopoll_engine {
   z_opaque_t       data;
   z_iopoll_stats_t stats;
 };
+
+extern const z_io_seq_vtable_t z_iopoll_entity_raw_io_seq_vtable;
 
 #ifdef Z_IOPOLL_HAS_EPOLL
   extern const z_iopoll_vtable_t z_iopoll_epoll;

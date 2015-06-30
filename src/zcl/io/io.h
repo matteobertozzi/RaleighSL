@@ -12,8 +12,8 @@
  *   limitations under the License.
  */
 
-#ifndef _Z_FD_H_
-#define _Z_FD_H_
+#ifndef _Z_IO_H_
+#define _Z_IO_H_
 
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
@@ -22,21 +22,13 @@ __Z_BEGIN_DECLS__
 
 #include <unistd.h>
 
-int     z_fd_set_blocking  (int fd, int blocking);
+typedef struct z_io_seq_vtable z_io_seq_vtable_t;
 
-int     z_fd_wait_readable (int fd, int timeout_msec);
-int     z_fd_read_avail    (int fd, int *avail);
-
-ssize_t z_fd_read    (int fd, void *buf, size_t bufsize);
-ssize_t z_fd_readv   (int fd, const struct iovec *iov, int iovcnt);
-ssize_t z_fd_skip    (int fd, size_t length);
-
-ssize_t z_fd_write   (int fd, const void *buf, size_t bufsize);
-ssize_t z_fd_writev  (int fd, const struct iovec *iov, int iovcnt);
-
-ssize_t z_fd_preadv  (int fd, uint64_t offset, const struct iovec *iov, int iovcnt);
-ssize_t z_fd_pwritev (int fd, uint64_t offset, const struct iovec *iov, int iovcnt);
+struct z_io_seq_vtable {
+  ssize_t (*read)  (void *udata, void *buffer, size_t bufsize);
+  ssize_t (*write) (void *udata, const void *buffer, size_t bufsize);
+};
 
 __Z_END_DECLS__
 
-#endif /* !_Z_FD_H_ */
+#endif /* !_Z_IO_H_ */

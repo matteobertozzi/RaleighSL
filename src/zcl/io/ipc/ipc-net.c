@@ -35,7 +35,6 @@ int z_ipc_bind_tcp (z_ipc_server_t *server,
 
 int z_ipc_accept_tcp (z_ipc_server_t *server) {
   struct sockaddr_storage address;
-  char ip[Z_INET6_ADDRSTRLEN];
   int csock;
 
   csock = z_socket_tcp_accept(Z_IOPOLL_ENTITY_FD(server), &address, 1);
@@ -43,9 +42,13 @@ int z_ipc_accept_tcp (z_ipc_server_t *server) {
     return(-1);
 
   z_socket_tcp_set_nodelay(csock);
-  z_socket_str_address(ip, Z_INET6_ADDRSTRLEN, &address);
-  Z_LOG_TRACE("Service %s %d accepted %d %s",
-              server->name, Z_IOPOLL_ENTITY_FD(server), csock, ip);
+
+  if (Z_UNLIKELY(z_log_is_trace_enabled())) {
+    char ip[128];
+    z_socket_str_address(ip, sizeof(ip), &address);
+    Z_LOG_TRACE("Service %s %d accepted %d %s",
+                server->name, Z_IOPOLL_ENTITY_FD(server), csock, ip);
+  }
   return(csock);
 }
 
@@ -68,12 +71,12 @@ int z_ipc_bind_unix (z_ipc_server_t *server,
 }
 
 void z_ipc_unbind_unix (z_ipc_server_t *server) {
-#if 0
   char path[4096];
-  if (!z_fd_get_path(Z_IOPOLL_ENTITY_FD(server), path, sizeof(path))) {
-    unlink(path);
+  if (!z_socket_unix_address(Z_IOPOLL_ENTITY_FD(server), path, sizeof(path))) {
+    if (unlink(path)) {
+      perror("unlink()");
+    }
   }
-#endif
 }
 
 int z_ipc_accept_unix (z_ipc_server_t *server) {

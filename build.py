@@ -623,9 +623,10 @@ class Project(object):
 
     if Build.platformIsMac():
       DEFAULT_DEFINES.extend(['-DCRYPTO_COMMON_CRYPTO'])
+      DEFAULT_LDLIBS.extend(['-framework CoreFoundation', '-framework Security'])
     else:
-      DEFAULT_DEFINES.extend(['-DHAVE_SETXATTR', '-DCRYPTO_OPENSSL'])
-      DEFAULT_LDLIBS.extend(['-lcrypto'])
+      DEFAULT_DEFINES.extend(['-DHAVE_SETXATTR', '-DCRYPTO_OPENSSL', '-DTLS_OPENSSL'])
+      DEFAULT_LDLIBS.extend(['-lcrypto', '-lssl'])
       if Build.platformIsBSD():
         DEFAULT_LDLIBS.extend(['-lexecinfo'])
 
@@ -807,6 +808,24 @@ class R5LServer(Project):
     if not self.options.xcode:
       build.build()
 
+class R5LProxy(Project):
+  VERSION = '0.5.0'
+  NAME = 'r5l-proxy'
+
+  def build_auto_generated(self):
+    compileZclStructs('src/r5l-proxy/rpc',
+                      'src/r5l-proxy/rpc/generated',
+                      dump_error=self.options.verbose)
+
+  def build_tools(self):
+    build_opts = self.default_opts.clone()
+    build_opts.addLdLibs(R5L.get_ldlibs())
+    build_opts.addIncludePaths(R5L.get_includes())
+
+    build = BuildApp(self.NAME, ['src/r5l-proxy/'], options=build_opts)
+    if not self.options.xcode:
+      build.build()
+
 class R5LClient(Project):
   VERSION = '0.5.0'
   NAME = 'r5l-client'
@@ -859,7 +878,7 @@ class R5LFuse(Project):
 def main(options):
   dependencies = [Zcl]
   if not options.no_r5l:
-    dependencies.extend([R5L, R5LServer, R5LClient])
+    dependencies.extend([R5L, R5LServer, R5LProxy, R5LClient])
 
     if options.r5l_fuse:
       dependencies.append(R5LFuse)

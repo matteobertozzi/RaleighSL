@@ -19,9 +19,6 @@
 #include <zcl/config.h>
 __Z_BEGIN_DECLS__
 
-#define Z_INET6_ADDRSTRLEN           46
-
-
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netdb.h>
@@ -82,6 +79,8 @@ struct sockaddr_un;
 int     z_socket_unix_connect     (const char *filepath);
 int     z_socket_unix_bind        (const char *filepath, int dgram);
 int     z_socket_unix_accept      (int socket, int non_blocking);
+
+int     z_socket_unix_address     (int sock, char *buffer, int n);
 
 int     z_socket_unix_sendfd      (int sock, int fd);
 int     z_socket_unix_recvfd      (int sock);

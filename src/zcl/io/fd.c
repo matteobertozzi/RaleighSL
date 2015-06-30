@@ -34,17 +34,18 @@
 int z_fd_set_blocking (int fd, int blocking) {
   int flags;
 
-  if ((flags = fcntl(fd, F_GETFL)) < 0) {
+  if (Z_UNLIKELY((flags = fcntl(fd, F_GETFL)) < 0)) {
     Z_LOG_ERRNO_WARN("failed fcntl(F_GETFL %d) for fd %d", blocking, fd);
     return(1);
   }
 
-  if (blocking)
+  if (Z_UNLIKELY(blocking)) {
     flags &= ~O_NONBLOCK;
-  else
+  } else {
     flags |= O_NONBLOCK;
+  }
 
-  if (fcntl(fd, F_SETFL, flags) < 0) {
+  if (Z_UNLIKELY(fcntl(fd, F_SETFL, flags) < 0)) {
     Z_LOG_ERRNO_WARN("failed fcntl(F_SETFL %d) for fd %d", blocking, fd);
     return(2);
   }
@@ -78,32 +79,28 @@ int z_fd_read_avail (int fd, int *avail) {
   return ioctl(fd, FIONREAD, avail) < 0;
 }
 
-static int __fd_read_link (int fd, char *path, int size) {
-  char fd_path[255];
-  snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", fd);
-  return(readlink(fd_path, path, size) < 0);
-}
-
-int z_fd_get_path (int fd, char *path, int size) {
-#if defined(F_GETPATH)
-  if (fcntl(fd, F_GETPATH, path) > 0)
-    return(0);
-#endif
-  return(__fd_read_link(fd, path, size));
-}
-
 ssize_t z_fd_read (int fd, void *buf, size_t bufsize) {
   ssize_t rd = read(fd, buf, bufsize);
-  if (Z_UNLIKELY(rd < 0 && errno == EAGAIN))
-    return(0);
-  return(rd);
+  if (Z_LIKELY(rd >= 0)) return(rd);
+  return (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : rd;
 }
 
 ssize_t z_fd_readv (int fd, const struct iovec *iov, int iovcnt) {
   ssize_t rd = readv(fd, iov, iovcnt);
-  if (Z_UNLIKELY(rd < 0 && errno == EAGAIN))
-    return(0);
-  return(rd);
+  if (Z_LIKELY(rd >= 0)) return(rd);
+  return (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : rd;
+}
+
+ssize_t z_fd_preadv (int fd, uint64_t offset, const struct iovec *iov, int iovcnt) {
+#if defined(Z_IO_HAS_PWRITEV)
+  ssize_t rd = preadv(fd, iov, iovcnt, offset);
+  if (Z_LIKELY(rd > 0)) return(rd);
+  return (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : rd;
+#else
+  if (Z_UNLIKELY(lseek(fd, offset, SEEK_SET) != offset))
+    return(-1);
+  return(z_fd_readv(fd, iov, iovcnt));
+#endif
 }
 
 ssize_t z_fd_skip (int fd, size_t length) {
@@ -111,20 +108,14 @@ ssize_t z_fd_skip (int fd, size_t length) {
   ssize_t rdtotal = 0;
   while (length >= sizeof(buffer)) {
     ssize_t rd = read(fd, buffer, sizeof(buffer));
-    if (Z_UNLIKELY(rd < 0)) {
-      if (errno == EAGAIN)
-        return(0);
-      return(rd);
-    }
+    if (Z_UNLIKELY(rd < 0))
+      return (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : rd;
     rdtotal += rd;
   }
   if (length > 0) {
     ssize_t rd = read(fd, buffer, length);
-    if (Z_UNLIKELY(rd < 0)) {
-      if (errno == EAGAIN)
-        return(0);
-      return(rd);
-    }
+    if (Z_UNLIKELY(rd < 0))
+      return (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : rd;
     rdtotal += rd;
   }
   return(rdtotal);
@@ -136,7 +127,7 @@ ssize_t z_fd_write (int fd, const void *buf, size_t bufsize) {
 
   while (bufsize > 0) {
     ssize_t written = write(fd, p, bufsize);
-    if (written <= 0 || errno == EAGAIN)
+    if (written <= 0 || errno == EAGAIN || errno == EWOULDBLOCK)
       return(written);
 
     p += written;
@@ -149,25 +140,18 @@ ssize_t z_fd_write (int fd, const void *buf, size_t bufsize) {
 
 ssize_t z_fd_writev(int fd, const struct iovec *iov, int iovcnt) {
   ssize_t wr = writev(fd, iov, iovcnt);
-  if (Z_UNLIKELY(wr < 0 && errno == EAGAIN))
-    return(0);
-  return(wr);
-}
-
-ssize_t z_fd_preadv (int fd, uint64_t offset, const struct iovec *iov, int iovcnt) {
-#if defined(Z_IO_HAS_PWRITEV)
-  return preadv(fd, iov, iovcnt, offset);
-#else
-  lseek(fd, offset, SEEK_SET);
-  return(z_fd_readv(fd, iov, iovcnt));
-#endif
+  if (Z_LIKELY(wr >= 0)) return wr;
+  return (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : wr;
 }
 
 ssize_t z_fd_pwritev (int fd, uint64_t offset, const struct iovec *iov, int iovcnt) {
 #if defined(Z_IO_HAS_PWRITEV)
-  return pwritev(fd, iov, iovcnt, offset);
+  ssize_t wr = pwritev(fd, iov, iovcnt, offset);
+  if (Z_LIKELY(wr >= 0)) return wr;
+  return (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : wr;
 #else
-  lseek(fd, offset, SEEK_SET);
+  if (Z_UNLIKELY(lseek(fd, offset, SEEK_SET) != offset))
+    return(-1);
   return(z_fd_writev(fd, iov, iovcnt));
 #endif
 }
